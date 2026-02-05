@@ -23,7 +23,7 @@ jobs:
           - macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
@@ -46,13 +46,13 @@ jobs:
 
       - name: Setup Node
         if: steps.guard.outputs.should_release == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
         with:
           node-version: 20
 
       - name: Setup pnpm
         if: steps.guard.outputs.should_release == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
         with:
           version: 9
 
