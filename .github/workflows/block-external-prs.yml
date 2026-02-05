@@ -1,0 +1,48 @@
+name: Block External PRs
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  block-fork-prs:
+    if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment and close PRs from forks
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.pull_request.number;
+            const headRepo = context.payload.pull_request.head.repo.full_name;
+            const baseRepo = context.payload.pull_request.base.repo.full_name;
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: prNumber,
+              body: [
+                "Thanks for the PR! This repository doesn't accept contributions from external sources right now.",
+                "You can read up on the current status in the [contributing file](/Markdown/CONTRIBUTING.md).",
+                "",
+                `Head repo: ${headRepo}`,
+                `Base repo: ${baseRepo}`,
+              ].join("\n"),
+            });
+
+            await github.rest.pulls.update({
+              owner,
+              repo,
+              pull_number: prNumber,
+              state: "closed",
+            });
