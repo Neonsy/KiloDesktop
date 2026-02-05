@@ -2,73 +2,135 @@
 
 ## Branch Gate Strategy
 
-KiloDesktop uses a three-tier branch gate system to ensure code quality and deployment stability:
+KiloDesktop uses three primary branches:
 
-### Development Flow
+- `dev`: integration branch for day-to-day work
+- `prev`: staging branch for beta candidates
+- `main`: stable branch for production releases
 
-**Work-in-Progress Branches**
+Expected promotion path: `dev` -> `prev` -> `main`.
 
--   Any branch outside of the 3 main branches (`dev`, `prev`, `main`) represents work-in-progress, prototypes, and ideas
--   These branches have no special meaning and are for experimentation and feature development
+## Release Channel Risk Notices
 
-**dev → prev → main**
+> [!CAUTION]
+> **Alpha channel (`dev` tags: `vX.Y.Z-alpha.N`)**
+> Alpha builds are for evaluation and testing.
+> They can include unfinished features,
+> weaker stability guarantees,
+> and temporary security hardening gaps while development is in progress.
+> Do not use alpha builds for critical workloads or sensitive data handling.
 
-1. **dev branch** - Current Development State
+> [!WARNING]
+> **Beta channel (`prev` tags: `vX.Y.Z-beta.N`)**
+> Beta builds are closer to stable, but still pre-release.
+> Regressions, breaking behavior changes,
+> and late fixes are still possible.
+> Use beta when you want early validation before stable.
 
-    - Collects work-in-progress features from feature branches
-    - Reflects the current active development state
-    - All feature branches should target `dev` for pull requests
+> [!NOTE]
+> **Stable channel (`main`)**
+> Stable builds are the most reliable channel in this project.
+> Bugs and regressions can still occur,
+> but the likelihood is lower than alpha and beta.
 
-2. **prev branch** - Staging Environment
+## Automation by Event
 
-    - Takes everything from `dev` branch that has passed initial checks
-    - Generates preview deployments and publishes to the beta channel
-    - Acts as a staging gate before production
+- PR to `dev`: normal review flow; no changeset check.
+- PR to `prev` or `main` touching `Project/**`: `Changeset Check` runs.
+- `Changeset Check` validates non-doc changes. Docs-only changes in `Project` (for example markdown/docs paths) are skipped.
+- Changes in `Project/.changeset/**` always trigger changeset validation.
+- Push to `main` touching `Project/.changeset/**`: `Changeset Version` runs (`changesets/action`) and creates/updates a version PR.
+- Push to `main` that changes both `Project/package.json` and `Project/CHANGELOG.md`: stable build workflow runs and publishes.
+- Push tag matching `v*-alpha.*` or `v*-beta.*`: prerelease build workflow runs and publishes.
+- Pre-release branch guard: alpha tag commit must be contained in `dev`; beta tag commit must be contained in `prev`.
 
-3. **main branch** - Production Ready
-    - Receives stable changes from `prev` branch
-    - Should only contain thoroughly tested, stable code
-    - Triggers production deployment when all checks pass on PR merge
-    - Represents the stable/production state
+## Direct Access Contributor Rules
 
-### Deployment Pipeline
+If you are an invited contributor with direct repo access:
 
--   **dev** → CI checks only
--   **prev** → CI checks + preview deployment generation
--   **main** → CI checks + production deployment (on merge)
+- Open normal work PRs to `dev`.
+- Do not target `prev` or `main` directly unless a release maintainer asks for it.
+- Use branch names in this format: `username/type/short-description`.
+- Keep `short-description` lowercase kebab-case.
+- Use `type=proto` for demo/testing/spike branches.
+- `proto` branches are usually not merged.
 
-This ensures progressive stability validation as code moves through the development pipeline.
+Allowed `type` values:
 
-## External Contribution Branching
-
-If you are contributing from a fork, please:
-
-- Create a descriptive branch name
-- Open the PR **against `dev`**
-
-**Branch name conventions (pick the one that fits):**
-
-- `feature/<short-description>` (new capability)
-- `fix/<short-description>` (bug fix)
-- `docs/<short-description>` (documentation)
-- `chore/<short-description>` (maintenance/refactor)
+- `feat`
+- `fix`
+- `chore`
+- `docs`
+- `refactor`
+- `test`
+- `perf`
+- `build`
+- `ci`
+- `proto`
 
 Examples:
 
-- `feature/onboarding-flow`
-- `fix/window-crash-on-startup`
-- `docs/branching-guide`
-- `chore/update-eslint`
+- `neonsy/feat/onboarding-flow`
+- `neonsy/fix/window-crash-on-startup`
+- `neonsy/chore/update-eslint-config`
+- `neonsy/docs/release-process`
+- `neonsy/proto/new-sidebar-concept`
 
-## Changesets & Releases
+Fork PRs are auto-closed by automation in this repository. Request invited access first.
 
--   PRs targeting `dev` do **not** require changesets.
--   Changesets are required for PRs targeting `prev` or `main` **when files under `Project/**` change**.
--   The changelog lives in `Project/CHANGELOG.md` and is generated from changesets.
--   Stable releases are automated on `main` via version PRs created by Changesets.
--   Pre-releases are triggered by tags:
-    -   `dev`: `vX.Y.Z-alpha.N` (alpha channel)
-    -   `prev`: `vX.Y.Z-beta.N` (beta channel)
+## Tag Security
+
+- Tag permissions are enforced in GitHub repository rulesets, not by this repo's workflows.
+- Configure a tag ruleset for `v*` and restrict create/update/delete to release maintainers only.
+- External users should not have bypass permissions for tag rulesets.
+
+## Changesets and Release Flow (Step-by-Step)
+
+1. Create a feature/fix/docs/chore PR to `dev`.
+
+- No changeset is required for PRs targeting `dev`.
+- No stable release happens from `dev` PRs.
+
+2. Publish alpha from `dev`.
+
+- Create and push an alpha tag: `vX.Y.Z-alpha.N`.
+- The tagged commit must be in `dev`.
+- Prerelease workflow builds and publishes for all target OSes.
+
+3. Promote to `prev`.
+
+- Open PR from `dev` to `prev`.
+- If `Project/**` changed, `Changeset Check` runs on the PR.
+- Docs-only changes are skipped by the check.
+- `.changeset` and non-doc code/config changes are validated.
+
+4. Publish beta from `prev`.
+
+- Create and push a beta tag: `vX.Y.Z-beta.N`.
+- The tagged commit must be in `prev`.
+- Prerelease workflow builds and publishes for all target OSes.
+
+5. Promote to `main`.
+
+- Open PR from `prev` to `main`.
+- If `Project/**` changed, `Changeset Check` runs on this PR too.
+- Docs-only changes are skipped by the check.
+- `.changeset` and non-doc code/config changes are validated.
+
+6. Merge `prev` into `main` with pending `.changeset` files.
+
+- `Changeset Version` workflow runs on push to `main`.
+- `changesets/action` opens or updates a version PR.
+
+7. Merge the version PR.
+
+- This updates `Project/package.json` and `Project/CHANGELOG.md`.
+- The stable build workflow detects those file changes and publishes the stable release.
+
+Versioning notes:
+
+- For stable releases, do not manually edit version in `Project/package.json`; Changesets handles it.
+- For alpha/beta prereleases, the tag version is injected into build metadata during publish.
 
 ## Labels Guide
 
@@ -139,4 +201,3 @@ Examples:
 | `status: done` | Completed and verified |
 | `status: duplicate` | Duplicate of an existing issue |
 | `status: wontfix` | Closed without planned changes |
-| Label Title | When to use it |

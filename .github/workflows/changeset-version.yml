@@ -33,30 +33,12 @@ jobs:
       - name: Install
         run: pnpm -C Project install
 
-      - name: Check for changesets
-        id: changesets
-        shell: bash
-        run: |
-          if ls Project/.changeset/*.md >/dev/null 2>&1; then
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Version packages
-        if: steps.changesets.outputs.skip != 'true'
-        run: pnpm -C Project changeset version
-
       - name: Create version PR
-        if: steps.changesets.outputs.skip != 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: changesets/action@c48e67d110a68bc90ccf1098e9646092baacaa87
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: changeset-release/main
-          base: main
+          cwd: Project
+          version: pnpm changeset version
+          commit: "chore(release): version"
           title: "chore(release): version"
-          commit-message: "chore(release): version"
-          add-paths: |
-            Project/package.json
-            Project/CHANGELOG.md
-            Project/.changeset/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

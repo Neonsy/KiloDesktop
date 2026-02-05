@@ -20,18 +20,59 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Detect changeset check scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          changed="$(git diff --name-only "origin/${{ github.base_ref }}...HEAD" -- Project)"
+          echo "$changed"
+
+          requires_changeset="false"
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+
+            # Changeset files always require validation.
+            if [[ "$file" == Project/.changeset/* ]]; then
+              requires_changeset="true"
+              break
+            fi
+
+            # Docs-only paths are excluded from changeset validation.
+            if [[ "$file" == Project/docs/* ]]; then
+              continue
+            fi
+            if [[ "$file" == *.md || "$file" == *.mdx ]]; then
+              continue
+            fi
+
+            requires_changeset="true"
+            break
+          done <<< "$changed"
+
+          echo "requires_changeset=$requires_changeset" >> "$GITHUB_OUTPUT"
+
       - name: Setup Node
+        if: steps.scope.outputs.requires_changeset == 'true'
         uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
         with:
           node-version: 20
 
       - name: Setup pnpm
+        if: steps.scope.outputs.requires_changeset == 'true'
         uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
         with:
           version: 9
 
       - name: Install
+        if: steps.scope.outputs.requires_changeset == 'true'
         run: pnpm -C Project install
 
+      - name: Skip docs-only changes
+        if: steps.scope.outputs.requires_changeset != 'true'
+        run: echo "Docs-only changes detected in Project/. Skipping changeset validation."
+
       - name: Verify changeset
+        if: steps.scope.outputs.requires_changeset == 'true'
         run: pnpm -C Project changeset status --since=origin/${{ github.base_ref }}

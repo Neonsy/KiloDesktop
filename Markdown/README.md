@@ -32,8 +32,28 @@ Release channels map to branches:
 - **`prev` → beta**
 - **`main` → stable**
 
-Stable releases are automated from `main` using Changesets and update `Project/CHANGELOG.md`.
-Pre-releases are published by tagging `dev` or `prev` with `vX.Y.Z-alpha.N` / `vX.Y.Z-beta.N`.
+Stable releases are automated from `main` using Changesets
+and update `Project/CHANGELOG.md`.
+Pre-releases are published by tagging `dev` or `prev`
+with `vX.Y.Z-alpha.N` / `vX.Y.Z-beta.N`.
+
+> [!CAUTION]
+> **Alpha releases (`dev`)**
+> Alpha builds are intended for testing and feedback.
+> Stability and security posture can be uneven
+> while features are still being integrated.
+> Avoid using alpha for critical workflows or sensitive data.
+
+> [!WARNING]
+> **Beta releases (`prev`)**
+> Beta builds are more stable than alpha, but still pre-release.
+> Regressions and behavior changes can still occur before stable.
+
+> [!NOTE]
+> **Stable releases (`main`)**
+> Stable builds are the most reliable channel in this project.
+> Bugs and regressions can still occur,
+> but the likelihood is lower than alpha and beta.
 
 ## Analytics
 
