@@ -32,6 +32,12 @@ Release channels map to branches:
 - **`prev` → beta**
 - **`main` → stable**
 
+Platform build testing coverage:
+
+- **Windows:** [@Neonsy](https://github.com/Neonsy) is currently focused on making sure the Windows build works.
+- **macOS:** [@bernaferrari](https://github.com/bernaferrari) is able to test the macOS build.
+- **Linux:** There is currently no plan to test if the Linux build works.
+
 Stable releases are automated from `main` using Changesets
 and update `Project/CHANGELOG.md`.
 Pre-releases are published by tagging `dev` or `prev`
