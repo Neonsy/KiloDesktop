@@ -1,7 +1,9 @@
 name: Build Stable Release
 
 on:
-  push:
+  pull_request:
+    types:
+      - closed
     branches:
       - main
     paths:
@@ -17,6 +19,7 @@ permissions:
 
 jobs:
   build:
+    if: github.event.pull_request.merged == true
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -35,7 +38,7 @@ jobs:
         id: guard
         shell: bash
         run: |
-          changed=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          changed=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "$changed"
           if echo "$changed" | grep -q "^Project/package.json$" && echo "$changed" | grep -q "^Project/CHANGELOG.md$"; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
