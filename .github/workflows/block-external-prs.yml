@@ -5,8 +5,6 @@ on:
     types:
       - opened
       - reopened
-      - synchronize
-      - ready_for_review
 
 permissions:
   contents: read
@@ -16,9 +14,12 @@ permissions:
 jobs:
   block-fork-prs:
     if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+    concurrency:
+      group: block-external-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
-      - name: Comment and close PRs from forks
+      - name: Comment once and close PRs from forks
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
@@ -26,19 +27,36 @@ jobs:
             const prNumber = context.payload.pull_request.number;
             const headRepo = context.payload.pull_request.head.repo.full_name;
             const baseRepo = context.payload.pull_request.base.repo.full_name;
+            const defaultBranch = context.payload.repository.default_branch;
+            const contributingUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/Markdown/CONTRIBUTING.md`;
+            const marker = "<!-- external-pr-block -->";
 
-            await github.rest.issues.createComment({
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
               repo,
               issue_number: prNumber,
-              body: [
-                "Thanks for the PR! This repository doesn't accept contributions from external sources right now.",
-                "You can read up on the current status in the [contributing file](/Markdown/CONTRIBUTING.md).",
-                "",
-                `Head repo: ${headRepo}`,
-                `Base repo: ${baseRepo}`,
-              ].join("\n"),
+              per_page: 100,
             });
+
+            const alreadyCommented = comments.some((comment) =>
+              (comment.body || "").includes(marker)
+            );
+
+            if (!alreadyCommented) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: prNumber,
+                body: [
+                  marker,
+                  "Thanks for the PR! This repository doesn't accept contributions from external sources right now.",
+                  `You can read up on the current status in the [contributing file](${contributingUrl}).`,
+                  "",
+                  `Head repo: ${headRepo}`,
+                  `Base repo: ${baseRepo}`,
+                ].join("\n"),
+              });
+            }
 
             await github.rest.pulls.update({
               owner,

@@ -8,6 +8,10 @@ on:
       - "Project/package.json"
       - "Project/CHANGELOG.md"
 
+concurrency:
+  group: build-stable-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 

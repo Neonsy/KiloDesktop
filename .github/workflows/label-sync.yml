@@ -3,6 +3,10 @@ name: Sync labels
 on:
   workflow_dispatch:
 
+concurrency:
+  group: label-sync
+  cancel-in-progress: true
+
 permissions:
   contents: read
   issues: write

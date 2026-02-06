@@ -6,6 +6,10 @@ on:
       - "v*-alpha.*"
       - "v*-beta.*"
 
+concurrency:
+  group: build-prerelease-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 

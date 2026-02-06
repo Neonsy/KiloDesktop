@@ -12,38 +12,64 @@ permissions:
 
 jobs:
   block-external-issues:
+    concurrency:
+      group: block-external-issue-${{ github.event.issue.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     steps:
-      - name: Comment and close issues from non-collaborators
+      - name: Comment once and close issues from users without write access
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
         with:
           script: |
             const { owner, repo } = context.repo;
             const issueNumber = context.payload.issue.number;
             const username = context.payload.issue.user.login;
+            const allowedPermissions = new Set(["write", "maintain", "admin"]);
+            const defaultBranch = context.payload.repository.default_branch;
+            const contributingUrl = `https://github.com/${owner}/${repo}/blob/${defaultBranch}/Markdown/CONTRIBUTING.md`;
+            const marker = "<!-- external-issue-block -->";
+            let permission = "none";
 
             try {
-              await github.rest.repos.checkCollaborator({
+              const permissionResponse = await github.rest.repos.getCollaboratorPermissionLevel({
                 owner,
                 repo,
                 username,
               });
-              return;
+              permission = permissionResponse.data.permission;
             } catch (error) {
               if (error.status !== 404) {
                 throw error;
               }
             }
 
-            await github.rest.issues.createComment({
+            if (allowedPermissions.has(permission)) {
+              return;
+            }
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner,
               repo,
               issue_number: issueNumber,
-              body: [
-                "Thanks for reaching out! This repository doesn't accept issues from external sources right now.",
-                "You can read up on the current status in the [contributing file](/Markdown/CONTRIBUTING.md).",
-              ].join("\n"),
+              per_page: 100,
             });
+
+            const alreadyCommented = comments.some((comment) =>
+              (comment.body || "").includes(marker)
+            );
+
+            if (!alreadyCommented) {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                body: [
+                  marker,
+                  "Thanks for reaching out! This repository only accepts issues from users with write access or higher.",
+                  `You can read up on the current status in the [contributing file](${contributingUrl}).`,
+                ].join("\n"),
+              });
+            }
 
             await github.rest.issues.update({
               owner,
