@@ -1,0 +1,26 @@
+---
+languages:
+  json:
+    extensions:
+      - ".json5"
+
+engines:
+  metric:
+    config:
+      languages:
+        - "typescript"
+        - "javascript"
+  duplication:
+    config:
+      languages:
+        - "typescript"
+        - "javascript"
+  markdownlint:
+    exclude_paths:
+      - "Markdown/**"
+      - "README.md"
+      - "CONTRIBUTING.md"
+
+exclude_paths:
+  - "Project/CHANGELOG.md"
+  - "Project/pnpm-lock.yaml"
