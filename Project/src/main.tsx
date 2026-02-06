@@ -12,6 +12,16 @@ const isDev = import.meta.env.DEV;
 
 const rootElement = document.getElementById('root');
 
+function waitForFirstPaint(): Promise<void> {
+    return new Promise((resolve) => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                resolve();
+            });
+        });
+    });
+}
+
 if (rootElement) {
     createRoot(rootElement).render(
         <StrictMode>
@@ -22,8 +32,10 @@ if (rootElement) {
         </StrictMode>
     );
 
-    // Signal to main process that React has rendered
-    // This ensures the window only appears after content is ready, preventing blank flash.
-    // The main process waits for this signal before showing/maximizing the window.
-    void trpcClient.system.signalReady.mutate();
+    // Signal main after React has had a chance to paint the first frame.
+    void waitForFirstPaint()
+        .then(() => trpcClient.system.signalReady.mutate())
+        .catch((error: unknown) => {
+            console.warn('[window] Failed to send ready signal:', error);
+        });
 }

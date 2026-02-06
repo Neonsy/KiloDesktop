@@ -42,6 +42,7 @@ pnpm build:linux  # Build and package Linux AppImage
 | `pnpm build:mac`       | Build and package macOS DMG             |
 | `pnpm build:linux`     | Build and package Linux AppImage        |
 | `pnpm publish:generic` | Publish built app to self-hosted server |
+| `pnpm typecheck`       | Generate route tree + run TypeScript checks |
 | `pnpm lint`            | Run ESLint                              |
 | `pnpm lint:fix`        | Run ESLint with auto-fix                |
 | `pnpm format`          | Format code with Prettier               |
@@ -94,8 +95,9 @@ pnpm test
 
 ### Tooling
 
-- **ESLint**: Linting with strict TypeScript rules
+- **ESLint**: Linting for TypeScript, React, TanStack Query, Node scripts, and Vitest
 - **Prettier**: Code formatting with Tailwind plugin
+- **TanStack Router CLI**: Generates `routeTree.gen.ts` for type-safe file routes
 - **vite-tsconfig-paths**: Auto-resolves TypeScript path aliases in Vite
 - **Vitest**: Vite-native test runner, fast and Jest-compatible
 - **electron-builder**: Cross-platform packaging and distribution
@@ -822,7 +824,7 @@ This is coordinated across three files:
 
 - `electron/main.ts`: Creates hidden window, waits for tRPC signal
 - `electron/backend/trpc/routers/system/signalReady.ts`: Mutation handler that maximizes and shows the window
-- `src/main.tsx`: Calls `trpcClient.system.signalReady.mutate()` after `createRoot().render()` completes
+- `src/main.tsx`: Calls `trpcClient.system.signalReady.mutate()` after the first paint frame
 
 ### Security
 

@@ -110,7 +110,8 @@ function createWindow(): BrowserWindow {
  * dynamically, which is the recommended pattern for Electron apps.
  */
 function setupContentSecurityPolicy(): void {
-    const cspHeader = getCspHeader(isDev ? 'dev' : 'prod', { devServerUrl: VITE_DEV_SERVER_URL });
+    const cspOptions = isDev && VITE_DEV_SERVER_URL ? { devServerUrl: VITE_DEV_SERVER_URL } : {};
+    const cspHeader = getCspHeader(isDev ? 'dev' : 'prod', cspOptions);
 
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
         // Only apply CSP to our app's content, not external resources or devtools

@@ -34,5 +34,7 @@
         target: ['AppImage'],
         artifactName: '${productName}-Linux-${version}.${ext}',
     },
-    publish: [{ provider: 'github', owner: 'Neonsy', repo: 'KiloDesktop' }],
+    // Uncomment and configure when you're ready to set up auto-updates:
+    // Use HTTP if your certificate isn't trusted
+    // publish: [{ provider: 'generic', url: 'https://your-generic-domain.tld' }],
 }

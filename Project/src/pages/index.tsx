@@ -148,7 +148,7 @@ export default function HomePage() {
                         <div className='animate-float relative'>
                             <div className='from-electric-500/30 via-neon-500/20 to-mint-500/30 absolute -inset-4 rounded-3xl bg-gradient-to-br blur-2xl' />
                             <div className='glass-card relative rounded-2xl p-6'>
-                                <VscTerminal className='h-16 w-16 text-white' />
+                                <VscTerminal aria-hidden='true' focusable='false' className='h-16 w-16 text-white' />
                             </div>
                         </div>
                     </div>
@@ -188,7 +188,7 @@ export default function HomePage() {
                 <section className='animate-slide-up mb-32 delay-400'>
                     <div className='mb-10 flex items-center gap-4'>
                         <div className='from-electric-500 to-neon-500 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br'>
-                            <VscExtensions className='h-6 w-6 text-white' />
+                            <VscExtensions aria-hidden='true' focusable='false' className='h-6 w-6 text-white' />
                         </div>
                         <div>
                             <h2 className='text-3xl font-bold text-white'>Core Stack</h2>
@@ -206,7 +206,7 @@ export default function HomePage() {
                                     style={{ animationDelay: `${String(400 + i * 80)}ms` }}>
                                     <div
                                         className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${item.gradient} opacity-80 transition-all group-hover:scale-110 group-hover:opacity-100`}>
-                                        <Icon className='h-6 w-6 text-white' />
+                                        <Icon aria-hidden='true' focusable='false' className='h-6 w-6 text-white' />
                                     </div>
                                     <h3 className='mb-2 text-lg font-semibold text-white'>{item.name}</h3>
                                     <p className='text-sm leading-relaxed text-white/40'>{item.desc}</p>
@@ -220,7 +220,7 @@ export default function HomePage() {
                 <section className='animate-slide-up mb-32 delay-500'>
                     <div className='mb-10 flex items-center gap-4'>
                         <div className='from-mint-500 to-electric-500 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br'>
-                            <VscCode className='h-6 w-6 text-white' />
+                            <VscCode aria-hidden='true' focusable='false' className='h-6 w-6 text-white' />
                         </div>
                         <div>
                             <h2 className='text-3xl font-bold text-white'>Key Files</h2>
@@ -244,7 +244,7 @@ export default function HomePage() {
                 <section className='animate-slide-up mb-32 delay-600'>
                     <div className='mb-10 flex items-center gap-4'>
                         <div className='flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500'>
-                            <VscFlame className='h-6 w-6 text-white' />
+                            <VscFlame aria-hidden='true' focusable='false' className='h-6 w-6 text-white' />
                         </div>
                         <div>
                             <h2 className='text-3xl font-bold text-white'>State Made Simple</h2>
@@ -278,7 +278,7 @@ export default function HomePage() {
                 <section className='animate-slide-up mb-32 delay-700'>
                     <div className='mb-10 flex items-center gap-4'>
                         <div className='from-coral-500 to-neon-500 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br'>
-                            <VscRocket className='h-6 w-6 text-white' />
+                            <VscRocket aria-hidden='true' focusable='false' className='h-6 w-6 text-white' />
                         </div>
                         <div>
                             <h2 className='text-3xl font-bold text-white'>Get Started</h2>
@@ -313,7 +313,7 @@ export default function HomePage() {
 
                         <div className='relative flex flex-col items-center text-center lg:flex-row lg:text-left'>
                             <div className='mb-6 flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 lg:mr-8 lg:mb-0'>
-                                <VscDatabase className='h-10 w-10 text-white' />
+                                <VscDatabase aria-hidden='true' focusable='false' className='h-10 w-10 text-white' />
                             </div>
 
                             <div className='flex-1'>
@@ -331,7 +331,9 @@ export default function HomePage() {
                                     rel='noopener noreferrer'
                                     className='inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-3 font-semibold text-white transition-all hover:scale-105 hover:shadow-lg hover:shadow-amber-500/25'>
                                     Learn More
-                                    <span className='transition-transform group-hover:translate-x-1'>→</span>
+                                    <span aria-hidden='true' className='transition-transform group-hover:translate-x-1'>
+                                        →
+                                    </span>
                                 </a>
                             </div>
                         </div>
@@ -342,7 +344,7 @@ export default function HomePage() {
                 <section className='animate-slide-up mb-24 delay-800'>
                     <div className='mb-10 flex items-center gap-4'>
                         <div className='from-neon-500 to-coral-500 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br'>
-                            <VscPackage className='h-6 w-6 text-white' />
+                            <VscPackage aria-hidden='true' focusable='false' className='h-6 w-6 text-white' />
                         </div>
                         <div>
                             <h2 className='text-3xl font-bold text-white'>Extend Your Stack</h2>
@@ -394,7 +396,9 @@ export default function HomePage() {
                                         <p className='text-sm text-white/40'>{pkg.desc}</p>
                                     </div>
                                 </div>
-                                <span className='text-white/30 transition-transform group-hover:translate-x-1'>→</span>
+                                <span aria-hidden='true' className='text-white/30 transition-transform group-hover:translate-x-1'>
+                                    →
+                                </span>
                             </a>
                         ))}
                     </div>

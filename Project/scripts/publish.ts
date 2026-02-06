@@ -1,12 +1,15 @@
 #!/usr/bin/env -S node --enable-source-maps
 import 'dotenv/config';
-import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { existsSync, writeFileSync } from 'node:fs';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 
-// --- Helpers ---------------------------------------------------------------
+interface RunOptions {
+    allowFail?: boolean;
+    captureStdout?: boolean;
+}
 
 function required(value: string | undefined | null, envName: string): string {
     const v = (value ?? '').trim();
@@ -26,39 +29,86 @@ function validatePort(value: string, envName: string): string {
     return String(n);
 }
 
-function sh(cmd: string, opts: { allowFail?: boolean } = {}): void {
-    console.log(`$ ${cmd}`);
-    try {
-        execSync(cmd, { stdio: 'inherit' });
-    } catch (err) {
-        if (opts.allowFail) return;
-        throw err;
+function validateSshDestination(value: string): string {
+    if (!/^[A-Za-z0-9._-]+@[A-Za-z0-9._:-]+$/u.test(value)) {
+        console.error(
+            `❌ Invalid UPDATER_SSH: ${value}. Expected user@host and only alphanumeric, dot, dash, underscore, colon characters.`
+        );
+        process.exit(1);
     }
+
+    return value;
 }
 
-function shCapture(cmd: string): string {
-    console.log(`$ ${cmd}`);
-    const out = execSync(cmd, { stdio: ['ignore', 'pipe', 'inherit'] });
-    return out.toString('utf8');
+function parseCliOptionString(value: string, envName: string): string[] {
+    const tokens = value
+        .split(/\s+/u)
+        .map((token) => token.trim())
+        .filter(Boolean);
+
+    if (tokens.length === 0) {
+        console.error(`❌ ${envName} must include at least one ssh option token.`);
+        process.exit(1);
+    }
+
+    for (const token of tokens) {
+        if (!/^[A-Za-z0-9._:@%+,/=-]+$/u.test(token)) {
+            console.error(`❌ Invalid token in ${envName}: "${token}". Use plain ssh option tokens only.`);
+            process.exit(1);
+        }
+    }
+
+    return tokens;
 }
 
-// --- Config via env --------------------------------------------------------
+function shellQuote(value: string): string {
+    return `'${value.replace(/'/gu, `'"'"'`)}'`;
+}
 
-const SSH_DEST = required(process.env.UPDATER_SSH, 'UPDATER_SSH');
+function formatCommand(command: string, args: string[]): string {
+    const printable = args.map((arg) => (/[\s"]/u.test(arg) ? JSON.stringify(arg) : arg));
+    return [command, ...printable].join(' ');
+}
+
+function run(command: string, args: string[], opts: RunOptions = {}): string {
+    const { allowFail = false, captureStdout = false } = opts;
+
+    console.log(`$ ${formatCommand(command, args)}`);
+
+    const result = spawnSync(command, args, {
+        encoding: 'utf8',
+        stdio: captureStdout ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+    });
+
+    if (result.error) {
+        if (allowFail) {
+            return result.stdout;
+        }
+        throw result.error;
+    }
+
+    if (result.status !== 0) {
+        if (allowFail) {
+            return result.stdout;
+        }
+        throw new Error(`${command} failed with exit code ${String(result.status)}`);
+    }
+
+    return result.stdout;
+}
+
+const SSH_DEST = validateSshDestination(required(process.env.UPDATER_SSH, 'UPDATER_SSH'));
 const envPort = process.env.UPDATER_SSH_PORT?.trim();
 const SSH_PORT = validatePort(envPort && envPort !== '' ? envPort : '22', 'UPDATER_SSH_PORT');
 const SSH_KEY = required(process.env.UPDATER_SSH_KEY, 'UPDATER_SSH_KEY');
-const SSH_OPTS = required(process.env.UPDATER_SSH_OPTS, 'UPDATER_SSH_OPTS');
+const SSH_OPTS = parseCliOptionString(required(process.env.UPDATER_SSH_OPTS, 'UPDATER_SSH_OPTS'), 'UPDATER_SSH_OPTS');
 const CONTAINER = required(process.env.UPDATER_CONTAINER, 'UPDATER_CONTAINER');
 const CONTAINER_PATH = required(process.env.UPDATER_PATH, 'UPDATER_PATH');
 
-// Validate SSH key exists
 if (!existsSync(SSH_KEY)) {
     console.error(`❌ UPDATER_SSH_KEY file not found: ${SSH_KEY}`);
     process.exit(1);
 }
-
-// --- Version & release artifacts ------------------------------------------
 
 const pkg = JSON.parse(await readFile('package.json', 'utf8')) as {
     version?: string;
@@ -79,7 +129,6 @@ if (!existsSync(releaseDir)) {
     process.exit(1);
 }
 
-// Prefer <channel>.yml then latest-<channel>.yml then latest.yml
 let latestYml = join(releaseDir, channel ? `${channel}.yml` : 'latest.yml');
 if (!existsSync(latestYml)) {
     if (channel && existsSync(join(releaseDir, `latest-${channel}.yml`))) {
@@ -87,18 +136,17 @@ if (!existsSync(latestYml)) {
     } else if (existsSync(join(releaseDir, 'latest.yml'))) {
         latestYml = join(releaseDir, 'latest.yml');
     } else {
-        const anyYml = readdirSync(releaseDir).find((f) => f.endsWith('.yml'));
-        if (anyYml) latestYml = join(releaseDir, anyYml);
-        else {
+        const anyYml = (await readdir(releaseDir)).find((file) => file.endsWith('.yml'));
+        if (!anyYml) {
             console.error(`❌ No updater manifest (*.yml) found in ${releaseDir}. Build may have failed.`);
             process.exit(1);
         }
+        latestYml = join(releaseDir, anyYml);
     }
 }
 
-// Find Windows installer exe in the release dir
-const files = readdirSync(releaseDir);
-const exe = files.find((f) => f.toLowerCase().endsWith('-setup.exe'));
+const files = await readdir(releaseDir);
+const exe = files.find((file) => file.toLowerCase().endsWith('-setup.exe'));
 if (!exe) {
     console.error(`❌ No Windows installer (*-Setup.exe) found in ${releaseDir}`);
     process.exit(1);
@@ -107,34 +155,51 @@ const exePath = join(releaseDir, exe);
 const ymlName = basename(latestYml);
 const exeName = basename(exePath);
 
-// --- SSH multiplexing (explicit open/close, no linger) ---------------------
-// Windows OpenSSH often fails with ControlMaster/ControlPath (e.g., "getsockname failed: Not a socket").
-// On Windows, disable multiplexing and fall back to plain ssh/scp.
 const isWindows = process.platform === 'win32';
 const useMux = !isWindows && (process.env.UPDATER_SSH_MUX ?? '1') !== '0';
 
 const ctrlDir = useMux ? join(homedir(), '.ssh', 'controlmasters') : '';
-if (useMux) mkdirSync(ctrlDir, { recursive: true });
-const ctrlPath = useMux ? join(ctrlDir, '%C') : ''; // hashed socket name, safe for long hostnames
+if (useMux) {
+    await mkdir(ctrlDir, { recursive: true });
+}
+const ctrlPath = useMux ? join(ctrlDir, '%C') : '';
 
-const baseMuxOpts = useMux ? `-o ControlPath="${ctrlPath}" -o ControlMaster=auto -o ControlPersist=yes` : '';
-const baseSsh = `-p ${SSH_PORT} -i "${SSH_KEY}" ${SSH_OPTS} -o PreferredAuthentications=publickey`;
-const sshBase = `${baseMuxOpts} ${baseSsh} ${SSH_DEST}`.trim();
-const ctrlArg = useMux ? `-o ControlPath="${ctrlPath}" ` : '';
+const sshAuthArgs = ['-p', SSH_PORT, '-i', SSH_KEY, ...SSH_OPTS, '-o', 'PreferredAuthentications=publickey'];
+const scpAuthArgs = ['-P', SSH_PORT, '-i', SSH_KEY, ...SSH_OPTS, '-o', 'PreferredAuthentications=publickey'];
+const sshMuxArgs = useMux
+    ? ['-o', `ControlPath=${ctrlPath}`, '-o', 'ControlMaster=auto', '-o', 'ControlPersist=yes']
+    : [];
+const sshReuseArgs = useMux ? ['-o', `ControlPath=${ctrlPath}`] : [];
 
 const tmpDir = `/tmp/wash-app-publish-${String(Date.now())}`;
 const remoteLog = `${tmpDir}/publish.log`;
 
+const qTmpDir = shellQuote(tmpDir);
+const qRemoteLog = shellQuote(remoteLog);
+const qRemoteYmlPath = shellQuote(`${tmpDir}/${ymlName}`);
+const qRemoteExePath = shellQuote(`${tmpDir}/${exeName}`);
+const qContainer = shellQuote(CONTAINER);
+const qContainerTargetDir = shellQuote(`${CONTAINER}:${CONTAINER_PATH}/`);
+const qContainerPathForWildcard = shellQuote(`rm -f "${CONTAINER_PATH}"/*.exe || true`);
+
+function runSsh(remoteCommand: string, opts: RunOptions = {}): string {
+    return run('ssh', [...sshReuseArgs, ...sshAuthArgs, SSH_DEST, remoteCommand], opts);
+}
+
 function openMaster(): void {
-    if (!useMux) return;
-    // One passphrase prompt here, then reuse for all ssh/scp
-    sh(`ssh ${sshBase} -M -N -f`);
+    if (!useMux) {
+        return;
+    }
+
+    run('ssh', [...sshMuxArgs, ...sshAuthArgs, '-M', '-N', '-f', SSH_DEST]);
 }
 
 function closeMaster(): void {
-    if (!useMux) return;
-    // Close the background master; ignore failure if not present
-    sh(`ssh -S "${ctrlPath}" -O exit ${baseSsh} ${SSH_DEST}`, {
+    if (!useMux) {
+        return;
+    }
+
+    run('ssh', ['-S', ctrlPath, '-O', 'exit', ...sshAuthArgs, SSH_DEST], {
         allowFail: true,
     });
 }
@@ -148,8 +213,6 @@ process.on('SIGTERM', () => {
     closeMaster();
     process.exit(143);
 });
-
-// --- Header ----------------------------------------------------------------
 
 console.log('');
 console.log('╔═══════════════════════════════════════════════════════════════╗');
@@ -165,45 +228,47 @@ console.log(`📌 Installer:   ${exeName}`);
 console.log(`📌 Manifest:    ${ymlName}`);
 console.log('');
 
-// --- Publish ---------------------------------------------------------------
-
 try {
     openMaster();
 
-    // Step 1: Prepare remote tmp directory
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('[STEP 1/3] 📁 Preparing remote tmp directory...');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    sh(
-        `ssh ${ctrlArg}${baseSsh} ${SSH_DEST} "mkdir -p ${tmpDir} && chmod 700 ${tmpDir} && : > ${remoteLog} && echo $(date -Is) INFO Created tmp dir >> ${remoteLog}"`
-    );
+    const prepareTmpCmd = [
+        `mkdir -p ${qTmpDir}`,
+        `chmod 700 ${qTmpDir}`,
+        `: > ${qRemoteLog}`,
+        `echo $(date -Is) INFO Created tmp dir >> ${qRemoteLog}`,
+    ].join(' && ');
+    runSsh(prepareTmpCmd);
     console.log('✅ Remote tmp directory ready.\n');
 
-    // Step 2: Upload artifacts
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('[STEP 2/3] 📤 Uploading artifacts to remote server...');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    sh(
-        `scp ${ctrlArg}-P ${SSH_PORT} -i "${SSH_KEY}" ${SSH_OPTS} -o PreferredAuthentications=publickey "${latestYml}" "${exePath}" ${SSH_DEST}:${tmpDir}/`
-    );
+    run('scp', [...sshReuseArgs, ...scpAuthArgs, latestYml, exePath, `${SSH_DEST}:${tmpDir}/`]);
     console.log('✅ Artifacts uploaded.\n');
 
-    // Step 3: Publish into container and cleanup
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('[STEP 3/3] 🐳 Publishing into container and cleaning up...');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    const step3Out = shCapture(
-        `ssh ${ctrlArg}${baseSsh} ${SSH_DEST} "set -e; ` +
-            `echo $(date -Is) INFO Uploads present: >> ${remoteLog}; ls -lh ${tmpDir} >> ${remoteLog}; ` +
-            `sudo -n docker cp ${tmpDir}/${ymlName} ${CONTAINER}:${CONTAINER_PATH}/ && echo $(date -Is) INFO docker cp ${ymlName} ok >> ${remoteLog}; ` +
-            `sudo -n docker exec ${CONTAINER} sh -lc 'rm -f ${CONTAINER_PATH}/*.exe || true' && echo $(date -Is) INFO removed old installers >> ${remoteLog}; ` +
-            `sudo -n docker cp ${tmpDir}/${exeName} ${CONTAINER}:${CONTAINER_PATH}/ && echo $(date -Is) INFO docker cp ${exeName} ok >> ${remoteLog}; ` +
-            `echo $(date -Is) INFO Full log follows: >> ${remoteLog}; cat ${remoteLog}; rm -rf ${tmpDir} || true; echo $(date -Is) INFO Cleaned up tmp dir"`
-    );
+    const step3Cmd = [
+        'set -e',
+        `echo $(date -Is) INFO Uploads present: >> ${qRemoteLog}`,
+        `ls -lh ${qTmpDir} >> ${qRemoteLog}`,
+        `sudo -n docker cp ${qRemoteYmlPath} ${qContainerTargetDir} && echo $(date -Is) INFO docker cp ${ymlName} ok >> ${qRemoteLog}`,
+        `sudo -n docker exec ${qContainer} sh -lc ${qContainerPathForWildcard} && echo $(date -Is) INFO removed old installers >> ${qRemoteLog}`,
+        `sudo -n docker cp ${qRemoteExePath} ${qContainerTargetDir} && echo $(date -Is) INFO docker cp ${exeName} ok >> ${qRemoteLog}`,
+        `echo $(date -Is) INFO Full log follows: >> ${qRemoteLog}`,
+        `cat ${qRemoteLog}`,
+        `rm -rf ${qTmpDir} || true`,
+        'echo $(date -Is) INFO Cleaned up tmp dir',
+    ].join('; ');
+
+    const step3Out = runSsh(step3Cmd, { captureStdout: true });
     writeFileSync('publish-last.log', step3Out, 'utf8');
     console.log('✅ Published into container.\n');
 
-    // Success
     console.log('╔═══════════════════════════════════════════════════════════════╗');
     console.log('║                     ✅ PUBLISH SUCCESSFUL                     ║');
     console.log('╚═══════════════════════════════════════════════════════════════╝');
@@ -219,12 +284,14 @@ try {
     if (error instanceof Error) {
         console.error(`Error: ${error.message}`);
     }
+
     try {
         console.log('[INFO] 📋 Attempting to print remote log tail:');
-        sh(`ssh ${ctrlArg}${baseSsh} ${SSH_DEST} "test -f ${remoteLog} && tail -n 200 ${remoteLog} || true"`, {
+        runSsh(`test -f ${qRemoteLog} && tail -n 200 ${qRemoteLog} || true`, {
             allowFail: true,
         });
     } catch {}
+
     process.exit(1);
 } finally {
     closeMaster();

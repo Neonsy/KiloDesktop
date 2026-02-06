@@ -1,21 +1,42 @@
 import js from '@eslint/js';
+import queryPlugin from '@tanstack/eslint-plugin-query';
+import vitestPlugin from '@vitest/eslint-plugin';
 import globals from 'globals';
+import { globalIgnores } from 'eslint/config';
+import importPlugin from 'eslint-plugin-import';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import nPlugin from 'eslint-plugin-n';
+import noSecrets from 'eslint-plugin-no-secrets';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
-import tseslint from 'typescript-eslint';
-import { globalIgnores } from 'eslint/config';
-import jsxA11y from 'eslint-plugin-jsx-a11y';
-import importPlugin from 'eslint-plugin-import';
-import noSecrets from 'eslint-plugin-no-secrets';
-import prettierPlugin from 'eslint-plugin-prettier';
+import securityPlugin from 'eslint-plugin-security';
 import prettierConfig from 'eslint-config-prettier';
+import tseslint from 'typescript-eslint';
 
-const typeCheckedGlobs = ['src/**/*.{ts,tsx}', 'electron/**/*.{ts,tsx}', 'vite.config.ts', 'vitest.config.ts'];
+const typeCheckedGlobs = [
+    'src/**/*.{ts,tsx}',
+    'electron/**/*.{ts,tsx}',
+    'scripts/**/*.ts',
+    'vite.config.ts',
+    'vitest.config.ts',
+];
 
 const rendererGlobs = ['src/**/*.{js,jsx,ts,tsx}'];
 
-const nodeGlobs = ['electron/**/*.{js,mjs,cjs,ts,tsx}', 'vite.config.ts', 'vitest.config.ts'];
+const nodeGlobs = [
+    'electron/**/*.{js,mjs,cjs,ts,tsx}',
+    'scripts/**/*.{js,mjs,cjs,ts,tsx}',
+    'vite.config.ts',
+    'vitest.config.ts',
+];
+
+const testGlobs = [
+    'electron/**/*.{test,spec}.ts',
+    'src/**/*.{test,spec}.{ts,tsx}',
+    'electron/**/__tests__/**/*.{ts,tsx}',
+    'src/**/__tests__/**/*.{ts,tsx}',
+];
 
 const sharedTypeLanguageOptions = {
     parser: tseslint.parser,
@@ -25,14 +46,24 @@ const sharedTypeLanguageOptions = {
     },
 };
 
-const sharedReactPlugins = {
+const sharedBasePlugins = {
+    import: importPlugin,
+    'no-secrets': noSecrets,
+};
+
+const rendererPlugins = {
+    ...sharedBasePlugins,
     react,
     'react-hooks': reactHooks,
     'react-refresh': reactRefresh,
     'jsx-a11y': jsxA11y,
-    import: importPlugin,
-    'no-secrets': noSecrets,
-    prettier: prettierPlugin,
+    '@tanstack/query': queryPlugin,
+};
+
+const nodePlugins = {
+    ...sharedBasePlugins,
+    n: nPlugin,
+    security: securityPlugin,
 };
 
 const importOrderRule = [
@@ -50,6 +81,29 @@ const importOrderRule = [
 ];
 
 const noRestrictedImportsRule = ['error', { patterns: ['../*', '../../*', '../../../*', '../../../../*'] }];
+
+const vitestGlobals = {
+    afterAll: 'readonly',
+    afterEach: 'readonly',
+    beforeAll: 'readonly',
+    beforeEach: 'readonly',
+    describe: 'readonly',
+    expect: 'readonly',
+    it: 'readonly',
+    test: 'readonly',
+    vi: 'readonly',
+};
+
+function mergeRecommendedRules(configValue) {
+    const configs = Array.isArray(configValue) ? configValue : configValue ? [configValue] : [];
+
+    return configs.reduce((rules, config) => {
+        return { ...rules, ...(config.rules ?? {}) };
+    }, {});
+}
+
+const tanstackQueryRules = mergeRecommendedRules(queryPlugin.configs?.['flat/recommended'] ?? queryPlugin.configs?.recommended);
+const vitestRules = mergeRecommendedRules(vitestPlugin.configs?.recommended);
 
 export default [
     globalIgnores([
@@ -80,7 +134,7 @@ export default [
 
     {
         files: rendererGlobs,
-        plugins: sharedReactPlugins,
+        plugins: rendererPlugins,
         languageOptions: {
             ...sharedTypeLanguageOptions,
             ecmaVersion: 2023,
@@ -105,13 +159,15 @@ export default [
             'no-restricted-imports': noRestrictedImportsRule,
             'no-secrets/no-secrets': 'warn',
             'no-alert': 'error',
-            'prettier/prettier': ['warn', { endOfLine: 'auto' }],
+            ...tanstackQueryRules,
+            '@tanstack/query/exhaustive-deps': 'error',
+            '@tanstack/query/no-unstable-deps': 'error',
         },
     },
 
     {
         files: nodeGlobs,
-        plugins: sharedReactPlugins,
+        plugins: nodePlugins,
         languageOptions: {
             ...sharedTypeLanguageOptions,
             ecmaVersion: 2023,
@@ -130,9 +186,40 @@ export default [
             'import/no-unresolved': 'off',
             'no-restricted-imports': noRestrictedImportsRule,
             'no-secrets/no-secrets': 'warn',
-            'prettier/prettier': ['warn', { endOfLine: 'auto' }],
+            'n/no-missing-import': 'off',
+            'n/no-process-exit': 'off',
+            'security/detect-child-process': 'warn',
+            'security/detect-non-literal-fs-filename': 'warn',
+            'security/detect-non-literal-regexp': 'warn',
+            'security/detect-unsafe-regex': 'warn',
             'no-empty': 'off',
             'no-unused-vars': ['warn', { args: 'none', varsIgnorePattern: '^_', caughtErrors: 'none' }],
+        },
+    },
+
+    {
+        files: ['scripts/**/*.ts'],
+        rules: {
+            'no-secrets/no-secrets': 'off',
+            'security/detect-non-literal-fs-filename': 'off',
+        },
+    },
+
+    {
+        files: testGlobs,
+        plugins: {
+            vitest: vitestPlugin,
+        },
+        languageOptions: {
+            ...sharedTypeLanguageOptions,
+            ecmaVersion: 2023,
+            sourceType: 'module',
+            globals: { ...globals.node, ...vitestGlobals },
+        },
+        rules: {
+            ...vitestRules,
+            'vitest/no-disabled-tests': 'warn',
+            'vitest/no-focused-tests': 'error',
         },
     },
 ];
