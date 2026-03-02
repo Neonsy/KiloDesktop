@@ -94,6 +94,45 @@ export interface SchemaMigrationsTable {
     applied_at: string;
 }
 
+export interface ConversationsTable {
+    id: string;
+    scope: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ThreadsTable {
+    id: string;
+    conversation_id: string;
+    title: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface TagsTable {
+    id: string;
+    label: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ThreadTagsTable {
+    thread_id: string;
+    tag_id: string;
+    created_at: string;
+}
+
+export interface DiffsTable {
+    id: string;
+    session_id: string;
+    run_id: string | null;
+    summary: string;
+    payload_json: string;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface DatabaseSchema {
     profiles: ProfilesTable;
     providers: ProvidersTable;
@@ -106,5 +145,9 @@ export interface DatabaseSchema {
     tools_catalog: ToolsCatalogTable;
     mcp_servers: McpServersTable;
     schema_migrations: SchemaMigrationsTable;
+    conversations: ConversationsTable;
+    threads: ThreadsTable;
+    tags: TagsTable;
+    thread_tags: ThreadTagsTable;
+    diffs: DiffsTable;
 }
-

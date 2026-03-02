@@ -1,9 +1,9 @@
 import BetterSqlite3 from 'better-sqlite3';
 import { Kysely, SqliteDialect } from 'kysely';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { runtimeSqlMigrations } from '@/app/backend/persistence/generatedMigrations';
 
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
@@ -21,7 +21,6 @@ export interface InitializePersistenceOptions {
     forceReinitialize?: boolean;
 }
 
-const MIGRATIONS_DIRECTORY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'migrations');
 const DEFAULT_DB_FILENAME = 'neonconductor.db';
 const TEST_MEMORY_PATH = ':memory:';
 
@@ -125,32 +124,22 @@ function applySqlMigrations(sqlite: BetterSqliteDatabase): void {
         );
     `);
 
-    if (!existsSync(MIGRATIONS_DIRECTORY)) {
-        throw new Error(`Missing migrations directory at ${MIGRATIONS_DIRECTORY}`);
-    }
-
-    const migrationFiles = readdirSync(MIGRATIONS_DIRECTORY)
-        .filter((file) => file.endsWith('.sql'))
-        .sort((a, b) => a.localeCompare(b));
-
     const isAppliedStatement = sqlite.prepare('SELECT 1 FROM schema_migrations WHERE name = ? LIMIT 1');
     const recordAppliedStatement = sqlite.prepare(
         'INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)'
     );
 
-    for (const filename of migrationFiles) {
-        const wasApplied = isAppliedStatement.get(filename);
+    for (const migration of runtimeSqlMigrations) {
+        const wasApplied = isAppliedStatement.get(migration.name);
         if (wasApplied) {
             continue;
         }
 
-        const migrationPath = path.join(MIGRATIONS_DIRECTORY, filename);
-        const sql = readFileSync(migrationPath, 'utf8');
         const appliedAt = new Date().toISOString();
 
         const runMigration = sqlite.transaction(() => {
-            sqlite.exec(sql);
-            recordAppliedStatement.run(filename, appliedAt);
+            sqlite.exec(migration.sql);
+            recordAppliedStatement.run(migration.name, appliedAt);
         });
 
         runMigration();

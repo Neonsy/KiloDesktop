@@ -45,6 +45,16 @@ describe('persistence bootstrap and durability', () => {
         const firstCountRow = getPersistence().sqlite
             .prepare('SELECT COUNT(*) AS count FROM schema_migrations')
             .get() as { count: number };
+        const firstTables = getPersistence().sqlite
+            .prepare(
+                `
+                    SELECT COUNT(*) AS count
+                    FROM sqlite_master
+                    WHERE type = 'table'
+                      AND name IN ('conversations', 'threads', 'tags', 'thread_tags', 'diffs')
+                `
+            )
+            .get() as { count: number };
 
         closePersistence();
 
@@ -59,6 +69,7 @@ describe('persistence bootstrap and durability', () => {
 
         expect(firstCountRow.count).toBeGreaterThan(0);
         expect(secondCountRow.count).toBe(firstCountRow.count);
+        expect(firstTables.count).toBe(5);
 
         const caller = createCaller();
         const providers = await caller.provider.listProviders();
@@ -95,4 +106,3 @@ describe('persistence bootstrap and durability', () => {
         expect(listed.sessions.some((item) => item.id === created.session.id)).toBe(true);
     });
 });
-

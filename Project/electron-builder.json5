@@ -4,9 +4,16 @@
     appId: 'com.neonsy.neonconductor',
     productName: 'NeonConductor',
 
-    files: ['dist', 'dist-electron'],
+    files: [
+        'dist/**',
+        'dist-electron/**',
+        '!**/__tests__/**',
+        '!**/*.test.*',
+        '!Research/**',
+        '!Markdown/**',
+    ],
     asar: true,
-    asarUnpack: [],
+    asarUnpack: ['**/node_modules/better-sqlite3/**', '**/node_modules/keytar/**'],
 
     // Single icon source - electron-builder converts to .ico/.icns automatically
     icon: 'src/assets/appicon.png',

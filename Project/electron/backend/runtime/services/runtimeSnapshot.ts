@@ -1,9 +1,12 @@
 import {
+    conversationStore,
+    diffStore,
     mcpStore,
     permissionStore,
     providerStore,
     runtimeEventStore,
     sessionStore,
+    tagStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
 
@@ -15,17 +18,35 @@ export interface RuntimeSnapshotService {
 
 class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
     async getSnapshot(): Promise<RuntimeSnapshotV1> {
-        const [sessions, permissions, providers, providerModels, tools, mcpServers, defaults, lastSequence] =
-            await Promise.all([
-                sessionStore.list(),
-                permissionStore.listAll(),
-                providerStore.listProviders(),
-                providerStore.listModels(),
-                toolStore.list(),
-                mcpStore.listServers(),
-                providerStore.getDefaults(),
-                runtimeEventStore.getLastSequence(),
-            ]);
+        const [
+            sessions,
+            permissions,
+            providers,
+            providerModels,
+            tools,
+            mcpServers,
+            defaults,
+            lastSequence,
+            conversations,
+            threads,
+            tags,
+            threadTags,
+            diffs,
+        ] = await Promise.all([
+            sessionStore.list(),
+            permissionStore.listAll(),
+            providerStore.listProviders(),
+            providerStore.listModels(),
+            toolStore.list(),
+            mcpStore.listServers(),
+            providerStore.getDefaults(),
+            runtimeEventStore.getLastSequence(),
+            conversationStore.listConversations(),
+            conversationStore.listThreads(),
+            tagStore.list(),
+            tagStore.listThreadTags(),
+            diffStore.list(),
+        ]);
 
         return {
             generatedAt: new Date().toISOString(),
@@ -39,10 +60,14 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             providerModels,
             tools,
             mcpServers,
+            conversations,
+            threads,
+            tags,
+            threadTags,
+            diffs,
             defaults,
         };
     }
 }
 
 export const runtimeSnapshotService: RuntimeSnapshotService = new RuntimeSnapshotServiceImpl();
-

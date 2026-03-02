@@ -41,6 +41,9 @@ export type OrchestratorMode = (typeof orchestratorModes)[number];
 export const permissionPolicies = ['ask', 'allow', 'deny'] as const;
 export type PermissionPolicy = (typeof permissionPolicies)[number];
 
+export const contextBudgets = ['low', 'balanced', 'high'] as const;
+export type ContextBudget = (typeof contextBudgets)[number];
+
 export const runStatuses = ['idle', 'running', 'completed', 'aborted', 'error'] as const;
 export type RunStatus = (typeof runStatuses)[number];
 
@@ -100,6 +103,10 @@ export interface McpByServerInput {
 export interface RuntimeEventsQueryInput {
     afterSequence?: number;
     limit?: number;
+}
+
+export interface ContextBudgetInput {
+    contextBudget: ContextBudget;
 }
 
 export const unknownInputSchema = arktype('unknown');
@@ -284,6 +291,13 @@ export function parseRuntimeEventsQueryInput(input: unknown): RuntimeEventsQuery
     };
 }
 
+export function parseContextBudgetInput(input: unknown): ContextBudgetInput {
+    const source = readObject(input, 'input');
+    return {
+        contextBudget: readEnumValue(source.contextBudget, 'contextBudget', contextBudgets),
+    };
+}
+
 export const sessionCreateInputSchema = createParser(parseSessionCreateInput);
 export const sessionByIdInputSchema = createParser(parseSessionByIdInput);
 export const sessionPromptInputSchema = createParser(parseSessionPromptInput);
@@ -294,3 +308,4 @@ export const permissionDecisionInputSchema = createParser(parsePermissionDecisio
 export const toolInvokeInputSchema = createParser(parseToolInvokeInput);
 export const mcpByServerInputSchema = createParser(parseMcpByServerInput);
 export const runtimeEventsQueryInputSchema = createParser(parseRuntimeEventsQueryInput);
+export const contextBudgetInputSchema = createParser(parseContextBudgetInput);
