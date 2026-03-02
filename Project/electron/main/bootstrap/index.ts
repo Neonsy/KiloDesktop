@@ -2,7 +2,7 @@ import { app, BrowserWindow, Menu } from 'electron';
 import { createIPCHandler, type CreateContextOptions } from 'electron-trpc-experimental/main';
 
 import { closePersistence, initializePersistence } from '@/app/backend/persistence/db';
-import { initializeSecretStore } from '@/app/backend/secrets/store';
+import { getSecretStoreInfo, initializeSecretStore } from '@/app/backend/secrets/store';
 import type { Context } from '@/app/backend/trpc/context';
 import type { AppRouter } from '@/app/backend/trpc/router';
 import { flushAppLogger, initAppLogger } from '@/app/main/logging';
@@ -42,6 +42,11 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
             dataDir: app.getPath('userData'),
         });
         initializeSecretStore();
+        const secretStoreInfo = getSecretStoreInfo();
+        if (!secretStoreInfo.available) {
+            const reason = secretStoreInfo.reason ?? 'unknown reason';
+            console.warn(`[secrets] ${secretStoreInfo.backend} backend unavailable: ${reason}`);
+        }
 
         // Remove default menu bar (File, Edit, View, Help)
         Menu.setApplicationMenu(null);

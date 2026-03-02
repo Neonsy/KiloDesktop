@@ -31,6 +31,11 @@ describe('runtime contracts', () => {
 
         expect(snapshot.lastSequence).toBeGreaterThanOrEqual(0);
         expect(sessions.sessions).toEqual([]);
+        expect(snapshot.conversations).toEqual([]);
+        expect(snapshot.threads).toEqual([]);
+        expect(snapshot.tags).toEqual([]);
+        expect(snapshot.threadTags).toEqual([]);
+        expect(snapshot.diffs).toEqual([]);
         expect(providers.providers.length).toBeGreaterThan(0);
         expect(pendingPermissions.requests).toEqual([]);
         expect(tools.tools.length).toBeGreaterThan(0);
@@ -188,6 +193,8 @@ describe('runtime contracts', () => {
         const snapshot = await caller.runtime.getSnapshot();
         expect(snapshot.sessions.some((item) => item.id === created.session.id)).toBe(true);
         expect(snapshot.lastSequence).toBeGreaterThan(0);
+        expect(Array.isArray(snapshot.conversations)).toBe(true);
+        expect(Array.isArray(snapshot.diffs)).toBe(true);
 
         const firstBatch = await caller.runtime.getEvents({
             limit: 2,

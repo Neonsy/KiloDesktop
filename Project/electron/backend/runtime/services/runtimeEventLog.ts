@@ -1,10 +1,10 @@
 import { runtimeEventStore } from '@/app/backend/persistence/stores';
 
-import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import type { RuntimeEntityType, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
 
 export interface RuntimeEventLogService {
     append(event: {
-        entityType: string;
+        entityType: RuntimeEntityType;
         entityId: string;
         eventType: string;
         payload: Record<string, unknown>;
@@ -14,7 +14,7 @@ export interface RuntimeEventLogService {
 
 class RuntimeEventLogServiceImpl implements RuntimeEventLogService {
     append(event: {
-        entityType: string;
+        entityType: RuntimeEntityType;
         entityId: string;
         eventType: string;
         payload: Record<string, unknown>;
@@ -28,4 +28,3 @@ class RuntimeEventLogServiceImpl implements RuntimeEventLogService {
 }
 
 export const runtimeEventLogService: RuntimeEventLogService = new RuntimeEventLogServiceImpl();
-

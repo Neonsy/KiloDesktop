@@ -47,14 +47,65 @@ export interface McpServerRecord {
     authState: 'unauthenticated' | 'authenticated';
 }
 
+export type RuntimeEntityType =
+    | 'session'
+    | 'run'
+    | 'permission'
+    | 'provider'
+    | 'tool'
+    | 'mcp'
+    | 'conversation'
+    | 'thread'
+    | 'tag'
+    | 'diff';
+
 export interface RuntimeEventRecordV1 {
     sequence: number;
     eventId: EntityId<'evt'>;
-    entityType: string;
+    entityType: RuntimeEntityType;
     entityId: string;
     eventType: string;
     payload: Record<string, unknown>;
     createdAt: string;
+}
+
+export interface ConversationRecord {
+    id: string;
+    scope: 'detached' | 'workspace';
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ThreadRecord {
+    id: string;
+    conversationId: string;
+    title: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface TagRecord {
+    id: string;
+    label: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface ThreadTagRecord {
+    threadId: string;
+    tagId: string;
+    createdAt: string;
+}
+
+export interface DiffRecord {
+    id: string;
+    sessionId: string;
+    runId: string | null;
+    summary: string;
+    payload: Record<string, unknown>;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface RuntimeSnapshotV1 {
@@ -66,9 +117,13 @@ export interface RuntimeSnapshotV1 {
     providerModels: ProviderModelRecord[];
     tools: ToolRecord[];
     mcpServers: McpServerRecord[];
+    conversations: ConversationRecord[];
+    threads: ThreadRecord[];
+    tags: TagRecord[];
+    threadTags: ThreadTagRecord[];
+    diffs: DiffRecord[];
     defaults: {
         providerId: string;
         modelId: string;
     };
 }
-

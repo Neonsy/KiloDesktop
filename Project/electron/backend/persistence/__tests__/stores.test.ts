@@ -2,10 +2,13 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resetPersistenceForTests } from '@/app/backend/persistence/db';
 import {
+    conversationStore,
+    diffStore,
     mcpStore,
     permissionStore,
     providerStore,
     sessionStore,
+    tagStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
 
@@ -67,5 +70,38 @@ describe('persistence stores', () => {
         const connected = await mcpStore.connect('github');
         expect(connected?.connectionState).toBe('connected');
     });
-});
 
+    it('supports conversations, threads, tags, and diffs', async () => {
+        const conversation = await conversationStore.createConversation('workspace', 'Workspace Chat');
+        const thread = await conversationStore.createThread(conversation.id, 'Thread A');
+        const tag = await tagStore.create('backend');
+        const linked = await tagStore.attachToThread(thread.id, tag.id);
+
+        const session = await sessionStore.create('workspace', 'local');
+        const prompt = await sessionStore.prompt(session.id, 'first');
+        if (!prompt.accepted) {
+            throw new Error('Expected prompt to be accepted.');
+        }
+
+        const diff = await diffStore.create({
+            sessionId: session.id,
+            runId: prompt.runId,
+            summary: 'created patch',
+            payload: { files: ['README.md'] },
+        });
+
+        const conversations = await conversationStore.listConversations();
+        const threads = await conversationStore.listThreads(conversation.id);
+        const tags = await tagStore.list();
+        const threadTags = await tagStore.listThreadTags();
+        const diffs = await diffStore.listBySession(session.id);
+
+        expect(conversations.some((item) => item.id === conversation.id)).toBe(true);
+        expect(threads.some((item) => item.id === thread.id)).toBe(true);
+        expect(tags.some((item) => item.id === tag.id)).toBe(true);
+        expect(threadTags.some((item) => item.threadId === linked.threadId && item.tagId === linked.tagId)).toBe(
+            true
+        );
+        expect(diffs.some((item) => item.id === diff.id)).toBe(true);
+    });
+});

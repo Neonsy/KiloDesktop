@@ -2,12 +2,12 @@ import { createEntityId } from '@/app/backend/runtime/contracts';
 import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 
-import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import type { RuntimeEntityType, RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 
 export class RuntimeEventStore {
     async append(event: {
-        entityType: string;
+        entityType: RuntimeEntityType;
         entityId: string;
         eventType: string;
         payload: Record<string, unknown>;
@@ -40,7 +40,7 @@ export class RuntimeEventStore {
         return {
             sequence: inserted.sequence,
             eventId: inserted.event_id as EntityId<'evt'>,
-            entityType: inserted.entity_type,
+            entityType: inserted.entity_type as RuntimeEntityType,
             entityId: inserted.entity_id,
             eventType: inserted.event_type,
             payload: parseJsonValue(inserted.payload_json, {}),
@@ -74,7 +74,7 @@ export class RuntimeEventStore {
         return rows.map((row) => ({
             sequence: row.sequence,
             eventId: row.event_id as EntityId<'evt'>,
-            entityType: row.entity_type,
+            entityType: row.entity_type as RuntimeEntityType,
             entityId: row.entity_id,
             eventType: row.event_type,
             payload: parseJsonValue(row.payload_json, {}),
