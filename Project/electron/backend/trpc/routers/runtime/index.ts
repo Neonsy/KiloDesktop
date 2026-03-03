@@ -1,5 +1,9 @@
 import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
-import { runtimeEventsSubscriptionInputSchema, runtimeResetInputSchema } from '@/app/backend/runtime/contracts';
+import {
+    profileInputSchema,
+    runtimeEventsSubscriptionInputSchema,
+    runtimeResetInputSchema,
+} from '@/app/backend/runtime/contracts';
 import { runtimeEventBus } from '@/app/backend/runtime/services/runtimeEventBus';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset';
@@ -32,8 +36,8 @@ function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<R
 }
 
 export const runtimeRouter = router({
-    getSnapshot: publicProcedure.query(async () => {
-        return runtimeSnapshotService.getSnapshot();
+    getSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
+        return runtimeSnapshotService.getSnapshot(input.profileId);
     }),
     subscribeEvents: publicProcedure.input(runtimeEventsSubscriptionInputSchema).subscription(async function* ({
         input,

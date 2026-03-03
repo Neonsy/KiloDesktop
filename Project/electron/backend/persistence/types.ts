@@ -1,4 +1,14 @@
-import type { EntityId, PermissionPolicy, RunStatus } from '@/app/backend/runtime/contracts';
+import type {
+    EntityId,
+    KiloAccountContext,
+    MarketplacePackage,
+    ModeDefinition,
+    PermissionPolicy,
+    RulesetDefinition,
+    RunStatus,
+    SecretReference,
+    SkillfileDefinition,
+} from '@/app/backend/runtime/contracts';
 
 export interface SessionSummaryRecord {
     id: EntityId<'sess'>;
@@ -111,6 +121,18 @@ export interface DiffRecord {
     updatedAt: string;
 }
 
+export type ModeDefinitionRecord = ModeDefinition;
+
+export type RulesetDefinitionRecord = RulesetDefinition;
+
+export type SkillfileDefinitionRecord = SkillfileDefinition;
+
+export type MarketplacePackageRecord = MarketplacePackage;
+
+export type KiloAccountContextRecord = KiloAccountContext;
+
+export type SecretReferenceRecord = SecretReference;
+
 export interface RuntimeSnapshotV1 {
     generatedAt: string;
     lastSequence: number;
@@ -125,6 +147,12 @@ export interface RuntimeSnapshotV1 {
     tags: TagRecord[];
     threadTags: ThreadTagRecord[];
     diffs: DiffRecord[];
+    modeDefinitions: ModeDefinitionRecord[];
+    rulesets: RulesetDefinitionRecord[];
+    skillfiles: SkillfileDefinitionRecord[];
+    marketplacePackages: MarketplacePackageRecord[];
+    kiloAccountContext: KiloAccountContextRecord;
+    secretReferences: SecretReferenceRecord[];
     defaults: {
         providerId: string;
         modelId: string;

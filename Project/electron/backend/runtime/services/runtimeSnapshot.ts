@@ -1,23 +1,28 @@
-import { getDefaultProfileId } from '@/app/backend/persistence/db';
 import {
+    accountSnapshotStore,
     conversationStore,
     diffStore,
+    marketplaceStore,
     mcpStore,
+    modeStore,
     permissionStore,
     providerStore,
+    rulesetStore,
     runtimeEventStore,
+    secretReferenceStore,
     sessionStore,
+    skillfileStore,
     tagStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
 import type { RuntimeSnapshotV1 } from '@/app/backend/persistence/types';
 
 export interface RuntimeSnapshotService {
-    getSnapshot(): Promise<RuntimeSnapshotV1>;
+    getSnapshot(profileId: string): Promise<RuntimeSnapshotV1>;
 }
 
 class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
-    async getSnapshot(): Promise<RuntimeSnapshotV1> {
+    async getSnapshot(profileId: string): Promise<RuntimeSnapshotV1> {
         const [
             sessions,
             permissions,
@@ -32,6 +37,12 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             tags,
             threadTags,
             diffs,
+            modeDefinitions,
+            rulesets,
+            skillfiles,
+            marketplacePackages,
+            kiloAccountContext,
+            secretReferences,
         ] = await Promise.all([
             sessionStore.list(),
             permissionStore.listAll(),
@@ -39,13 +50,19 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             providerStore.listModels(),
             toolStore.list(),
             mcpStore.listServers(),
-            providerStore.getDefaults(getDefaultProfileId()),
+            providerStore.getDefaults(profileId),
             runtimeEventStore.getLastSequence(),
             conversationStore.listConversations(),
             conversationStore.listThreads(),
             tagStore.list(),
             tagStore.listThreadTags(),
             diffStore.list(),
+            modeStore.listByProfile(profileId),
+            rulesetStore.listByProfile(profileId),
+            skillfileStore.listByProfile(profileId),
+            marketplaceStore.listPackages(),
+            accountSnapshotStore.getByProfile(profileId),
+            secretReferenceStore.listByProfile(profileId),
         ]);
 
         return {
@@ -65,6 +82,12 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             tags,
             threadTags,
             diffs,
+            modeDefinitions,
+            rulesets,
+            skillfiles,
+            marketplacePackages,
+            kiloAccountContext,
+            secretReferences,
             defaults,
         };
     }

@@ -1,5 +1,6 @@
 import { getPersistence, reseedRuntimeData } from '@/app/backend/persistence/db';
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
+import { secretReferenceStore } from '@/app/backend/persistence/stores';
 import type { RuntimeResetCounts, RuntimeResetInput, RuntimeResetResult } from '@/app/backend/runtime/contracts';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
@@ -16,7 +17,25 @@ const EMPTY_COUNTS: RuntimeResetCounts = {
     threadTags: 0,
     tags: 0,
     diffs: 0,
+    modeDefinitions: 0,
+    rulesets: 0,
+    skillfiles: 0,
+    marketplacePackages: 0,
+    marketplaceAssets: 0,
+    kiloAccountSnapshots: 0,
+    kiloOrgSnapshots: 0,
+    secretReferences: 0,
 };
+
+interface WorkspaceResolvedCounts {
+    counts: RuntimeResetCounts;
+    sessionIds: string[];
+    conversationIds: string[];
+    tagIds: string[];
+    rulesetIds: string[];
+    skillfileIds: string[];
+    entityIds: string[];
+}
 
 function unique(values: string[]): string[] {
     return [...new Set(values)];
@@ -50,6 +69,24 @@ async function listWorkspaceConversationIds(
         query = query.where('workspace_fingerprint', '=', workspaceFingerprint ?? '');
     } else {
         query = query.where('scope', '=', 'workspace');
+    }
+
+    const rows = await query.execute();
+    return rows.map((row) => row.id);
+}
+
+async function listWorkspaceParityIds(
+    db: Kysely<DatabaseSchema>,
+    table: 'rulesets' | 'skillfiles',
+    target: RuntimeResetInput['target'],
+    workspaceFingerprint?: string
+): Promise<string[]> {
+    let query = db.selectFrom(table).select('id');
+
+    if (target === 'workspace') {
+        query = query.where('workspace_fingerprint', '=', workspaceFingerprint ?? '');
+    } else {
+        query = query.where('workspace_fingerprint', 'is not', null);
     }
 
     const rows = await query.execute();
@@ -131,28 +168,27 @@ async function countRuntimeEventsForEntityIds(db: Kysely<DatabaseSchema>, entity
     return row?.count ?? 0;
 }
 
-async function removeKnownProviderSecrets(): Promise<void> {
+async function removeSecretsByReferences(secretKeyRefs: string[]): Promise<void> {
+    if (secretKeyRefs.length === 0) {
+        return;
+    }
+
     const store = getSecretStore();
-    await Promise.allSettled([store.delete('provider/kilo'), store.delete('provider/openai')]);
+    await Promise.allSettled(unique(secretKeyRefs).map((secretKeyRef) => store.delete(secretKeyRef)));
 }
 
 async function resolveWorkspaceCounts(
     db: Kysely<DatabaseSchema>,
     target: 'workspace' | 'workspace_all',
     workspaceFingerprint?: string
-): Promise<
-    RuntimeResetCounts & {
-        sessionIds: string[];
-        conversationIds: string[];
-        tagIds: string[];
-        entityIds: string[];
-    }
-> {
+): Promise<WorkspaceResolvedCounts> {
     const sessionIds = await listWorkspaceSessionIds(db, target, workspaceFingerprint);
     const conversationIds = await listWorkspaceConversationIds(db, target, workspaceFingerprint);
     const threadIds = await listThreadIds(db, conversationIds);
     const runIds = await listRunIds(db, sessionIds);
     const diffIds = await listDiffIds(db, sessionIds);
+    const rulesetIds = await listWorkspaceParityIds(db, 'rulesets', target, workspaceFingerprint);
+    const skillfileIds = await listWorkspaceParityIds(db, 'skillfiles', target, workspaceFingerprint);
 
     const threadTagRows = threadIds.length
         ? await db
@@ -163,45 +199,182 @@ async function resolveWorkspaceCounts(
         : [];
 
     const tagIds = await listThreadTagIdsToDelete(db, threadIds);
-    const entityIds = unique([...sessionIds, ...runIds, ...conversationIds, ...threadIds, ...diffIds, ...tagIds]);
+    const entityIds = unique([
+        ...sessionIds,
+        ...runIds,
+        ...conversationIds,
+        ...threadIds,
+        ...diffIds,
+        ...tagIds,
+        ...rulesetIds,
+        ...skillfileIds,
+    ]);
 
     return {
-        settings: 0,
-        runtimeEvents: await countRuntimeEventsForEntityIds(db, entityIds),
-        sessions: sessionIds.length,
-        runs: runIds.length,
-        permissions: 0,
-        conversations: conversationIds.length,
-        threads: threadIds.length,
-        threadTags: threadTagRows.length,
-        tags: tagIds.length,
-        diffs: diffIds.length,
+        counts: {
+            ...EMPTY_COUNTS,
+            runtimeEvents: await countRuntimeEventsForEntityIds(db, entityIds),
+            sessions: sessionIds.length,
+            runs: runIds.length,
+            conversations: conversationIds.length,
+            threads: threadIds.length,
+            threadTags: threadTagRows.length,
+            tags: tagIds.length,
+            diffs: diffIds.length,
+            rulesets: rulesetIds.length,
+            skillfiles: skillfileIds.length,
+        },
         sessionIds,
         conversationIds,
         tagIds,
+        rulesetIds,
+        skillfileIds,
         entityIds,
     };
 }
 
-async function applyWorkspaceDelete(
+async function applyWorkspaceDelete(db: Kysely<DatabaseSchema>, resolved: WorkspaceResolvedCounts): Promise<void> {
+    if (resolved.entityIds.length > 0) {
+        await db.deleteFrom('runtime_events').where('entity_id', 'in', resolved.entityIds).execute();
+    }
+
+    if (resolved.sessionIds.length > 0) {
+        await db.deleteFrom('sessions').where('id', 'in', resolved.sessionIds).execute();
+    }
+
+    if (resolved.conversationIds.length > 0) {
+        await db.deleteFrom('conversations').where('id', 'in', resolved.conversationIds).execute();
+    }
+
+    if (resolved.tagIds.length > 0) {
+        await db.deleteFrom('tags').where('id', 'in', resolved.tagIds).execute();
+    }
+
+    if (resolved.rulesetIds.length > 0) {
+        await db.deleteFrom('rulesets').where('id', 'in', resolved.rulesetIds).execute();
+    }
+
+    if (resolved.skillfileIds.length > 0) {
+        await db.deleteFrom('skillfiles').where('id', 'in', resolved.skillfileIds).execute();
+    }
+}
+
+async function resolveProfileSettingsCounts(
     db: Kysely<DatabaseSchema>,
-    counts: { sessionIds: string[]; conversationIds: string[]; tagIds: string[]; entityIds: string[] }
-): Promise<void> {
-    if (counts.entityIds.length > 0) {
-        await db.deleteFrom('runtime_events').where('entity_id', 'in', counts.entityIds).execute();
-    }
+    profileId: string
+): Promise<RuntimeResetCounts> {
+    const [settings, modeDefinitions, rulesets, skillfiles, kiloAccountSnapshots, kiloOrgSnapshots, secretReferences] =
+        await Promise.all([
+            db
+                .selectFrom('settings')
+                .select((eb) => eb.fn.count<number>('id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+            db
+                .selectFrom('mode_definitions')
+                .select((eb) => eb.fn.count<number>('id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+            db
+                .selectFrom('rulesets')
+                .select((eb) => eb.fn.count<number>('id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+            db
+                .selectFrom('skillfiles')
+                .select((eb) => eb.fn.count<number>('id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+            db
+                .selectFrom('kilo_account_snapshots')
+                .select((eb) => eb.fn.count<number>('profile_id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+            db
+                .selectFrom('kilo_org_snapshots')
+                .select((eb) => eb.fn.count<number>('id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+            db
+                .selectFrom('secret_references')
+                .select((eb) => eb.fn.count<number>('id').as('count'))
+                .where('profile_id', '=', profileId)
+                .executeTakeFirst(),
+        ]);
 
-    if (counts.sessionIds.length > 0) {
-        await db.deleteFrom('sessions').where('id', 'in', counts.sessionIds).execute();
-    }
+    return {
+        ...EMPTY_COUNTS,
+        settings: settings?.count ?? 0,
+        modeDefinitions: modeDefinitions?.count ?? 0,
+        rulesets: rulesets?.count ?? 0,
+        skillfiles: skillfiles?.count ?? 0,
+        kiloAccountSnapshots: kiloAccountSnapshots?.count ?? 0,
+        kiloOrgSnapshots: kiloOrgSnapshots?.count ?? 0,
+        secretReferences: secretReferences?.count ?? 0,
+    };
+}
 
-    if (counts.conversationIds.length > 0) {
-        await db.deleteFrom('conversations').where('id', 'in', counts.conversationIds).execute();
-    }
+async function resolveFullCounts(db: Kysely<DatabaseSchema>): Promise<RuntimeResetCounts> {
+    const [
+        settings,
+        runtimeEvents,
+        sessions,
+        runs,
+        permissions,
+        conversations,
+        threads,
+        threadTags,
+        tags,
+        diffs,
+        modeDefinitions,
+        rulesets,
+        skillfiles,
+        marketplacePackages,
+        marketplaceAssets,
+        kiloAccountSnapshots,
+        kiloOrgSnapshots,
+        secretReferences,
+    ] = await Promise.all([
+        db.selectFrom('settings').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('runtime_events').select((eb) => eb.fn.count<number>('sequence').as('count')).executeTakeFirst(),
+        db.selectFrom('sessions').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('runs').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('permissions').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('conversations').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('threads').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('thread_tags').select((eb) => eb.fn.count<number>('thread_id').as('count')).executeTakeFirst(),
+        db.selectFrom('tags').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('diffs').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('mode_definitions').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('rulesets').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('skillfiles').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('marketplace_packages').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('marketplace_assets').select((eb) => eb.fn.count<number>('package_id').as('count')).executeTakeFirst(),
+        db.selectFrom('kilo_account_snapshots').select((eb) => eb.fn.count<number>('profile_id').as('count')).executeTakeFirst(),
+        db.selectFrom('kilo_org_snapshots').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('secret_references').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+    ]);
 
-    if (counts.tagIds.length > 0) {
-        await db.deleteFrom('tags').where('id', 'in', counts.tagIds).execute();
-    }
+    return {
+        settings: settings?.count ?? 0,
+        runtimeEvents: runtimeEvents?.count ?? 0,
+        sessions: sessions?.count ?? 0,
+        runs: runs?.count ?? 0,
+        permissions: permissions?.count ?? 0,
+        conversations: conversations?.count ?? 0,
+        threads: threads?.count ?? 0,
+        threadTags: threadTags?.count ?? 0,
+        tags: tags?.count ?? 0,
+        diffs: diffs?.count ?? 0,
+        modeDefinitions: modeDefinitions?.count ?? 0,
+        rulesets: rulesets?.count ?? 0,
+        skillfiles: skillfiles?.count ?? 0,
+        marketplacePackages: marketplacePackages?.count ?? 0,
+        marketplaceAssets: marketplaceAssets?.count ?? 0,
+        kiloAccountSnapshots: kiloAccountSnapshots?.count ?? 0,
+        kiloOrgSnapshots: kiloOrgSnapshots?.count ?? 0,
+        secretReferences: secretReferences?.count ?? 0,
+    };
 }
 
 export interface RuntimeResetService {
@@ -214,49 +387,34 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
         const dryRun = input.dryRun ?? false;
 
         if (input.target === 'workspace' || input.target === 'workspace_all') {
-            const countsWithIds = await resolveWorkspaceCounts(db, input.target, input.workspaceFingerprint);
-            const counts: RuntimeResetCounts = {
-                settings: countsWithIds.settings,
-                runtimeEvents: countsWithIds.runtimeEvents,
-                sessions: countsWithIds.sessions,
-                runs: countsWithIds.runs,
-                permissions: countsWithIds.permissions,
-                conversations: countsWithIds.conversations,
-                threads: countsWithIds.threads,
-                threadTags: countsWithIds.threadTags,
-                tags: countsWithIds.tags,
-                diffs: countsWithIds.diffs,
-            };
+            const resolved = await resolveWorkspaceCounts(db, input.target, input.workspaceFingerprint);
 
             if (!dryRun) {
-                await applyWorkspaceDelete(db, countsWithIds);
+                await applyWorkspaceDelete(db, resolved);
             }
 
             return {
                 dryRun,
                 target: input.target,
                 applied: !dryRun,
-                counts,
+                counts: resolved.counts,
             };
         }
 
         if (input.target === 'profile_settings') {
-            const settings = await db
-                .selectFrom('settings')
-                .select((eb) => eb.fn.count<number>('id').as('count'))
-                .where('profile_id', '=', input.profileId ?? '')
-                .executeTakeFirst();
-
-            const counts: RuntimeResetCounts = {
-                ...EMPTY_COUNTS,
-                settings: settings?.count ?? 0,
-            };
+            const profileId = input.profileId ?? '';
+            const counts = await resolveProfileSettingsCounts(db, profileId);
+            const secretRefs = await secretReferenceStore.listByProfile(profileId);
 
             if (!dryRun) {
-                await db
-                    .deleteFrom('settings')
-                    .where('profile_id', '=', input.profileId ?? '')
-                    .execute();
+                await db.deleteFrom('settings').where('profile_id', '=', profileId).execute();
+                await db.deleteFrom('mode_definitions').where('profile_id', '=', profileId).execute();
+                await db.deleteFrom('rulesets').where('profile_id', '=', profileId).execute();
+                await db.deleteFrom('skillfiles').where('profile_id', '=', profileId).execute();
+                await db.deleteFrom('kilo_account_snapshots').where('profile_id', '=', profileId).execute();
+                await db.deleteFrom('kilo_org_snapshots').where('profile_id', '=', profileId).execute();
+                await db.deleteFrom('secret_references').where('profile_id', '=', profileId).execute();
+                await removeSecretsByReferences(secretRefs.map((secretRef) => secretRef.secretKeyRef));
             }
 
             return {
@@ -267,78 +425,8 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
             };
         }
 
-        const counts: RuntimeResetCounts = {
-            settings:
-                (
-                    await db
-                        .selectFrom('settings')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            runtimeEvents:
-                (
-                    await db
-                        .selectFrom('runtime_events')
-                        .select((eb) => eb.fn.count<number>('sequence').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            sessions:
-                (
-                    await db
-                        .selectFrom('sessions')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            runs:
-                (
-                    await db
-                        .selectFrom('runs')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            permissions:
-                (
-                    await db
-                        .selectFrom('permissions')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            conversations:
-                (
-                    await db
-                        .selectFrom('conversations')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            threads:
-                (
-                    await db
-                        .selectFrom('threads')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            threadTags:
-                (
-                    await db
-                        .selectFrom('thread_tags')
-                        .select((eb) => eb.fn.count<number>('thread_id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            tags:
-                (
-                    await db
-                        .selectFrom('tags')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-            diffs:
-                (
-                    await db
-                        .selectFrom('diffs')
-                        .select((eb) => eb.fn.count<number>('id').as('count'))
-                        .executeTakeFirst()
-                )?.count ?? 0,
-        };
+        const counts = await resolveFullCounts(db);
+        const secretRefs = await secretReferenceStore.listAll();
 
         if (!dryRun) {
             await db.deleteFrom('runtime_events').execute();
@@ -347,13 +435,20 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
             await db.deleteFrom('conversations').execute();
             await db.deleteFrom('tags').execute();
             await db.deleteFrom('settings').execute();
+            await db.deleteFrom('mode_definitions').execute();
+            await db.deleteFrom('rulesets').execute();
+            await db.deleteFrom('skillfiles').execute();
+            await db.deleteFrom('kilo_account_snapshots').execute();
+            await db.deleteFrom('kilo_org_snapshots').execute();
+            await db.deleteFrom('secret_references').execute();
+            await db.deleteFrom('marketplace_packages').execute();
             await db.deleteFrom('provider_models').execute();
             await db.deleteFrom('providers').execute();
             await db.deleteFrom('tools_catalog').execute();
             await db.deleteFrom('mcp_servers').execute();
 
             reseedRuntimeData();
-            await removeKnownProviderSecrets();
+            await removeSecretsByReferences(secretRefs.map((secretRef) => secretRef.secretKeyRef));
         }
 
         return {
