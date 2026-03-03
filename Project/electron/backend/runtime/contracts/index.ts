@@ -53,6 +53,90 @@ export type StreamEventType = (typeof streamEventTypes)[number];
 export const runtimeResetTargets = ['workspace', 'workspace_all', 'profile_settings', 'full'] as const;
 export type RuntimeResetTarget = (typeof runtimeResetTargets)[number];
 
+export interface ModeDefinition {
+    id: string;
+    profileId: string;
+    topLevelTab: TopLevelTab;
+    modeKey: string;
+    label: string;
+    prompt: Record<string, unknown>;
+    executionPolicy: Record<string, unknown>;
+    source: string;
+    enabled: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface RulesetDefinition {
+    id: string;
+    profileId: string;
+    workspaceFingerprint?: string;
+    name: string;
+    bodyMarkdown: string;
+    source: string;
+    enabled: boolean;
+    precedence: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface SkillfileDefinition {
+    id: string;
+    profileId: string;
+    workspaceFingerprint?: string;
+    name: string;
+    bodyMarkdown: string;
+    source: string;
+    enabled: boolean;
+    precedence: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface MarketplacePackage {
+    id: string;
+    packageKind: string;
+    slug: string;
+    version: string;
+    enabled: boolean;
+    pinned: boolean;
+    source: Record<string, unknown>;
+    installedAt: string;
+    updatedAt: string;
+    assets: Array<{
+        assetKind: string;
+        assetId: string;
+        createdAt: string;
+    }>;
+}
+
+export interface KiloAccountContext {
+    profileId: string;
+    accountId?: string;
+    displayName: string;
+    emailMasked: string;
+    authState: string;
+    tokenExpiresAt?: string;
+    organizations: Array<{
+        id: string;
+        organizationId: string;
+        name: string;
+        isActive: boolean;
+        entitlement: Record<string, unknown>;
+    }>;
+    updatedAt: string;
+}
+
+export interface SecretReference {
+    id: string;
+    profileId: string;
+    providerId: string;
+    secretKeyRef: string;
+    secretKind: string;
+    status: string;
+    updatedAt: string;
+}
+
 export interface StreamEventEnvelope {
     id: EntityId<'evt'>;
     sessionId: EntityId<'sess'>;
@@ -114,6 +198,8 @@ export interface RuntimeEventsSubscriptionInput {
     afterSequence?: number;
 }
 
+export type RuntimeSnapshotInput = ProfileInput;
+
 export interface RuntimeResetInput {
     target: RuntimeResetTarget;
     profileId?: string;
@@ -133,6 +219,14 @@ export interface RuntimeResetCounts {
     threadTags: number;
     tags: number;
     diffs: number;
+    modeDefinitions: number;
+    rulesets: number;
+    skillfiles: number;
+    marketplacePackages: number;
+    marketplaceAssets: number;
+    kiloAccountSnapshots: number;
+    kiloOrgSnapshots: number;
+    secretReferences: number;
 }
 
 export interface RuntimeResetResult {

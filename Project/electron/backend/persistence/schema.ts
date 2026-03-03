@@ -135,6 +135,95 @@ export interface DiffsTable {
     updated_at: string;
 }
 
+export interface ModeDefinitionsTable {
+    id: string;
+    profile_id: string;
+    top_level_tab: string;
+    mode_key: string;
+    label: string;
+    prompt_json: string;
+    execution_policy_json: string;
+    source: string;
+    enabled: 0 | 1;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface RulesetsTable {
+    id: string;
+    profile_id: string;
+    workspace_fingerprint: string | null;
+    name: string;
+    body_markdown: string;
+    source: string;
+    enabled: 0 | 1;
+    precedence: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface SkillfilesTable {
+    id: string;
+    profile_id: string;
+    workspace_fingerprint: string | null;
+    name: string;
+    body_markdown: string;
+    source: string;
+    enabled: 0 | 1;
+    precedence: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface MarketplacePackagesTable {
+    id: string;
+    package_kind: string;
+    slug: string;
+    version: string;
+    enabled: 0 | 1;
+    pinned: 0 | 1;
+    source_json: string;
+    installed_at: string;
+    updated_at: string;
+}
+
+export interface MarketplaceAssetsTable {
+    package_id: string;
+    asset_kind: string;
+    asset_id: string;
+    created_at: string;
+}
+
+export interface KiloAccountSnapshotsTable {
+    profile_id: string;
+    account_id: string | null;
+    display_name: string;
+    email_masked: string;
+    auth_state: string;
+    token_expires_at: string | null;
+    updated_at: string;
+}
+
+export interface KiloOrgSnapshotsTable {
+    id: string;
+    profile_id: string;
+    organization_id: string;
+    name: string;
+    is_active: 0 | 1;
+    entitlement_json: string;
+    updated_at: string;
+}
+
+export interface SecretReferencesTable {
+    id: string;
+    profile_id: string;
+    provider_id: string;
+    secret_key_ref: string;
+    secret_kind: string;
+    status: string;
+    updated_at: string;
+}
+
 export interface DatabaseSchema {
     profiles: ProfilesTable;
     providers: ProvidersTable;
@@ -152,4 +241,12 @@ export interface DatabaseSchema {
     tags: TagsTable;
     thread_tags: ThreadTagsTable;
     diffs: DiffsTable;
+    mode_definitions: ModeDefinitionsTable;
+    rulesets: RulesetsTable;
+    skillfiles: SkillfilesTable;
+    marketplace_packages: MarketplacePackagesTable;
+    marketplace_assets: MarketplaceAssetsTable;
+    kilo_account_snapshots: KiloAccountSnapshotsTable;
+    kilo_org_snapshots: KiloOrgSnapshotsTable;
+    secret_references: SecretReferencesTable;
 }

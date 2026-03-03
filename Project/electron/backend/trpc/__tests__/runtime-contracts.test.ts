@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getDefaultProfileId, resetPersistenceForTests } from '@/app/backend/persistence/db';
+import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import type { Context } from '@/app/backend/trpc/context';
 import { appRouter } from '@/app/backend/trpc/router';
 
@@ -23,7 +23,7 @@ describe('runtime contracts', () => {
     it('exposes all new runtime domains in root router', async () => {
         const caller = createCaller();
 
-        const snapshot = await caller.runtime.getSnapshot();
+        const snapshot = await caller.runtime.getSnapshot({ profileId });
         const sessions = await caller.session.list();
         const providers = await caller.provider.listProviders({ profileId });
         const pendingPermissions = await caller.permission.listPending();
@@ -37,6 +37,11 @@ describe('runtime contracts', () => {
         expect(snapshot.tags).toEqual([]);
         expect(snapshot.threadTags).toEqual([]);
         expect(snapshot.diffs).toEqual([]);
+        expect(snapshot.modeDefinitions.some((mode) => mode.topLevelTab === 'chat' && mode.modeKey === 'chat')).toBe(
+            true
+        );
+        expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
+        expect(snapshot.secretReferences).toEqual([]);
         expect(providers.providers.length).toBeGreaterThan(0);
         expect(pendingPermissions.requests).toEqual([]);
         expect(tools.tools.length).toBeGreaterThan(0);
@@ -184,12 +189,71 @@ describe('runtime contracts', () => {
 
     it('supports workspace-scoped runtime reset dry-run and apply', async () => {
         const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
 
         const created = await caller.session.create({
             scope: 'workspace',
             kind: 'local',
             workspaceFingerprint: 'wsf_runtime_contracts',
         });
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO rulesets (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'ruleset_workspace_target',
+                profileId,
+                'wsf_runtime_contracts',
+                'Workspace Rules',
+                '# Rules',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO skillfiles (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'skill_workspace_target',
+                profileId,
+                'wsf_runtime_contracts',
+                'Workspace Skillfile',
+                '# Skill',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO rulesets (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'ruleset_workspace_other',
+                profileId,
+                'wsf_other_workspace',
+                'Other Rules',
+                '# Rules',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
 
         const dryRun = await caller.runtime.reset({
             target: 'workspace',
@@ -198,6 +262,8 @@ describe('runtime contracts', () => {
         });
         expect(dryRun.applied).toBe(false);
         expect(dryRun.counts.sessions).toBe(1);
+        expect(dryRun.counts.rulesets).toBe(1);
+        expect(dryRun.counts.skillfiles).toBe(1);
 
         const applied = await caller.runtime.reset({
             target: 'workspace',
@@ -210,7 +276,146 @@ describe('runtime contracts', () => {
         const sessions = await caller.session.list();
         expect(sessions.sessions.some((item) => item.id === created.session.id)).toBe(false);
 
-        const snapshot = await caller.runtime.getSnapshot();
+        const snapshot = await caller.runtime.getSnapshot({ profileId });
         expect(snapshot.lastSequence).toBeGreaterThan(0);
+
+        const remainingRulesetCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM rulesets WHERE workspace_fingerprint = ?')
+            .get('wsf_other_workspace') as { count: number };
+        expect(remainingRulesetCount.count).toBe(1);
+    });
+
+    it('resets only targeted profile-scoped parity rows for profile_settings', async () => {
+        const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+        const otherProfileId = 'profile_other';
+
+        sqlite
+            .prepare('INSERT INTO profiles (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+            .run(otherProfileId, 'Other Profile', now, now);
+
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO mode_definitions (id, profile_id, top_level_tab, mode_key, label, prompt_json, execution_policy_json, source, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'mode_profile_other_agent_code',
+                otherProfileId,
+                'agent',
+                'code',
+                'Other Agent Code',
+                '{}',
+                '{}',
+                'user',
+                1,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO rulesets (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'ruleset_profile_other',
+                otherProfileId,
+                null,
+                'Other Profile Rules',
+                '# Rules',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'secret_ref_profile_other',
+                otherProfileId,
+                'openai',
+                'provider/openai/other',
+                'api_key',
+                'active',
+                now
+            );
+
+        const dryRun = await caller.runtime.reset({
+            target: 'profile_settings',
+            profileId,
+            dryRun: true,
+        });
+        expect(dryRun.applied).toBe(false);
+        expect(dryRun.counts.modeDefinitions).toBeGreaterThan(0);
+        expect(dryRun.counts.kiloAccountSnapshots).toBeGreaterThan(0);
+
+        const applied = await caller.runtime.reset({
+            target: 'profile_settings',
+            profileId,
+            confirm: true,
+        });
+        expect(applied.applied).toBe(true);
+
+        const defaultProfileModeCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM mode_definitions WHERE profile_id = ?')
+            .get(profileId) as { count: number };
+        expect(defaultProfileModeCount.count).toBe(0);
+
+        const otherProfileModeCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM mode_definitions WHERE profile_id = ?')
+            .get(otherProfileId) as { count: number };
+        expect(otherProfileModeCount.count).toBe(1);
+
+        const otherProfileSecretRefCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM secret_references WHERE profile_id = ?')
+            .get(otherProfileId) as { count: number };
+        expect(otherProfileSecretRefCount.count).toBe(1);
+    });
+
+    it('full reset clears parity rows and reseeds baseline modes', async () => {
+        const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run('secret_ref_profile_default', profileId, 'kilo', 'provider/kilo/default', 'api_key', 'active', now);
+
+        const dryRun = await caller.runtime.reset({
+            target: 'full',
+            profileId,
+            dryRun: true,
+        });
+        expect(dryRun.applied).toBe(false);
+        expect(dryRun.counts.modeDefinitions).toBeGreaterThan(0);
+        expect(dryRun.counts.secretReferences).toBe(1);
+
+        const applied = await caller.runtime.reset({
+            target: 'full',
+            profileId,
+            confirm: true,
+        });
+        expect(applied.applied).toBe(true);
+
+        const snapshot = await caller.runtime.getSnapshot({ profileId });
+        expect(snapshot.modeDefinitions.length).toBe(8);
+        expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
+        expect(snapshot.secretReferences).toEqual([]);
     });
 });

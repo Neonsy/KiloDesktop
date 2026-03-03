@@ -52,6 +52,10 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         confirm?: boolean;
     }>();
 
+    expectTypeOf<Inputs['runtime']['getSnapshot']>().toExtend<{
+        profileId: string;
+    }>();
+
     expectTypeOf<Outputs['runtime']['getSnapshot']>().toExtend<{
         generatedAt: string;
         lastSequence: number;

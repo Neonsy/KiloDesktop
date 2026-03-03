@@ -2,12 +2,17 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getDefaultProfileId, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import {
+    accountSnapshotStore,
     conversationStore,
     diffStore,
+    marketplaceStore,
     mcpStore,
+    modeStore,
     permissionStore,
     providerStore,
+    secretReferenceStore,
     sessionStore,
+    skillfileStore,
     tagStore,
     toolStore,
 } from '@/app/backend/persistence/stores';
@@ -70,6 +75,26 @@ describe('persistence stores', () => {
 
         const connected = await mcpStore.connect('github');
         expect(connected?.connectionState).toBe('connected');
+    });
+
+    it('seeds parity baseline stores', async () => {
+        const profileId = getDefaultProfileId();
+
+        const [modes, skillfiles, account, marketplacePackages, secretReferences] = await Promise.all([
+            modeStore.listByProfile(profileId),
+            skillfileStore.listByProfile(profileId),
+            accountSnapshotStore.getByProfile(profileId),
+            marketplaceStore.listPackages(),
+            secretReferenceStore.listByProfile(profileId),
+        ]);
+
+        expect(modes.some((mode) => mode.topLevelTab === 'chat' && mode.modeKey === 'chat')).toBe(true);
+        expect(modes.some((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'ask')).toBe(true);
+        expect(skillfiles).toEqual([]);
+        expect(account.authState).toBe('logged_out');
+        expect(account.profileId).toBe(profileId);
+        expect(marketplacePackages).toEqual([]);
+        expect(secretReferences).toEqual([]);
     });
 
     it('supports conversations, threads, tags, and diffs', async () => {

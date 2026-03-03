@@ -77,6 +77,71 @@ const MCP_SERVER_SEED = [
     },
 ] as const;
 
+const MODE_SEED = [
+    {
+        topLevelTab: 'chat',
+        modeKey: 'chat',
+        label: 'Chat',
+        prompt: {},
+        executionPolicy: {},
+    },
+    {
+        topLevelTab: 'agent',
+        modeKey: 'plan',
+        label: 'Agent Plan',
+        prompt: {},
+        executionPolicy: {
+            planningOnly: true,
+        },
+    },
+    {
+        topLevelTab: 'agent',
+        modeKey: 'debug',
+        label: 'Agent Debug',
+        prompt: {},
+        executionPolicy: {},
+    },
+    {
+        topLevelTab: 'agent',
+        modeKey: 'code',
+        label: 'Agent Code',
+        prompt: {},
+        executionPolicy: {},
+    },
+    {
+        topLevelTab: 'agent',
+        modeKey: 'ask',
+        label: 'Agent Ask',
+        prompt: {},
+        executionPolicy: {
+            readOnly: true,
+        },
+    },
+    {
+        topLevelTab: 'orchestrator',
+        modeKey: 'plan',
+        label: 'Orchestrator Plan',
+        prompt: {},
+        executionPolicy: {
+            planningOnly: true,
+        },
+    },
+    {
+        topLevelTab: 'orchestrator',
+        modeKey: 'orchestrate',
+        label: 'Orchestrator Orchestrate',
+        prompt: {},
+        executionPolicy: {},
+    },
+    {
+        topLevelTab: 'orchestrator',
+        modeKey: 'debug',
+        label: 'Orchestrator Debug',
+        prompt: {},
+        executionPolicy: {},
+    },
+] as const;
+
 const DEFAULT_PROVIDER_ID = 'kilo';
 const DEFAULT_MODEL_ID = 'kilo/auto';
 
@@ -212,6 +277,20 @@ function seedRuntimeData(sqlite: BetterSqliteDatabase): void {
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `
     );
+    const insertModeDefinition = sqlite.prepare(
+        `
+            INSERT OR IGNORE INTO mode_definitions
+                (id, profile_id, top_level_tab, mode_key, label, prompt_json, execution_policy_json, source, enabled, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+    );
+    const insertKiloAccountSnapshot = sqlite.prepare(
+        `
+            INSERT OR IGNORE INTO kilo_account_snapshots
+                (profile_id, account_id, display_name, email_masked, auth_state, token_expires_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `
+    );
     const insertSettingIfMissing = sqlite.prepare(
         `
             INSERT OR IGNORE INTO settings (id, profile_id, key, value_json, updated_at)
@@ -244,6 +323,25 @@ function seedRuntimeData(sqlite: BetterSqliteDatabase): void {
             now
         );
     }
+
+    for (const mode of MODE_SEED) {
+        const modeId = `mode_${DEFAULT_PROFILE_ID}_${mode.topLevelTab}_${mode.modeKey}`;
+        insertModeDefinition.run(
+            modeId,
+            DEFAULT_PROFILE_ID,
+            mode.topLevelTab,
+            mode.modeKey,
+            mode.label,
+            JSON.stringify(mode.prompt),
+            JSON.stringify(mode.executionPolicy),
+            'system',
+            1,
+            now,
+            now
+        );
+    }
+
+    insertKiloAccountSnapshot.run(DEFAULT_PROFILE_ID, null, '', '', 'logged_out', null, now);
 
     insertSettingIfMissing.run(
         'setting_default_provider',

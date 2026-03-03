@@ -1,11 +1,17 @@
+export { accountSnapshotStore } from '@/app/backend/persistence/stores/accountSnapshotStore';
 export { conversationStore } from '@/app/backend/persistence/stores/conversationStore';
 export { diffStore } from '@/app/backend/persistence/stores/diffStore';
+export { marketplaceStore } from '@/app/backend/persistence/stores/marketplaceStore';
 export { mcpStore } from '@/app/backend/persistence/stores/mcpStore';
+export { modeStore } from '@/app/backend/persistence/stores/modeStore';
 export { permissionStore } from '@/app/backend/persistence/stores/permissionStore';
 export { providerStore } from '@/app/backend/persistence/stores/providerStore';
 export { runStore } from '@/app/backend/persistence/stores/runStore';
+export { rulesetStore } from '@/app/backend/persistence/stores/rulesetStore';
 export { runtimeEventStore } from '@/app/backend/persistence/stores/runtimeEventStore';
+export { secretReferenceStore } from '@/app/backend/persistence/stores/secretReferenceStore';
 export { sessionStore } from '@/app/backend/persistence/stores/sessionStore';
 export { settingsStore } from '@/app/backend/persistence/stores/settingsStore';
+export { skillfileStore } from '@/app/backend/persistence/stores/skillfileStore';
 export { tagStore } from '@/app/backend/persistence/stores/tagStore';
 export { toolStore } from '@/app/backend/persistence/stores/toolStore';
