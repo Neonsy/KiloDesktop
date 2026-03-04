@@ -1,3 +1,7 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
@@ -68,6 +72,24 @@ async function waitForRunStatus(
     }
 
     throw new Error(`Timed out waiting for session ${sessionId} to reach status "${expected}".`);
+}
+
+async function waitForOrchestratorStatus(
+    caller: ReturnType<typeof createCaller>,
+    profileId: string,
+    orchestratorRunId: EntityId<'orch'>,
+    expected: 'completed' | 'aborted' | 'failed'
+): Promise<void> {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+        const status = await caller.orchestrator.status({ profileId, orchestratorRunId });
+        if (status.found && status.run.status === expected) {
+            return;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 40));
+    }
+
+    throw new Error(`Timed out waiting for orchestrator run ${orchestratorRunId} to reach status "${expected}".`);
 }
 
 beforeEach(() => {
@@ -321,6 +343,230 @@ describe('runtime contracts', () => {
                 runtimeOptions: defaultRuntimeOptions,
             } as unknown as Parameters<typeof caller.session.startRun>[0])
         ).rejects.toThrow('modeKey');
+    });
+
+    it('supports agent planning lifecycle with explicit approve then implement transition', async () => {
+        const caller = createCaller();
+        const completionFetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () => ({
+                choices: [
+                    {
+                        message: {
+                            content: 'Plan implementation completed',
+                        },
+                    },
+                ],
+                usage: {
+                    prompt_tokens: 12,
+                    completion_tokens: 22,
+                    total_tokens: 34,
+                },
+            }),
+        });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-plan-test-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Agent planning lifecycle thread',
+            kind: 'local',
+        });
+
+        const started = await caller.plan.start({
+            profileId,
+            sessionId: created.session.id,
+            topLevelTab: 'agent',
+            modeKey: 'plan',
+            prompt: 'Build a safe implementation plan for this task.',
+        });
+        expect(started.plan.status).toBe('awaiting_answers');
+
+        const answeredScope = await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'scope',
+            answer: 'Deliver a minimal deterministic implementation.',
+        });
+        expect(answeredScope.found).toBe(true);
+        if (!answeredScope.found) {
+            throw new Error('Expected scope answer update.');
+        }
+
+        const answeredConstraints = await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'constraints',
+            answer: 'Keep boundaries explicit and avoid blind casts.',
+        });
+        expect(answeredConstraints.found).toBe(true);
+        if (!answeredConstraints.found) {
+            throw new Error('Expected constraints answer update.');
+        }
+        expect(answeredConstraints.plan.status).toBe('draft');
+
+        const revised = await caller.plan.revise({
+            profileId,
+            planId: started.plan.id,
+            summaryMarkdown: '# Agent Plan\n\n- Implement the approved plan deterministically.',
+            items: [
+                { description: 'Implement backend contracts first.' },
+                { description: 'Implement renderer flow second.' },
+            ],
+        });
+        expect(revised.found).toBe(true);
+        if (!revised.found) {
+            throw new Error('Expected plan revision.');
+        }
+        expect(revised.plan.items.length).toBe(2);
+
+        const approved = await caller.plan.approve({
+            profileId,
+            planId: started.plan.id,
+        });
+        expect(approved.found).toBe(true);
+        if (!approved.found) {
+            throw new Error('Expected plan approval.');
+        }
+        expect(approved.plan.status).toBe('approved');
+
+        const implemented = await caller.plan.implement({
+            profileId,
+            planId: started.plan.id,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(implemented.found).toBe(true);
+        if (!implemented.found) {
+            throw new Error('Expected plan implementation start.');
+        }
+        expect(implemented.mode).toBe('agent.code');
+        if (implemented.mode !== 'agent.code') {
+            throw new Error('Expected agent.code implementation mode.');
+        }
+
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+
+        const planState = await caller.plan.get({
+            profileId,
+            planId: started.plan.id,
+        });
+        expect(planState.found).toBe(true);
+        if (!planState.found) {
+            throw new Error('Expected plan state lookup.');
+        }
+        expect(planState.plan.status).toBe('implemented');
+    });
+
+    it('supports orchestrator sequential execution from approved plan steps', async () => {
+        const caller = createCaller();
+        const completionFetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            json: () => ({
+                choices: [
+                    {
+                        message: {
+                            content: 'Orchestrator step completed',
+                        },
+                    },
+                ],
+                usage: {
+                    prompt_tokens: 9,
+                    completion_tokens: 15,
+                    total_tokens: 24,
+                },
+            }),
+        });
+        vi.stubGlobal('fetch', completionFetchMock);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-orchestrator-test-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Orchestrator planning lifecycle thread',
+            kind: 'local',
+        });
+
+        const started = await caller.plan.start({
+            profileId,
+            sessionId: created.session.id,
+            topLevelTab: 'orchestrator',
+            modeKey: 'plan',
+            prompt: 'Plan a sequential orchestrator execution with two steps.',
+        });
+        expect(started.plan.status).toBe('awaiting_answers');
+
+        await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'scope',
+            answer: 'Execute two deterministic steps in order.',
+        });
+        const answered = await caller.plan.answerQuestion({
+            profileId,
+            planId: started.plan.id,
+            questionId: 'constraints',
+            answer: 'No parallel tasks; fail closed on step errors.',
+        });
+        expect(answered.found).toBe(true);
+
+        await caller.plan.revise({
+            profileId,
+            planId: started.plan.id,
+            summaryMarkdown: '# Orchestrator Plan\n\nExecute two sequential tasks.',
+            items: [{ description: 'Step one task' }, { description: 'Step two task' }],
+        });
+
+        const approved = await caller.plan.approve({
+            profileId,
+            planId: started.plan.id,
+        });
+        expect(approved.found).toBe(true);
+
+        const implemented = await caller.plan.implement({
+            profileId,
+            planId: started.plan.id,
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(implemented.found).toBe(true);
+        if (!implemented.found) {
+            throw new Error('Expected orchestrator implementation start.');
+        }
+        expect(implemented.mode).toBe('orchestrator.orchestrate');
+        if (implemented.mode !== 'orchestrator.orchestrate') {
+            throw new Error('Expected orchestrator.orchestrate mode.');
+        }
+
+        await waitForOrchestratorStatus(caller, profileId, implemented.orchestratorRunId, 'completed');
+
+        const status = await caller.orchestrator.status({
+            profileId,
+            orchestratorRunId: implemented.orchestratorRunId,
+        });
+        expect(status.found).toBe(true);
+        if (!status.found) {
+            throw new Error('Expected orchestrator status to be found.');
+        }
+        expect(status.steps.length).toBe(2);
+        expect(status.steps.every((step) => step.status === 'completed')).toBe(true);
     });
 
     it('falls back to first runnable provider/model when defaults are not runnable', async () => {
@@ -795,20 +1041,89 @@ describe('runtime contracts', () => {
         expect(setDefault.success).toBe(true);
     });
 
-    it('fails closed for unimplemented tool and mcp mutations', async () => {
+    it('executes read-only tools and enforces mode-sensitive tool policies', async () => {
         const caller = createCaller();
+        const tempDir = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-tool-test-'));
+        const tempFile = path.join(tempDir, 'readme.txt');
+        writeFileSync(tempFile, 'hello from tool execution test', 'utf8');
 
         const tools = await caller.tool.list();
         expect(tools.tools.map((item) => item.id)).toContain('read_file');
 
-        const toolInvocation = await caller.tool.invoke({
+        const allowedRead = await caller.tool.invoke({
+            profileId,
             toolId: 'read_file',
+            topLevelTab: 'agent',
+            modeKey: 'ask',
             args: {
-                path: '/tmp/file.txt',
+                path: tempFile,
             },
         });
-        expect(toolInvocation.ok).toBe(false);
-        expect(toolInvocation.error).toBe('not_implemented');
+        expect(allowedRead.ok).toBe(true);
+        if (!allowedRead.ok) {
+            throw new Error('Expected read_file invocation to be allowed in agent.ask mode.');
+        }
+        expect(String(allowedRead.output['content'] ?? '')).toContain('hello from tool execution test');
+
+        const deniedMutation = await caller.tool.invoke({
+            profileId,
+            toolId: 'run_command',
+            topLevelTab: 'agent',
+            modeKey: 'ask',
+            args: {
+                command: 'echo blocked',
+            },
+        });
+        expect(deniedMutation.ok).toBe(false);
+        if (deniedMutation.ok) {
+            throw new Error('Expected run_command to be blocked in agent.ask mode.');
+        }
+        expect(deniedMutation.error).toBe('policy_denied');
+
+        const askDecision = await caller.tool.invoke({
+            profileId,
+            toolId: 'read_file',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {
+                path: tempFile,
+            },
+        });
+        expect(askDecision.ok).toBe(false);
+        if (askDecision.ok) {
+            throw new Error('Expected read_file to require permission in agent.code mode by default policy.');
+        }
+        expect(askDecision.error).toBe('permission_required');
+
+        const profileOverride = await caller.permission.setProfileOverride({
+            profileId,
+            resource: 'tool:read_file',
+            policy: 'allow',
+        });
+        expect(profileOverride.override.policy).toBe('allow');
+
+        const allowedByOverride = await caller.tool.invoke({
+            profileId,
+            toolId: 'read_file',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            args: {
+                path: tempFile,
+            },
+        });
+        expect(allowedByOverride.ok).toBe(true);
+        if (!allowedByOverride.ok) {
+            throw new Error('Expected profile override to allow read_file.');
+        }
+
+        const effectivePolicy = await caller.permission.getEffectivePolicy({
+            profileId,
+            resource: 'tool:read_file',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+        });
+        expect(effectivePolicy.policy).toBe('allow');
+        expect(effectivePolicy.source).toBe('profile_override');
 
         const mcpServers = await caller.mcp.listServers();
         expect(mcpServers.servers.map((item) => item.id)).toContain('github');

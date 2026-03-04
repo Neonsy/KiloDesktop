@@ -1,5 +1,12 @@
-import { permissionStore } from '@/app/backend/persistence/stores';
-import { permissionDecisionInputSchema, permissionRequestInputSchema } from '@/app/backend/runtime/contracts';
+import { permissionPolicyOverrideStore, permissionStore, toolStore } from '@/app/backend/persistence/stores';
+import {
+    permissionDecisionInputSchema,
+    permissionGetEffectivePolicyInputSchema,
+    permissionRequestInputSchema,
+    permissionSetProfileOverrideInputSchema,
+    permissionSetWorkspaceOverrideInputSchema,
+} from '@/app/backend/runtime/contracts';
+import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -20,6 +27,75 @@ export const permissionRouter = router({
     listPending: publicProcedure.query(async () => {
         return { requests: await permissionStore.listPending() };
     }),
+    getEffectivePolicy: publicProcedure.input(permissionGetEffectivePolicyInputSchema).query(async ({ input }) => {
+        const tools = await toolStore.list();
+        const toolId = input.resource.startsWith('tool:') ? input.resource.slice('tool:'.length) : null;
+        const tool = toolId ? tools.find((item) => item.id === toolId) : null;
+        const defaultPolicy = tool?.permissionPolicy ?? 'deny';
+
+        const resolved = await resolveEffectivePermissionPolicy({
+            profileId: input.profileId,
+            resource: input.resource,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+            toolDefaultPolicy: defaultPolicy,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+        });
+
+        return {
+            resource: input.resource,
+            policy: resolved.policy,
+            source: resolved.source,
+            defaultPolicy,
+        };
+    }),
+    setProfileOverride: publicProcedure.input(permissionSetProfileOverrideInputSchema).mutation(async ({ input }) => {
+        const override = await permissionPolicyOverrideStore.upsert(
+            input.profileId,
+            permissionPolicyOverrideStore.toProfileScopeKey(),
+            input.resource,
+            input.policy
+        );
+        await runtimeEventLogService.append({
+            entityType: 'permission',
+            entityId: input.resource,
+            eventType: 'permission.override.profile.set',
+            payload: {
+                profileId: input.profileId,
+                resource: input.resource,
+                policy: input.policy,
+            },
+        });
+
+        return {
+            override,
+        };
+    }),
+    setWorkspaceOverride: publicProcedure
+        .input(permissionSetWorkspaceOverrideInputSchema)
+        .mutation(async ({ input }) => {
+            const override = await permissionPolicyOverrideStore.upsert(
+                input.profileId,
+                permissionPolicyOverrideStore.toWorkspaceScopeKey(input.workspaceFingerprint),
+                input.resource,
+                input.policy
+            );
+            await runtimeEventLogService.append({
+                entityType: 'permission',
+                entityId: input.resource,
+                eventType: 'permission.override.workspace.set',
+                payload: {
+                    profileId: input.profileId,
+                    workspaceFingerprint: input.workspaceFingerprint,
+                    resource: input.resource,
+                    policy: input.policy,
+                },
+            });
+
+            return {
+                override,
+            };
+        }),
     grant: publicProcedure.input(permissionDecisionInputSchema).mutation(async ({ input }) => {
         const record = await permissionStore.getById(input.requestId);
         if (!record) {

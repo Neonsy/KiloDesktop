@@ -7,7 +7,9 @@ import { router } from '@/app/backend/trpc/init';
 import { conversationRouter } from '@/app/backend/trpc/routers/conversation';
 import { mcpRouter } from '@/app/backend/trpc/routers/mcp';
 import { modeRouter } from '@/app/backend/trpc/routers/mode';
+import { orchestratorRouter } from '@/app/backend/trpc/routers/orchestrator';
 import { permissionRouter } from '@/app/backend/trpc/routers/permission';
+import { planRouter } from '@/app/backend/trpc/routers/plan';
 import { providerRouter } from '@/app/backend/trpc/routers/provider';
 import { runtimeRouter } from '@/app/backend/trpc/routers/runtime';
 import { sessionRouter } from '@/app/backend/trpc/routers/session';
@@ -24,6 +26,8 @@ export const appRouter = router({
     tool: toolRouter,
     mcp: mcpRouter,
     mode: modeRouter,
+    plan: planRouter,
+    orchestrator: orchestratorRouter,
     system: systemRouter,
     updates: updatesRouter,
 });

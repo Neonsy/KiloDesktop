@@ -16,6 +16,7 @@ describe('generated migrations', () => {
             '008_p2_5_reasoning_and_cache_controls.sql',
             '009_p2_6_provider_capability_parity.sql',
             '010_p3b_conversation_graph.sql',
+            '011_p4_2_plan_orchestrator_and_permission_overrides.sql',
         ]);
     });
 });

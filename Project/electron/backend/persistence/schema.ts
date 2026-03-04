@@ -351,6 +351,74 @@ export interface ProviderDiscoverySnapshotsTable {
     status: string;
 }
 
+export interface PlanRecordsTable {
+    id: string;
+    profile_id: string;
+    session_id: string;
+    top_level_tab: string;
+    mode_key: string;
+    status: string;
+    source_prompt: string;
+    summary_markdown: string;
+    questions_json: string;
+    answers_json: string;
+    workspace_fingerprint: string | null;
+    implementation_run_id: string | null;
+    orchestrator_run_id: string | null;
+    approved_at: string | null;
+    implemented_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PlanItemsTable {
+    id: string;
+    plan_id: string;
+    sequence: number;
+    description: string;
+    status: string;
+    run_id: string | null;
+    error_message: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface OrchestratorRunsTable {
+    id: string;
+    profile_id: string;
+    session_id: string;
+    plan_id: string;
+    status: string;
+    active_step_index: number | null;
+    started_at: string;
+    completed_at: string | null;
+    aborted_at: string | null;
+    error_message: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface OrchestratorStepsTable {
+    id: string;
+    orchestrator_run_id: string;
+    sequence: number;
+    description: string;
+    status: string;
+    run_id: string | null;
+    error_message: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PermissionPolicyOverridesTable {
+    profile_id: string;
+    scope_key: string;
+    resource: string;
+    policy: string;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface DatabaseSchema {
     profiles: ProfilesTable;
     providers: ProvidersTable;
@@ -383,4 +451,9 @@ export interface DatabaseSchema {
     provider_auth_flows: ProviderAuthFlowsTable;
     provider_model_catalog: ProviderModelCatalogTable;
     provider_discovery_snapshots: ProviderDiscoverySnapshotsTable;
+    plan_records: PlanRecordsTable;
+    plan_items: PlanItemsTable;
+    orchestrator_runs: OrchestratorRunsTable;
+    orchestrator_steps: OrchestratorStepsTable;
+    permission_policy_overrides: PermissionPolicyOverridesTable;
 }

@@ -5,7 +5,10 @@ export { marketplaceStore } from '@/app/backend/persistence/stores/marketplaceSt
 export { messageStore } from '@/app/backend/persistence/stores/messageStore';
 export { mcpStore } from '@/app/backend/persistence/stores/mcpStore';
 export { modeStore } from '@/app/backend/persistence/stores/modeStore';
+export { orchestratorStore } from '@/app/backend/persistence/stores/orchestratorStore';
 export { permissionStore } from '@/app/backend/persistence/stores/permissionStore';
+export { permissionPolicyOverrideStore } from '@/app/backend/persistence/stores/permissionPolicyOverrideStore';
+export { planStore } from '@/app/backend/persistence/stores/planStore';
 export { providerAuthStore } from '@/app/backend/persistence/stores/providerAuthStore';
 export { providerAuthFlowStore } from '@/app/backend/persistence/stores/providerAuthFlowStore';
 export { providerCatalogStore } from '@/app/backend/persistence/stores/providerCatalogStore';
