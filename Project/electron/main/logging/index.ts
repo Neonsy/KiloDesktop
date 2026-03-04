@@ -9,22 +9,21 @@ export interface InitAppLoggerOptions {
 
 let appLoggerEnabled = false;
 
+type AppLogMethod = {
+    (tag: string, message: string): void;
+    (event: Record<string, unknown>): void;
+};
+
 function resolveEnvironment(isDev: boolean): string {
     return process.env['NODE_ENV'] ?? (isDev ? 'development' : 'production');
 }
 
 function resolveEnabled(isDev: boolean): boolean {
-    const enabledOverride = process.env['EVLOG_ENABLED'];
-
-    if (enabledOverride === '1') {
-        return true;
-    }
-
-    if (enabledOverride === '0') {
+    if (!isDev) {
         return false;
     }
 
-    return isDev;
+    return process.env['EVLOG_ENABLED'] !== '0';
 }
 
 function resolvePretty(isDev: boolean): boolean {
@@ -41,7 +40,28 @@ function resolvePretty(isDev: boolean): boolean {
     return isDev;
 }
 
-export const appLog = log;
+function createAppLogMethod(level: 'info' | 'warn' | 'error' | 'debug'): AppLogMethod {
+    return ((...args: [string, string] | [Record<string, unknown>]) => {
+        if (!appLoggerEnabled) {
+            return;
+        }
+
+        const target = log[level];
+        if (args.length === 2) {
+            target(args[0], args[1]);
+            return;
+        }
+
+        target(args[0]);
+    }) as AppLogMethod;
+}
+
+export const appLog = {
+    info: createAppLogMethod('info'),
+    warn: createAppLogMethod('warn'),
+    error: createAppLogMethod('error'),
+    debug: createAppLogMethod('debug'),
+};
 
 export function isAppLoggerEnabled(): boolean {
     return appLoggerEnabled;
@@ -79,6 +99,10 @@ export async function flushAppLogger(): Promise<void> {
     try {
         await flushLogDrain();
     } catch (error) {
-        console.error('[logging] Failed to flush evlog drain before exit:', error);
+        appLog.error({
+            tag: 'logging',
+            message: 'Failed to flush evlog drain before exit.',
+            ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+        });
     }
 }

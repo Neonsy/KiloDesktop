@@ -1,23 +1,36 @@
 import { providerAuthFlowStore, providerAuthStore } from '@/app/backend/persistence/stores';
 import { AUTH_METHODS_BY_PROVIDER } from '@/app/backend/providers/auth/constants';
+import {
+    errAuthExecution,
+    okAuthExecution,
+    type AuthExecutionResult,
+} from '@/app/backend/providers/auth/errors';
 import { plusSeconds } from '@/app/backend/providers/auth/helpers';
 import { startOpenAIDeviceAuth, startOpenAIPkceAuth } from '@/app/backend/providers/auth/openaiOAuthClient';
 import type { StartAuthResult } from '@/app/backend/providers/auth/types';
 import { kiloGatewayClient } from '@/app/backend/providers/kiloGatewayClient';
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
-function assertMethodAllowed(providerId: RuntimeProviderId, method: ProviderAuthMethod): void {
+function assertMethodAllowed(
+    providerId: RuntimeProviderId,
+    method: ProviderAuthMethod
+): AuthExecutionResult<void> {
     if (!AUTH_METHODS_BY_PROVIDER[providerId].includes(method)) {
-        throw new Error(`Auth method "${method}" is not supported for provider "${providerId}".`);
+        return errAuthExecution('method_not_supported', `Auth method "${method}" is not supported for provider "${providerId}".`);
     }
+
+    return okAuthExecution(undefined);
 }
 
 export async function startAuthFlow(input: {
     profileId: string;
     providerId: RuntimeProviderId;
     method: ProviderAuthMethod;
-}): Promise<StartAuthResult> {
-    assertMethodAllowed(input.providerId, input.method);
+}): Promise<AuthExecutionResult<StartAuthResult>> {
+    const methodAllowed = assertMethodAllowed(input.providerId, input.method);
+    if (methodAllowed.isErr()) {
+        return errAuthExecution(methodAllowed.error.code, methodAllowed.error.message);
+    }
     await providerAuthFlowStore.cancelPendingByProvider(input.profileId, input.providerId);
 
     if (input.providerId === 'kilo' && input.method === 'device_code') {
@@ -40,12 +53,12 @@ export async function startAuthFlow(input: {
             authState: 'pending',
         });
 
-        return {
+        return okAuthExecution({
             flow,
             pollAfterSeconds: device.pollIntervalSeconds,
             verificationUri: device.verificationUri,
             userCode: device.userCode,
-        };
+        });
     }
 
     if (input.providerId === 'openai' && input.method === 'oauth_pkce') {
@@ -67,14 +80,18 @@ export async function startAuthFlow(input: {
             authState: 'pending',
         });
 
-        return {
+        return okAuthExecution({
             flow,
             authorizeUrl: pkce.authorizeUrl,
-        };
+        });
     }
 
     if (input.providerId === 'openai' && input.method === 'oauth_device') {
-        const device = await startOpenAIDeviceAuth();
+        const deviceResult = await startOpenAIDeviceAuth();
+        if (deviceResult.isErr()) {
+            return errAuthExecution(deviceResult.error.code, deviceResult.error.message);
+        }
+        const device = deviceResult.value;
         const flow = await providerAuthFlowStore.create({
             profileId: input.profileId,
             providerId: input.providerId,
@@ -93,13 +110,16 @@ export async function startAuthFlow(input: {
             authState: 'pending',
         });
 
-        return {
+        return okAuthExecution({
             flow,
             pollAfterSeconds: device.intervalSeconds,
             verificationUri: device.verificationUri,
             userCode: device.userCode,
-        };
+        });
     }
 
-    throw new Error(`Auth method "${input.method}" is not implemented for provider "${input.providerId}".`);
+    return errAuthExecution(
+        'method_not_implemented',
+        `Auth method "${input.method}" is not implemented for provider "${input.providerId}".`
+    );
 }

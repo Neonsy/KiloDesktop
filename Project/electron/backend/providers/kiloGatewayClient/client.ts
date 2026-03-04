@@ -21,6 +21,7 @@ import {
     executeJsonRequest,
     KiloGatewayError,
     type GatewayErrorCategory,
+    type GatewayErrorShape,
     type RequestHeadersInput,
 } from '@/app/backend/providers/kiloGatewayClient/requestExecutor';
 import type {
@@ -45,6 +46,15 @@ export class KiloGatewayClient {
         this.timeoutMs = input?.timeoutMs ?? KILO_GATEWAY_TIMEOUT_MS;
     }
 
+    private toGatewayException(error: GatewayErrorShape): KiloGatewayError {
+        return new KiloGatewayError({
+            message: error.message,
+            category: error.category,
+            endpoint: error.endpoint,
+            ...(error.statusCode !== undefined ? { statusCode: error.statusCode } : {}),
+        });
+    }
+
     private async fetchGateway(path: string, headers?: RequestHeadersInput): Promise<Record<string, unknown>> {
         const endpoint = `${this.gatewayBaseUrl}${path}`;
         const requestInput = {
@@ -53,7 +63,10 @@ export class KiloGatewayClient {
             ...(headers ? { headers } : {}),
         };
         const result = await executeJsonRequest<Record<string, unknown>>(requestInput);
-        return result.payload;
+        if (result.isErr()) {
+            throw this.toGatewayException(result.error);
+        }
+        return result.value.payload;
     }
 
     private async fetchApi(
@@ -69,7 +82,10 @@ export class KiloGatewayClient {
             ...(input?.body !== undefined ? { body: input.body } : {}),
         };
         const result = await executeJsonRequest<Record<string, unknown>>(requestInput);
-        return result.payload;
+        if (result.isErr()) {
+            throw this.toGatewayException(result.error);
+        }
+        return result.value.payload;
     }
 
     async getModels(headers?: RequestHeadersInput): Promise<KiloGatewayModel[]> {

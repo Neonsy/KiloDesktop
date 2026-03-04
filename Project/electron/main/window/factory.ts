@@ -1,6 +1,7 @@
 import { BrowserWindow } from 'electron';
 import path from 'node:path';
 
+import { appLog } from '@/app/main/logging';
 import { attachDevelopmentShortcuts } from '@/app/main/window/devtoolsShortcuts';
 import { attachNavigationGuards } from '@/app/main/window/navigationGuards';
 
@@ -45,7 +46,10 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
 
     const fallbackTimer = setTimeout(() => {
         if (!win.isVisible()) {
-            console.warn('[window] Renderer did not signal ready in time; showing window fallback.');
+            appLog.warn({
+                tag: 'window',
+                message: 'Renderer did not signal ready in time; showing window fallback.',
+            });
             win.show();
         }
     }, 3000);

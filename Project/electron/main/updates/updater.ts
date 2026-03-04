@@ -7,7 +7,9 @@
 import { app, BrowserWindow, dialog } from 'electron';
 import Store from 'electron-store';
 import { autoUpdater, type ProgressInfo } from 'electron-updater';
+import { err, ok, type Result } from 'neverthrow';
 
+import { appLog } from '@/app/main/logging';
 import { GitHubReleaseResolverError, resolveLatestReleaseForChannel } from '@/app/main/updates/githubReleaseResolver';
 
 export type UpdateChannel = 'stable' | 'beta' | 'alpha';
@@ -51,6 +53,13 @@ interface ActiveUpdateFlow {
 }
 
 const DEFAULT_CHANNEL: UpdateChannel = 'stable';
+
+type UpdaterOperationErrorCode = 'resolver_failed' | 'check_failed';
+
+interface UpdaterOperationError {
+    code: UpdaterOperationErrorCode;
+    message: string;
+}
 
 let mainWindow: BrowserWindow | null = null;
 let initialized = false;
@@ -151,10 +160,17 @@ function loadPersistedChannel(): PersistedChannelState {
             return { channel: persisted, exists: true };
         }
 
-        console.error('[updater] Persisted channel is invalid. Re-seeding from stable default.');
+        appLog.error({
+            tag: 'updater',
+            message: 'Persisted channel is invalid. Re-seeding from stable default.',
+        });
         return { channel: DEFAULT_CHANNEL, exists: false };
     } catch (error) {
-        console.error('[updater] Failed to read persisted channel:', error);
+        appLog.error({
+            tag: 'updater',
+            message: 'Failed to read persisted channel.',
+            ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+        });
     }
 
     return { channel: DEFAULT_CHANNEL, exists: false };
@@ -168,7 +184,10 @@ function persistChannel(channel: UpdateChannel): void {
     getChannelStore().set('channel', channel);
 }
 
-async function configureFeedForChannel(channel: UpdateChannel, options: ConfigureFeedOptions = {}): Promise<void> {
+async function configureFeedForChannel(
+    channel: UpdateChannel,
+    options: ConfigureFeedOptions = {}
+): Promise<Result<void, UpdaterOperationError>> {
     const forceRefresh = options.forceRefresh ?? false;
     const applyResolvedChannel = options.applyResolvedChannel ?? true;
 
@@ -186,7 +205,13 @@ async function configureFeedForChannel(channel: UpdateChannel, options: Configur
 
         const resolvedFeed = feedConfig;
 
-        console.info(`[updater][resolver] channel=${channel} tag=${resolvedFeed.tag} feed=${resolvedFeed.feedBaseUrl}`);
+        appLog.info({
+            tag: 'updater.resolver',
+            message: 'Resolved feed configuration.',
+            channel,
+            releaseTag: resolvedFeed.tag,
+            feedBaseUrl: resolvedFeed.feedBaseUrl,
+        });
 
         autoUpdater.setFeedURL({
             provider: 'generic',
@@ -197,28 +222,55 @@ async function configureFeedForChannel(channel: UpdateChannel, options: Configur
         if (applyResolvedChannel) {
             applyChannel(channel);
         }
+        return ok(undefined);
     } catch (error) {
         if (error instanceof GitHubReleaseResolverError) {
-            console.error(
-                `[updater][resolver] channel=${channel} code=${error.code} status=${String(error.statusCode ?? 'n/a')} message=${error.message}`
-            );
+            appLog.error({
+                tag: 'updater.resolver',
+                message: 'Failed to resolve feed channel.',
+                channel,
+                code: error.code,
+                statusCode: error.statusCode,
+                error: error.message,
+            });
         } else {
-            console.error(`[updater][resolver] channel=${channel} message=Failed to resolve feed.`, error);
+            appLog.error({
+                tag: 'updater.resolver',
+                message: 'Failed to resolve feed.',
+                channel,
+                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+            });
         }
 
-        throw error;
+        return err({
+            code: 'resolver_failed',
+            message: 'Failed to resolve feed for selected channel.',
+        });
     }
 }
 
 async function checkForUpdatesForSelectedChannel(
     channel: UpdateChannel,
     options: ConfigureFeedOptions = {}
-): Promise<void> {
-    await configureFeedForChannel(channel, {
+): Promise<Result<void, UpdaterOperationError>> {
+    const configureResult = await configureFeedForChannel(channel, {
         forceRefresh: options.forceRefresh ?? true,
         applyResolvedChannel: options.applyResolvedChannel ?? true,
     });
-    await autoUpdater.checkForUpdates();
+
+    if (configureResult.isErr()) {
+        return configureResult;
+    }
+
+    try {
+        await autoUpdater.checkForUpdates();
+        return ok(undefined);
+    } catch {
+        return err({
+            code: 'check_failed',
+            message: 'Failed to check for updates for selected channel.',
+        });
+    }
 }
 
 function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boolean } = {}): void {
@@ -234,15 +286,32 @@ function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boo
         canInteract: false,
     });
 
-    const checkPromise = options.feedConfigured
-        ? autoUpdater.checkForUpdates()
+    const checkPromise: Promise<Result<void, UpdaterOperationError>> = options.feedConfigured
+        ? autoUpdater
+              .checkForUpdates()
+              .then(() => ok(undefined))
+              .catch(() =>
+                  err({
+                      code: 'check_failed',
+                      message: 'Failed to check for updates in the selected channel.',
+                  })
+              )
         : checkForUpdatesForSelectedChannel(channel, {
               forceRefresh: true,
               applyResolvedChannel: false,
           });
 
-    void checkPromise.catch((error: unknown) => {
-        console.error('[updater] Failed to check for updates after channel switch:', error);
+    void checkPromise.then((result) => {
+        if (result.isOk()) {
+            return;
+        }
+
+        appLog.error({
+            tag: 'updater',
+            message: 'Failed to check for updates after channel switch.',
+            code: result.error.code,
+            error: result.error.message,
+        });
         activeUpdateFlow = null;
         updateSwitchStatus({
             phase: 'error',
@@ -299,41 +368,47 @@ export async function checkForUpdatesManually(): Promise<{ started: boolean; mes
         canInteract: false,
     });
 
-    try {
-        await checkForUpdatesForSelectedChannel(currentChannel, {
-            forceRefresh: true,
-            applyResolvedChannel: true,
-        });
+    const checkResult = await checkForUpdatesForSelectedChannel(currentChannel, {
+        forceRefresh: true,
+        applyResolvedChannel: true,
+    });
+
+    if (checkResult.isOk()) {
         return {
             started: true,
             message: 'Checking for updates in the selected channel...',
         };
-    } catch (error) {
-        activeUpdateFlow = null;
-        manualCheckRequested = false;
-        console.error('[updater] Manual update check failed:', error);
-        updateSwitchStatus({
-            phase: 'error',
-            percent: null,
-            message: 'Failed to check for updates in the selected channel.',
-            canInteract: true,
-        });
-        scheduleStatusReset(1200);
-
-        const window = getWindow();
-        if (window) {
-            void dialog.showMessageBox(window, {
-                type: 'error',
-                title: 'Update Check Failed',
-                message: 'Unable to check for updates in the selected channel right now.',
-            });
-        }
-
-        return {
-            started: false,
-            message: 'Failed to check for updates.',
-        };
     }
+
+    activeUpdateFlow = null;
+    manualCheckRequested = false;
+    appLog.error({
+        tag: 'updater',
+        message: 'Manual update check failed.',
+        code: checkResult.error.code,
+        error: checkResult.error.message,
+    });
+    updateSwitchStatus({
+        phase: 'error',
+        percent: null,
+        message: 'Failed to check for updates in the selected channel.',
+        canInteract: true,
+    });
+    scheduleStatusReset(1200);
+
+    const window = getWindow();
+    if (window) {
+        void dialog.showMessageBox(window, {
+            type: 'error',
+            title: 'Update Check Failed',
+            message: 'Unable to check for updates in the selected channel right now.',
+        });
+    }
+
+    return {
+        started: false,
+        message: 'Failed to check for updates.',
+    };
 }
 
 export async function switchChannel(channel: UpdateChannel): Promise<SwitchChannelResult> {
@@ -367,12 +442,19 @@ export async function switchChannel(channel: UpdateChannel): Promise<SwitchChann
         canInteract: false,
     });
 
-    try {
-        await configureFeedForChannel(channel, {
-            forceRefresh: true,
-            applyResolvedChannel: false,
+    const configureResult = await configureFeedForChannel(channel, {
+        forceRefresh: true,
+        applyResolvedChannel: false,
+    });
+
+    if (configureResult.isErr()) {
+        appLog.error({
+            tag: 'updater',
+            message: 'Channel switch failed during feed configuration.',
+            code: configureResult.error.code,
+            error: configureResult.error.message,
+            channel,
         });
-    } catch {
         updateSwitchStatus({
             phase: 'error',
             channel: currentChannel,
@@ -643,7 +725,11 @@ export function initAutoUpdater(): void {
     });
 
     autoUpdater.on('error', (error) => {
-        console.error('Auto-updater error:', error);
+        appLog.error({
+            tag: 'updater',
+            message: 'Auto-updater error.',
+            ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+        });
         getWindow()?.setProgressBar(-1);
 
         if (!activeUpdateFlow) {
@@ -697,7 +783,16 @@ export function initAutoUpdater(): void {
     void checkForUpdatesForSelectedChannel(currentChannel, {
         forceRefresh: true,
         applyResolvedChannel: true,
-    }).catch((error: unknown) => {
-        console.error('Auto-updater initial check failed:', error);
+    }).then((result) => {
+        if (result.isOk()) {
+            return;
+        }
+
+        appLog.error({
+            tag: 'updater',
+            message: 'Auto-updater initial check failed.',
+            code: result.error.code,
+            error: result.error.message,
+        });
     });
 }

@@ -1,9 +1,8 @@
 import { app } from 'electron';
+import { log, type DrainContext, type WideEvent } from 'evlog';
 import { createDrainPipeline, type PipelineDrainFn } from 'evlog/pipeline';
 import { appendFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
-
-import type { DrainContext, WideEvent } from 'evlog';
 
 const LOG_SUBDIRECTORY = 'logs';
 
@@ -76,7 +75,11 @@ function createBatchedDrain(): PipelineDrainFn<DrainContext> {
         },
         maxBufferSize: 2000,
         onDropped: (events, error) => {
-            console.error(`[logging] Dropped ${String(events.length)} event(s) from file drain.`, error);
+            log.error({
+                tag: 'logging',
+                message: `Dropped ${String(events.length)} event(s) from file drain.`,
+                ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+            });
         },
     });
 

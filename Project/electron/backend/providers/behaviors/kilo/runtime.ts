@@ -1,5 +1,9 @@
 import { buildAutoCacheKey } from '@/app/backend/providers/behaviors/cacheKey';
-import type { ProviderRuntimeBehavior } from '@/app/backend/providers/behaviors/types';
+import {
+    errProviderBehavior,
+    okProviderBehavior,
+    type ProviderRuntimeBehavior,
+} from '@/app/backend/providers/behaviors/types';
 import type { RuntimeRunOptions } from '@/app/backend/runtime/contracts';
 
 function isReasoningRequested(runtimeOptions: RuntimeRunOptions): boolean {
@@ -40,25 +44,31 @@ export const kiloRuntimeBehavior: ProviderRuntimeBehavior = {
     resolveCache(input) {
         const key = resolveCacheKey(input);
         if (key.trim().length === 0) {
-            throw new Error('Cache key resolution failed: cache key is empty.');
+            return errProviderBehavior('cache_key_invalid', 'Cache key resolution failed: cache key is empty.');
         }
 
-        return {
+        return okProviderBehavior({
             strategy: input.runtimeOptions.cache.strategy,
             key,
             applied: true,
-        };
+        });
     },
     validateRunOptions(input) {
         if (input.runtimeOptions.transport.openai !== 'auto') {
-            throw new Error(
+            return errProviderBehavior(
+                'runtime_option_invalid',
                 `OpenAI transport override "${input.runtimeOptions.transport.openai}" is not supported for provider "kilo".`
             );
         }
 
         if (!input.modelCapabilities.supportsReasoning && isReasoningRequested(input.runtimeOptions)) {
-            throw new Error(`Model "${input.modelId}" does not support reasoning options.`);
+            return errProviderBehavior(
+                'runtime_option_invalid',
+                `Model "${input.modelId}" does not support reasoning options.`
+            );
         }
+
+        return okProviderBehavior(undefined);
     },
     resolveBilledVia() {
         return 'kilo_gateway';

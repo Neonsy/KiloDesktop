@@ -11,10 +11,12 @@ import type {
     ProviderModelRecord,
     ProviderUsageSummary,
 } from '@/app/backend/persistence/types';
-import { getOpenAISubscriptionRateLimits as getOpenAISubscriptionRateLimitsFromWham } from '@/app/backend/providers/service/openaiSubscriptionRateLimits';
+import { toProviderServiceException } from '@/app/backend/providers/service/errors';
 import { defaultAuthState, ensureSupportedProvider } from '@/app/backend/providers/service/helpers';
+import { getOpenAISubscriptionRateLimits as getOpenAISubscriptionRateLimitsFromWham } from '@/app/backend/providers/service/openaiSubscriptionRateLimits';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { appLog } from '@/app/main/logging';
 
 export async function listProviders(profileId: string): Promise<ProviderListItem[]> {
     const [providers, defaults, authStates] = await Promise.all([
@@ -36,8 +38,12 @@ export async function listProviders(profileId: string): Promise<ProviderListItem
 }
 
 export async function listModels(profileId: string, providerId: RuntimeProviderId): Promise<ProviderModelRecord[]> {
-    await ensureSupportedProvider(providerId);
-    return providerStore.listModels(profileId, providerId);
+    const ensuredProviderResult = await ensureSupportedProvider(providerId);
+    if (ensuredProviderResult.isErr()) {
+        throw toProviderServiceException(ensuredProviderResult.error);
+    }
+
+    return providerStore.listModels(profileId, ensuredProviderResult.value);
 }
 
 export async function listModelsByProfile(profileId: string): Promise<ProviderModelRecord[]> {
@@ -58,10 +64,16 @@ export async function setDefault(
     defaultProviderId: string;
     defaultModelId: string;
 }> {
-    try {
-        await ensureSupportedProvider(providerId);
-    } catch {
+    const ensuredProviderResult = await ensureSupportedProvider(providerId);
+    if (ensuredProviderResult.isErr()) {
         const defaults = await providerStore.getDefaults(profileId);
+        appLog.warn({
+            tag: 'provider.read-service',
+            message: 'Rejected default provider update due to unsupported or unregistered provider.',
+            profileId,
+            providerId,
+            error: ensuredProviderResult.error.message,
+        });
         return {
             success: false,
             reason: 'provider_not_found',
@@ -108,5 +120,26 @@ export async function getOpenAISubscriptionUsage(profileId: string): Promise<Ope
 }
 
 export async function getOpenAISubscriptionRateLimits(profileId: string): Promise<OpenAISubscriptionRateLimitsSummary> {
-    return getOpenAISubscriptionRateLimitsFromWham(profileId);
+    const summary = await getOpenAISubscriptionRateLimitsFromWham(profileId);
+    if (summary.source === 'unavailable') {
+        appLog.warn({
+            tag: 'provider.openai-subscription-rate-limits',
+            message: 'OpenAI subscription rate limits unavailable.',
+            profileId,
+            reason: summary.reason ?? null,
+            detail: summary.detail ?? null,
+        });
+        return summary;
+    }
+
+    appLog.info({
+        tag: 'provider.openai-subscription-rate-limits',
+        message: 'Fetched OpenAI subscription rate limits.',
+        profileId,
+        limitsCount: summary.limits.length,
+        hasPrimary: Boolean(summary.primary),
+        hasSecondary: Boolean(summary.secondary),
+    });
+
+    return summary;
 }

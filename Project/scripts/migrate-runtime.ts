@@ -1,5 +1,7 @@
 import { initializePersistence } from '@/app/backend/persistence/db';
 
+import { scriptLog } from '@/scripts/logger';
+
 const dbPath = process.env['NEONCONDUCTOR_DB_PATH'];
 
 initializePersistence({
@@ -7,4 +9,8 @@ initializePersistence({
     forceReinitialize: true,
 });
 
-console.log('[runtime-migrate] migrations applied successfully');
+scriptLog.info({
+    tag: 'runtime-migrate',
+    message: 'Runtime migrations applied successfully.',
+    ...(dbPath ? { dbPath } : {}),
+});

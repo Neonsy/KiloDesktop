@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -6,6 +7,7 @@ import type { ToolRecord } from '@/app/backend/persistence/types';
 import type { ToolInvokeInput } from '@/app/backend/runtime/contracts';
 import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { appLog } from '@/app/main/logging';
 
 interface ToolOutputEntry {
     path: string;
@@ -30,6 +32,11 @@ type ToolExecutionResult =
           policy?: { effective: 'ask' | 'allow' | 'deny'; source: string };
           requestId?: string;
       };
+
+interface ToolExecutionFailure {
+    code: 'invalid_args' | 'not_implemented' | 'execution_failed';
+    message: string;
+}
 
 function readStringArg(args: Record<string, unknown>, key: string): string | undefined {
     const value = args[key];
@@ -108,29 +115,49 @@ async function listFilesTool(args: Record<string, unknown>): Promise<Record<stri
     };
 }
 
-async function readFileTool(args: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function readFileTool(args: Record<string, unknown>): Promise<Result<Record<string, unknown>, ToolExecutionFailure>> {
     const fileArg = readStringArg(args, 'path');
     if (!fileArg) {
-        throw new Error('Missing "path" argument.');
+        return err({
+            code: 'invalid_args',
+            message: 'Missing "path" argument.',
+        });
     }
 
     const maxBytes = Math.max(1, Math.floor(readNumberArg(args, 'maxBytes', 200_000)));
     const targetPath = normalizeToolPath(fileArg);
-    const buffer = await readFile(targetPath);
-    const truncated = buffer.byteLength > maxBytes;
-    const content = buffer.subarray(0, maxBytes).toString('utf8');
+    try {
+        const buffer = await readFile(targetPath);
+        const truncated = buffer.byteLength > maxBytes;
+        const content = buffer.subarray(0, maxBytes).toString('utf8');
 
-    return {
-        path: targetPath,
-        content,
-        byteLength: buffer.byteLength,
-        truncated,
-    };
+        return ok({
+            path: targetPath,
+            content,
+            byteLength: buffer.byteLength,
+            truncated,
+        });
+    } catch (error) {
+        return err({
+            code: 'execution_failed',
+            message: error instanceof Error ? error.message : String(error),
+        });
+    }
 }
 
-async function executeTool(tool: ToolRecord, args: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function executeTool(
+    tool: ToolRecord,
+    args: Record<string, unknown>
+): Promise<Result<Record<string, unknown>, ToolExecutionFailure>> {
     if (tool.id === 'list_files') {
-        return listFilesTool(args);
+        try {
+            return ok(await listFilesTool(args));
+        } catch (error) {
+            return err({
+                code: 'execution_failed',
+                message: error instanceof Error ? error.message : String(error),
+            });
+        }
     }
 
     if (tool.id === 'read_file') {
@@ -138,10 +165,16 @@ async function executeTool(tool: ToolRecord, args: Record<string, unknown>): Pro
     }
 
     if (tool.id === 'run_command') {
-        throw new Error('Tool "run_command" is not implemented yet.');
+        return err({
+            code: 'not_implemented',
+            message: 'Tool "run_command" is not implemented yet.',
+        });
     }
 
-    throw new Error(`Tool "${tool.id}" is not implemented.`);
+    return err({
+        code: 'not_implemented',
+        message: `Tool "${tool.id}" is not implemented.`,
+    });
 }
 
 export class ToolExecutionService {
@@ -152,6 +185,14 @@ export class ToolExecutionService {
         const tool = tools.find((candidate) => candidate.id === input.toolId);
 
         if (!tool) {
+            appLog.warn({
+                tag: 'tool-execution',
+                message: 'Rejected tool invocation because tool was not found.',
+                profileId: input.profileId,
+                toolId: input.toolId,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+            });
             return {
                 ok: false,
                 toolId: input.toolId,
@@ -187,6 +228,15 @@ export class ToolExecutionService {
                 },
             });
 
+            appLog.warn({
+                tag: 'tool-execution',
+                message: 'Blocked tool invocation by deny policy.',
+                profileId: input.profileId,
+                toolId: tool.id,
+                source: resolvedPolicy.source,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+            });
             return {
                 ok: false,
                 toolId: tool.id,
@@ -234,6 +284,16 @@ export class ToolExecutionService {
                 },
             });
 
+            appLog.info({
+                tag: 'tool-execution',
+                message: 'Tool invocation requires permission approval.',
+                profileId: input.profileId,
+                toolId: tool.id,
+                requestId: request.id,
+                source: resolvedPolicy.source,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+            });
             return {
                 ok: false,
                 toolId: tool.id,
@@ -249,8 +309,9 @@ export class ToolExecutionService {
             };
         }
 
-        try {
-            const output = await executeTool(tool, args);
+        const execution = await executeTool(tool, args);
+        if (execution.isOk()) {
+            const output = execution.value;
             await runtimeEventLogService.append({
                 entityType: 'tool',
                 entityId: tool.id,
@@ -264,6 +325,15 @@ export class ToolExecutionService {
                 },
             });
 
+            appLog.debug({
+                tag: 'tool-execution',
+                message: 'Completed tool invocation.',
+                profileId: input.profileId,
+                toolId: tool.id,
+                source: resolvedPolicy.source,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+            });
             return {
                 ok: true,
                 toolId: tool.id,
@@ -274,37 +344,48 @@ export class ToolExecutionService {
                     source: resolvedPolicy.source,
                 },
             };
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            const code = message.includes('not implemented') ? 'not_implemented' : 'execution_failed';
-
-            await runtimeEventLogService.append({
-                entityType: 'tool',
-                entityId: tool.id,
-                eventType: 'tool.invocation.failed',
-                payload: {
-                    profileId: input.profileId,
-                    toolId: tool.id,
-                    resource,
-                    policy: resolvedPolicy.policy,
-                    source: resolvedPolicy.source,
-                    error: message,
-                },
-            });
-
-            return {
-                ok: false,
-                toolId: tool.id,
-                error: code,
-                message,
-                args,
-                at,
-                policy: {
-                    effective: resolvedPolicy.policy,
-                    source: resolvedPolicy.source,
-                },
-            };
         }
+
+        const code = execution.error.code;
+        const message = execution.error.message;
+
+        await runtimeEventLogService.append({
+            entityType: 'tool',
+            entityId: tool.id,
+            eventType: 'tool.invocation.failed',
+            payload: {
+                profileId: input.profileId,
+                toolId: tool.id,
+                resource,
+                policy: resolvedPolicy.policy,
+                source: resolvedPolicy.source,
+                error: message,
+            },
+        });
+
+        appLog.warn({
+            tag: 'tool-execution',
+            message: 'Tool invocation failed.',
+            profileId: input.profileId,
+            toolId: tool.id,
+            errorCode: code,
+            errorMessage: message,
+            source: resolvedPolicy.source,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+        });
+        return {
+            ok: false,
+            toolId: tool.id,
+            error: code,
+            message,
+            args,
+            at,
+            policy: {
+                effective: resolvedPolicy.policy,
+                source: resolvedPolicy.source,
+            },
+        };
     }
 }
 

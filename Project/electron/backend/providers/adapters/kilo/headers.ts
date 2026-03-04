@@ -1,4 +1,9 @@
 import {
+    errProviderAdapter,
+    okProviderAdapter,
+    type ProviderAdapterResult,
+} from '@/app/backend/providers/adapters/errors';
+import {
     DEFAULT_CLIENT_VERSION,
     DEFAULT_EDITOR_NAME,
     HEADER_EDITOR_NAME,
@@ -8,13 +13,13 @@ import {
 } from '@/app/backend/providers/kiloGatewayClient/constants';
 import type { ProviderRuntimeInput } from '@/app/backend/providers/types';
 
-export function resolveKiloRuntimeAuthToken(input: ProviderRuntimeInput): string {
+export function resolveKiloRuntimeAuthToken(input: ProviderRuntimeInput): ProviderAdapterResult<string> {
     const token = input.accessToken ?? input.apiKey;
     if (!token) {
-        throw new Error('Kilo runtime execution requires access token or API key.');
+        return errProviderAdapter('auth_missing', 'Kilo runtime execution requires access token or API key.');
     }
 
-    return token;
+    return okProviderAdapter(token);
 }
 
 function mapReasoningEffort(

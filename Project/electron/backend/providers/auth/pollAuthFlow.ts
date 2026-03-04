@@ -1,5 +1,10 @@
 import { providerAuthFlowStore, providerAuthStore } from '@/app/backend/persistence/stores';
 import { getAuthState, persistAuthenticatedState } from '@/app/backend/providers/auth/authStateService';
+import {
+    errAuthExecution,
+    okAuthExecution,
+    type AuthExecutionResult,
+} from '@/app/backend/providers/auth/errors';
 import { nowIso } from '@/app/backend/providers/auth/helpers';
 import { exchangeOpenAIAuthorizationCode } from '@/app/backend/providers/auth/openaiOAuthClient';
 import {
@@ -14,10 +19,14 @@ export async function pollAuthFlow(input: {
     profileId: string;
     providerId: RuntimeProviderId;
     flowId: string;
-}): Promise<PollAuthResult> {
-    const flow = await requireFlow(input.profileId, input.providerId, input.flowId);
+}): Promise<AuthExecutionResult<PollAuthResult>> {
+    const flowResult = await requireFlow(input.profileId, input.providerId, input.flowId);
+    if (flowResult.isErr()) {
+        return errAuthExecution(flowResult.error.code, flowResult.error.message);
+    }
+    const flow = flowResult.value;
     if (flow.status !== 'pending') {
-        return { flow, state: await getAuthState(input.profileId, input.providerId) };
+        return okAuthExecution({ flow, state: await getAuthState(input.profileId, input.providerId) });
     }
 
     if (Date.parse(flow.expiresAt) <= Date.now()) {
@@ -35,7 +44,7 @@ export async function pollAuthFlow(input: {
             lastErrorCode: 'expired',
             lastErrorMessage: 'Authentication flow expired.',
         });
-        return { flow: expiredFlow ?? flow, state: await getAuthState(input.profileId, input.providerId) };
+        return okAuthExecution({ flow: expiredFlow ?? flow, state: await getAuthState(input.profileId, input.providerId) });
     }
 
     if (flow.providerId === 'kilo' && flow.flowType === 'device_code') {
@@ -46,7 +55,7 @@ export async function pollAuthFlow(input: {
         return handleOpenAIDevicePoll(flow);
     }
 
-    return { flow, state: await getAuthState(input.profileId, input.providerId) };
+    return okAuthExecution({ flow, state: await getAuthState(input.profileId, input.providerId) });
 }
 
 export async function completeAuthFlow(input: {
@@ -54,18 +63,26 @@ export async function completeAuthFlow(input: {
     providerId: RuntimeProviderId;
     flowId: string;
     code?: string;
-}): Promise<PollAuthResult> {
-    const flow = await requireFlow(input.profileId, input.providerId, input.flowId);
+}): Promise<AuthExecutionResult<PollAuthResult>> {
+    const flowResult = await requireFlow(input.profileId, input.providerId, input.flowId);
+    if (flowResult.isErr()) {
+        return errAuthExecution(flowResult.error.code, flowResult.error.message);
+    }
+    const flow = flowResult.value;
     if (flow.providerId !== 'openai' || flow.flowType !== 'oauth_pkce') {
         return pollAuthFlow(input);
     }
 
     const code = input.code?.trim();
     if (!code) {
-        throw new Error('OAuth completion for PKCE flow requires "code".');
+        return errAuthExecution('pkce_code_required', 'OAuth completion for PKCE flow requires "code".');
     }
 
-    const token = await exchangeOpenAIAuthorizationCode(code, flow.codeVerifier ?? '');
+    const tokenResult = await exchangeOpenAIAuthorizationCode(code, flow.codeVerifier ?? '');
+    if (tokenResult.isErr()) {
+        return errAuthExecution(tokenResult.error.code, tokenResult.error.message);
+    }
+    const token = tokenResult.value;
     const state = await persistAuthenticatedState({
         profileId: flow.profileId,
         providerId: flow.providerId,
@@ -80,18 +97,22 @@ export async function completeAuthFlow(input: {
         consumedAt: nowIso(),
     });
 
-    return {
+    return okAuthExecution({
         flow: completedFlow ?? flow,
         state,
-    };
+    });
 }
 
 export async function cancelAuthFlow(input: {
     profileId: string;
     providerId: RuntimeProviderId;
     flowId: string;
-}): Promise<PollAuthResult> {
-    const flow = await requireFlow(input.profileId, input.providerId, input.flowId);
+}): Promise<AuthExecutionResult<PollAuthResult>> {
+    const flowResult = await requireFlow(input.profileId, input.providerId, input.flowId);
+    if (flowResult.isErr()) {
+        return errAuthExecution(flowResult.error.code, flowResult.error.message);
+    }
+    const flow = flowResult.value;
     const cancelledFlow = await providerAuthFlowStore.updateStatus(flow.id, {
         status: 'cancelled',
         consumedAt: nowIso(),
@@ -103,8 +124,8 @@ export async function cancelAuthFlow(input: {
         authState: 'logged_out',
     });
 
-    return {
+    return okAuthExecution({
         flow: cancelledFlow ?? flow,
         state: await getAuthState(input.profileId, input.providerId),
-    };
+    });
 }

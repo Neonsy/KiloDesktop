@@ -6,6 +6,11 @@ import {
     secretReferenceStore,
 } from '@/app/backend/persistence/stores';
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
+import {
+    errAuthExecution,
+    okAuthExecution,
+    type AuthExecutionResult,
+} from '@/app/backend/providers/auth/errors';
 import { persistSecretRef } from '@/app/backend/providers/auth/secretRefs';
 import type { FlowAuthMethod } from '@/app/backend/providers/auth/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
@@ -26,12 +31,22 @@ export function defaultAuthState(profileId: string, providerId: RuntimeProviderI
     };
 }
 
-export async function ensureProviderExists(providerId: RuntimeProviderId): Promise<void> {
-    assertSupportedProviderId(providerId);
+export async function ensureProviderExists(providerId: RuntimeProviderId): Promise<AuthExecutionResult<void>> {
+    try {
+        assertSupportedProviderId(providerId);
+    } catch (error) {
+        return errAuthExecution(
+            'method_not_supported',
+            error instanceof Error ? error.message : `Unsupported provider "${providerId}".`
+        );
+    }
+
     const exists = await providerStore.providerExists(providerId);
     if (!exists) {
-        throw new Error(`Provider "${providerId}" is not registered.`);
+        return errAuthExecution('method_not_supported', `Provider "${providerId}" is not registered.`);
     }
+
+    return okAuthExecution(undefined);
 }
 
 export async function getAuthState(profileId: string, providerId: RuntimeProviderId): Promise<ProviderAuthStateRecord> {
@@ -45,11 +60,15 @@ export async function setApiKey(
     profileId: string,
     providerId: RuntimeProviderId,
     apiKey: string
-): Promise<ProviderAuthStateRecord> {
-    await ensureProviderExists(providerId);
+): Promise<AuthExecutionResult<ProviderAuthStateRecord>> {
+    const providerCheck = await ensureProviderExists(providerId);
+    if (providerCheck.isErr()) {
+        return errAuthExecution(providerCheck.error.code, providerCheck.error.message);
+    }
+
     const normalized = apiKey.trim();
     if (normalized.length === 0) {
-        throw new Error('Invalid "apiKey": expected non-empty string.');
+        return errAuthExecution('invalid_payload', 'Invalid "apiKey": expected non-empty string.');
     }
 
     await persistSecretRef({
@@ -65,14 +84,18 @@ export async function setApiKey(
         authState: 'configured',
     });
 
-    return getAuthState(profileId, providerId);
+    return okAuthExecution(await getAuthState(profileId, providerId));
 }
 
 export async function clearAuth(
     profileId: string,
     providerId: RuntimeProviderId
-): Promise<{ cleared: boolean; authState: ProviderAuthStateRecord }> {
-    await ensureProviderExists(providerId);
+): Promise<AuthExecutionResult<{ cleared: boolean; authState: ProviderAuthStateRecord }>> {
+    const providerCheck = await ensureProviderExists(providerId);
+    if (providerCheck.isErr()) {
+        return errAuthExecution(providerCheck.error.code, providerCheck.error.message);
+    }
+
     const refs = await secretReferenceStore.listByProfileAndProvider(profileId, providerId);
     await Promise.allSettled(refs.map((ref) => getSecretStore().delete(ref.secretKeyRef)));
     await secretReferenceStore.deleteByProfileAndProvider(profileId, providerId);
@@ -98,10 +121,10 @@ export async function clearAuth(
         });
     }
 
-    return {
+    return okAuthExecution({
         cleared: refs.length > 0,
         authState: await getAuthState(profileId, providerId),
-    };
+    });
 }
 
 export async function persistAuthenticatedState(input: {

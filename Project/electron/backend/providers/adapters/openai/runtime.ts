@@ -1,5 +1,16 @@
-import { parseChatCompletionsPayload, parseResponsesPayload } from '@/app/backend/providers/adapters/runtimePayload';
+import {
+    errProviderAdapter,
+    okProviderAdapter,
+    toProviderAdapterException,
+    type ProviderAdapterResult,
+} from '@/app/backend/providers/adapters/errors';
+import {
+    parseChatCompletionsPayload,
+    parseResponsesPayload,
+    type RuntimeParsedCompletion,
+} from '@/app/backend/providers/adapters/runtimePayload';
 import type { ProviderRuntimeHandlers, ProviderRuntimeInput } from '@/app/backend/providers/types';
+import { appLog } from '@/app/main/logging';
 
 const OPENAI_CHAT_COMPLETIONS_ENDPOINT =
     process.env['OPENAI_CHAT_COMPLETIONS_ENDPOINT']?.trim() || 'https://api.openai.com/v1/chat/completions';
@@ -30,13 +41,13 @@ function toUpstreamModelId(modelId: string): string {
     return modelId.startsWith('openai/') ? modelId.slice('openai/'.length) : modelId;
 }
 
-function resolveAuthToken(input: ProviderRuntimeInput): string {
+function resolveAuthToken(input: ProviderRuntimeInput): ProviderAdapterResult<string> {
     const token = input.accessToken ?? input.apiKey;
     if (!token) {
-        throw new Error('OpenAI runtime execution requires API key or OAuth access token.');
+        return errProviderAdapter('auth_missing', 'OpenAI runtime execution requires API key or OAuth access token.');
     }
 
-    return token;
+    return okProviderAdapter(token);
 }
 
 async function fetchJson(input: {
@@ -44,31 +55,38 @@ async function fetchJson(input: {
     token: string;
     body: Record<string, unknown>;
     signal: AbortSignal;
-}): Promise<HttpJsonResult> {
-    const response = await fetch(input.url, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${input.token}`,
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(input.body),
-        signal: input.signal,
-    });
-
-    let payload: unknown;
+}): Promise<ProviderAdapterResult<HttpJsonResult>> {
     try {
-        payload = (await response.json()) as unknown;
-    } catch {
-        payload = {};
-    }
+        const response = await fetch(input.url, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${input.token}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(input.body),
+            signal: input.signal,
+        });
 
-    return {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText,
-        payload,
-    };
+        let payload: unknown;
+        try {
+            payload = (await response.json()) as unknown;
+        } catch {
+            payload = {};
+        }
+
+        return okProviderAdapter({
+            ok: response.ok,
+            status: response.status,
+            statusText: response.statusText,
+            payload,
+        });
+    } catch (error) {
+        return errProviderAdapter(
+            'provider_request_unavailable',
+            error instanceof Error ? error.message : 'OpenAI runtime request failed before receiving a response.'
+        );
+    }
 }
 
 function mapReasoningEffort(
@@ -124,7 +142,7 @@ function shouldFallbackToChat(result: HttpJsonResult): boolean {
 }
 
 async function emitParsedCompletion(
-    parsed: ReturnType<typeof parseResponsesPayload>,
+    parsed: RuntimeParsedCompletion,
     handlers: ProviderRuntimeHandlers,
     startedAt: number
 ): Promise<void> {
@@ -186,11 +204,33 @@ function buildChatCompletionsBody(input: ProviderRuntimeInput): Record<string, u
     };
 }
 
+function throwWithLog(input: ProviderRuntimeInput, context: string, code: string, error: string): never {
+    appLog.warn({
+        tag: 'provider.openai',
+        message: `OpenAI runtime ${context} failed.`,
+        runId: input.runId,
+        profileId: input.profileId,
+        sessionId: input.sessionId,
+        modelId: input.modelId,
+        code,
+        error,
+    });
+
+    throw toProviderAdapterException({
+        code: 'provider_request_failed',
+        message: error,
+    });
+}
+
 export async function streamOpenAIRuntime(
     input: ProviderRuntimeInput,
     handlers: ProviderRuntimeHandlers
 ): Promise<void> {
-    const token = resolveAuthToken(input);
+    const tokenResult = resolveAuthToken(input);
+    if (tokenResult.isErr()) {
+        throwWithLog(input, 'auth resolution', tokenResult.error.code, tokenResult.error.message);
+    }
+    const token = tokenResult.value;
     const startedAt = Date.now();
 
     if (handlers.onCacheResolved) {
@@ -213,12 +253,23 @@ export async function streamOpenAIRuntime(
             body: buildChatCompletionsBody(input),
             signal: input.signal,
         });
-        if (!chatResult.ok) {
-            throw new Error(`OpenAI chat completion failed: ${String(chatResult.status)} ${chatResult.statusText}`);
+        if (chatResult.isErr()) {
+            throwWithLog(input, 'chat request', chatResult.error.code, chatResult.error.message);
+        }
+        if (!chatResult.value.ok) {
+            throwWithLog(
+                input,
+                'chat request',
+                'provider_request_failed',
+                `OpenAI chat completion failed: ${String(chatResult.value.status)} ${chatResult.value.statusText}`
+            );
         }
 
-        const parsed = parseChatCompletionsPayload(chatResult.payload);
-        await emitParsedCompletion(parsed, handlers, startedAt);
+        const parsed = parseChatCompletionsPayload(chatResult.value.payload);
+        if (parsed.isErr()) {
+            throwWithLog(input, 'chat payload parse', parsed.error.code, parsed.error.message);
+        }
+        await emitParsedCompletion(parsed.value, handlers, startedAt);
         return;
     }
 
@@ -236,16 +287,25 @@ export async function streamOpenAIRuntime(
         body: buildResponsesBody(input),
         signal: input.signal,
     });
+    if (responsesResult.isErr()) {
+        throwWithLog(input, 'responses request', responsesResult.error.code, responsesResult.error.message);
+    }
 
-    if (responsesResult.ok) {
-        const parsed = parseResponsesPayload(responsesResult.payload);
-        await emitParsedCompletion(parsed, handlers, startedAt);
+    if (responsesResult.value.ok) {
+        const parsed = parseResponsesPayload(responsesResult.value.payload);
+        if (parsed.isErr()) {
+            throwWithLog(input, 'responses payload parse', parsed.error.code, parsed.error.message);
+        }
+        await emitParsedCompletion(parsed.value, handlers, startedAt);
         return;
     }
 
-    if (!shouldFallbackToChat(responsesResult)) {
-        throw new Error(
-            `OpenAI responses completion failed: ${String(responsesResult.status)} ${responsesResult.statusText}`
+    if (!shouldFallbackToChat(responsesResult.value)) {
+        throwWithLog(
+            input,
+            'responses request',
+            'provider_request_failed',
+            `OpenAI responses completion failed: ${String(responsesResult.value.status)} ${responsesResult.value.statusText}`
         );
     }
 
@@ -264,10 +324,21 @@ export async function streamOpenAIRuntime(
         body: buildChatCompletionsBody(input),
         signal: input.signal,
     });
-    if (!chatResult.ok) {
-        throw new Error(`OpenAI chat fallback failed: ${String(chatResult.status)} ${chatResult.statusText}`);
+    if (chatResult.isErr()) {
+        throwWithLog(input, 'chat fallback request', chatResult.error.code, chatResult.error.message);
+    }
+    if (!chatResult.value.ok) {
+        throwWithLog(
+            input,
+            'chat fallback request',
+            'provider_request_failed',
+            `OpenAI chat fallback failed: ${String(chatResult.value.status)} ${chatResult.value.statusText}`
+        );
     }
 
-    const parsed = parseChatCompletionsPayload(chatResult.payload);
-    await emitParsedCompletion(parsed, handlers, startedAt);
+    const parsed = parseChatCompletionsPayload(chatResult.value.payload);
+    if (parsed.isErr()) {
+        throwWithLog(input, 'chat fallback payload parse', parsed.error.code, parsed.error.message);
+    }
+    await emitParsedCompletion(parsed.value, handlers, startedAt);
 }
