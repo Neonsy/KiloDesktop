@@ -6,11 +6,11 @@ import { closePersistence, initializePersistence } from '@/app/backend/persisten
 import { getSecretStoreInfo, initializeSecretStore } from '@/app/backend/secrets/store';
 import type { Context } from '@/app/backend/trpc/context';
 import type { AppRouter } from '@/app/backend/trpc/router';
-import { flushAppLogger, initAppLogger } from '@/app/main/logging';
+import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/windowControls';
+import { appLog, flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
 import { createMainWindow } from '@/app/main/window/factory';
-import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/windowControls';
 
 interface BootstrapDeps {
     createContext: (opts: CreateContextOptions) => Promise<Context>;
@@ -43,7 +43,12 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
 
         const persistenceChannel = resolvePersistenceChannel();
         const persistenceDbPath = path.join(app.getPath('userData'), 'runtime', persistenceChannel, 'neonconductor.db');
-        console.info(`[runtime] channel=${persistenceChannel} dbPath=${persistenceDbPath}`);
+        appLog.info({
+            tag: 'runtime',
+            message: 'Persistence channel resolved.',
+            channel: persistenceChannel,
+            dbPath: persistenceDbPath,
+        });
 
         initializePersistence({
             dbPath: persistenceDbPath,
@@ -52,7 +57,12 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         const secretStoreInfo = getSecretStoreInfo();
         if (!secretStoreInfo.available) {
             const reason = secretStoreInfo.reason ?? 'unknown reason';
-            console.warn(`[secrets] ${secretStoreInfo.backend} backend unavailable: ${reason}`);
+            appLog.warn({
+                tag: 'secrets',
+                message: `${secretStoreInfo.backend} backend unavailable: ${reason}`,
+                backend: secretStoreInfo.backend,
+                reason,
+            });
         }
 
         // Remove default menu bar (File, Edit, View, Help)

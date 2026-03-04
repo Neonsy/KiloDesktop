@@ -1,6 +1,11 @@
 import { providerStore, secretReferenceStore } from '@/app/backend/persistence/stores';
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
-import { assertSupportedProviderId } from '@/app/backend/providers/registry';
+import { toSupportedProviderIdResult } from '@/app/backend/providers/registry';
+import {
+    errProviderService,
+    okProviderService,
+    type ProviderServiceResult,
+} from '@/app/backend/providers/service/errors';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
@@ -14,14 +19,19 @@ export function defaultAuthState(profileId: string, providerId: RuntimeProviderI
     };
 }
 
-export async function ensureSupportedProvider(providerId: RuntimeProviderId): Promise<RuntimeProviderId> {
-    const supportedProviderId = assertSupportedProviderId(providerId);
-    const exists = await providerStore.providerExists(supportedProviderId);
-    if (!exists) {
-        throw new Error(`Provider "${supportedProviderId}" is not registered.`);
+export async function ensureSupportedProvider(providerId: RuntimeProviderId): Promise<ProviderServiceResult<RuntimeProviderId>> {
+    const supportedProviderIdResult = toSupportedProviderIdResult(providerId);
+    if (supportedProviderIdResult.isErr()) {
+        return errProviderService('provider_not_supported', supportedProviderIdResult.error.message);
     }
 
-    return supportedProviderId;
+    const supportedProviderId = supportedProviderIdResult.value;
+    const exists = await providerStore.providerExists(supportedProviderId);
+    if (!exists) {
+        return errProviderService('provider_not_registered', `Provider "${supportedProviderId}" is not registered.`);
+    }
+
+    return okProviderService(supportedProviderId);
 }
 
 export async function resolveSecret(

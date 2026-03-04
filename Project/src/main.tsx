@@ -1,4 +1,5 @@
 import { RouterProvider } from '@tanstack/react-router';
+import { initLogger, log } from 'evlog';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -13,6 +14,18 @@ const isDev = import.meta.env.DEV;
 
 const rootElement = document.getElementById('root');
 initializeThemeClass();
+
+if (isDev) {
+    initLogger({
+        enabled: true,
+        pretty: true,
+        stringify: true,
+        env: {
+            service: 'neon-conductor-renderer',
+            environment: 'development',
+        },
+    });
+}
 
 function waitForFirstPaint(): Promise<void> {
     return new Promise((resolve) => {
@@ -39,6 +52,12 @@ if (rootElement) {
     void waitForFirstPaint()
         .then(() => trpcClient.system.signalReady.mutate())
         .catch((error: unknown) => {
-            console.warn('[window] Failed to send ready signal:', error);
+            if (isDev) {
+                log.warn({
+                    tag: 'window',
+                    message: 'Failed to send ready signal.',
+                    ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+                });
+            }
         });
 }

@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { scriptLog } from '@/scripts/logger';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir = path.resolve(__dirname, '../electron/backend/persistence/migrations');
 const outputPath = path.resolve(__dirname, '../electron/backend/persistence/generatedMigrations.ts');
@@ -55,14 +57,24 @@ const currentContent = existsSync(outputPath) ? readFileSync(outputPath, 'utf8')
 
 if (checkOnly) {
     if (currentContent !== nextContent) {
-        console.error('[generate-migrations] generatedMigrations.ts is stale. Run `pnpm generate:migrations`.');
+        scriptLog.error({
+            tag: 'generate-migrations',
+            message: 'generatedMigrations.ts is stale. Run `pnpm generate:migrations`.',
+        });
         process.exit(1);
     }
 
-    console.log('[generate-migrations] generatedMigrations.ts is up to date.');
+    scriptLog.info({
+        tag: 'generate-migrations',
+        message: 'generatedMigrations.ts is up to date.',
+    });
     process.exit(0);
 }
 
 mkdirSync(path.dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, nextContent, 'utf8');
-console.log(`[generate-migrations] wrote ${path.relative(path.resolve(__dirname, '..'), outputPath)}`);
+scriptLog.info({
+    tag: 'generate-migrations',
+    message: 'Wrote generated migrations module.',
+    outputPath: path.relative(path.resolve(__dirname, '..'), outputPath),
+});

@@ -1,9 +1,53 @@
+import { err, ok, type Result } from 'neverthrow';
+
 import { planStore, runStore } from '@/app/backend/persistence/stores';
 import type { PlanQuestionRecord } from '@/app/backend/persistence/types';
 import type { EntityId, PlanAnswerQuestionInput, PlanImplementInput, PlanRecordView, PlanReviseInput, PlanStartInput } from '@/app/backend/runtime/contracts';
 import { orchestratorExecutionService } from '@/app/backend/runtime/services/orchestrator/executionService';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { appLog } from '@/app/main/logging';
+
+type PlanServiceErrorCode =
+    | 'invalid_mode'
+    | 'invalid_tab'
+    | 'unanswered_questions'
+    | 'not_approved'
+    | 'run_start_failed'
+    | 'unsupported_tab';
+
+interface PlanServiceError {
+    code: PlanServiceErrorCode;
+    message: string;
+}
+
+function okPlan<T>(value: T): Result<T, PlanServiceError> {
+    return ok(value);
+}
+
+function errPlan(code: PlanServiceErrorCode, message: string): Result<never, PlanServiceError> {
+    return err({
+        code,
+        message,
+    });
+}
+
+function toPlanException(error: PlanServiceError): Error {
+    const exception = new Error(error.message);
+    (exception as { code?: string }).code = error.code;
+    return exception;
+}
+
+function validatePlanStartInput(input: PlanStartInput): Result<void, PlanServiceError> {
+    if (input.modeKey !== 'plan') {
+        return errPlan('invalid_mode', `Plan flow only supports "plan" mode, received "${input.modeKey}".`);
+    }
+    if (input.topLevelTab === 'chat') {
+        return errPlan('invalid_tab', 'Planning flow is only available in agent or orchestrator tabs.');
+    }
+
+    return okPlan(undefined);
+}
 
 function createDefaultQuestions(prompt: string): PlanQuestionRecord[] {
     const normalized = prompt.trim();
@@ -62,11 +106,19 @@ function toPlanView(plan: Awaited<ReturnType<typeof planStore.getById>>, items: 
 
 export class PlanService {
     async start(input: PlanStartInput): Promise<{ plan: PlanRecordView }> {
-        if (input.modeKey !== 'plan') {
-            throw new Error(`Plan flow only supports "plan" mode, received "${input.modeKey}".`);
-        }
-        if (input.topLevelTab === 'chat') {
-            throw new Error('Planning flow is only available in agent or orchestrator tabs.');
+        const validation = validatePlanStartInput(input);
+        if (validation.isErr()) {
+            appLog.warn({
+                tag: 'plan',
+                message: 'Rejected plan.start request.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+                code: validation.error.code,
+                error: validation.error.message,
+            });
+            throw toPlanException(validation.error);
         }
 
         const questions = createDefaultQuestions(input.prompt);
@@ -106,6 +158,15 @@ export class PlanService {
                 },
             });
         }
+
+        appLog.info({
+            tag: 'plan',
+            message: 'Started planning flow.',
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            planId: plan.id,
+            topLevelTab: input.topLevelTab,
+        });
 
         return {
             plan: toPlanView(plan, []) as PlanRecordView,
@@ -218,7 +279,19 @@ export class PlanService {
             return typeof answer !== 'string' || answer.trim().length === 0;
         });
         if (hasUnanswered) {
-            throw new Error('Cannot approve plan before answering all clarifying questions.');
+            const validation: PlanServiceError = {
+                code: 'unanswered_questions',
+                message: 'Cannot approve plan before answering all clarifying questions.',
+            };
+            appLog.warn({
+                tag: 'plan',
+                message: 'Rejected plan.approve request.',
+                profileId,
+                planId,
+                code: validation.code,
+                error: validation.message,
+            });
+            throw toPlanException(validation);
         }
 
         const approved = await planStore.approve(planId);
@@ -232,6 +305,13 @@ export class PlanService {
                 planId,
                 profileId,
             },
+        });
+
+        appLog.info({
+            tag: 'plan',
+            message: 'Approved plan.',
+            profileId,
+            planId,
         });
 
         return {
@@ -250,7 +330,19 @@ export class PlanService {
             return { found: false };
         }
         if (plan.status !== 'approved' && plan.status !== 'implementing') {
-            throw new Error('Plan must be approved before implementation.');
+            const validation: PlanServiceError = {
+                code: 'not_approved',
+                message: 'Plan must be approved before implementation.',
+            };
+            appLog.warn({
+                tag: 'plan',
+                message: 'Rejected plan.implement request.',
+                profileId: input.profileId,
+                planId: input.planId,
+                code: validation.code,
+                error: validation.message,
+            });
+            throw toPlanException(validation);
         }
 
         if (plan.topLevelTab === 'agent') {
@@ -279,7 +371,20 @@ export class PlanService {
             });
 
             if (!result.accepted) {
-                throw new Error(`Plan implementation failed to start: ${result.reason}.`);
+                const failure: PlanServiceError = {
+                    code: 'run_start_failed',
+                    message: `Plan implementation failed to start: ${result.reason}.`,
+                };
+                appLog.warn({
+                    tag: 'plan',
+                    message: 'Failed to start implementation run for approved plan.',
+                    profileId: input.profileId,
+                    planId: plan.id,
+                    code: failure.code,
+                    error: failure.message,
+                    reason: result.reason,
+                });
+                throw toPlanException(failure);
             }
 
             const implementing = await planStore.markImplementing(plan.id, result.runId);
@@ -293,6 +398,14 @@ export class PlanService {
                     mode: 'agent.code',
                     runId: result.runId,
                 },
+            });
+
+            appLog.info({
+                tag: 'plan',
+                message: 'Started agent implementation run from approved plan.',
+                profileId: input.profileId,
+                planId: plan.id,
+                runId: result.runId,
             });
 
             return {
@@ -328,6 +441,14 @@ export class PlanService {
                 },
             });
 
+            appLog.info({
+                tag: 'plan',
+                message: 'Started orchestrator implementation run from approved plan.',
+                profileId: input.profileId,
+                planId: plan.id,
+                orchestratorRunId: started.run.id,
+            });
+
             return {
                 found: true,
                 started: true,
@@ -337,7 +458,20 @@ export class PlanService {
             };
         }
 
-        throw new Error('Chat plans cannot be implemented through plan.implement.');
+        const unsupported: PlanServiceError = {
+            code: 'unsupported_tab',
+            message: 'Chat plans cannot be implemented through plan.implement.',
+        };
+        appLog.warn({
+            tag: 'plan',
+            message: 'Rejected unsupported plan implementation tab.',
+            profileId: input.profileId,
+            planId: input.planId,
+            code: unsupported.code,
+            error: unsupported.message,
+            topLevelTab: plan.topLevelTab,
+        });
+        throw toPlanException(unsupported);
     }
 }
 

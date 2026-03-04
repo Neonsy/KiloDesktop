@@ -1,0 +1,33 @@
+import { err, ok, type Result } from 'neverthrow';
+
+export type RunExecutionErrorCode =
+    | 'invalid_mode'
+    | 'mode_not_available'
+    | 'mode_policy_invalid'
+    | 'runtime_option_invalid'
+    | 'cache_resolution_failed'
+    | 'provider_not_authenticated'
+    | 'provider_auth_invalid_state'
+    | 'provider_secret_missing'
+    | 'provider_auth_unsupported'
+    | 'provider_not_supported'
+    | 'provider_model_not_available'
+    | 'provider_model_missing';
+
+export interface RunExecutionError {
+    code: RunExecutionErrorCode;
+    message: string;
+}
+
+export type RunExecutionResult<T> = Result<T, RunExecutionError>;
+
+export function okRunExecution<T>(value: T): RunExecutionResult<T> {
+    return ok(value);
+}
+
+export function errRunExecution(code: RunExecutionErrorCode, message: string): RunExecutionResult<never> {
+    return err({
+        code,
+        message,
+    });
+}

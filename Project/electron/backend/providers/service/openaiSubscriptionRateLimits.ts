@@ -5,6 +5,12 @@ import type {
     OpenAISubscriptionRateLimitsSummary,
 } from '@/app/backend/persistence/types';
 import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
+import {
+    errProviderService,
+    okProviderService,
+    type ProviderServiceResult,
+} from '@/app/backend/providers/service/errors';
+import { appLog } from '@/app/main/logging';
 
 const OPENAI_CHATGPT_WHAM_USAGE_ENDPOINT =
     process.env['OPENAI_CHATGPT_WHAM_USAGE_ENDPOINT']?.trim() || 'https://chatgpt.com/backend-api/wham/usage';
@@ -95,9 +101,9 @@ function parseRateLimitNode(input: unknown): {
     };
 }
 
-function parsePayload(payload: unknown): ParsedRateLimitPayload {
+function parsePayload(payload: unknown): ProviderServiceResult<ParsedRateLimitPayload> {
     if (!isRecord(payload)) {
-        throw new Error('OpenAI WHAM usage payload is not an object.');
+        return errProviderService('invalid_payload', 'OpenAI WHAM usage payload is not an object.');
     }
 
     const limits: OpenAISubscriptionRateLimitEntry[] = [];
@@ -110,10 +116,10 @@ function parsePayload(payload: unknown): ParsedRateLimitPayload {
         });
     }
 
-    const additional = payload['additional_rate_limits'];
-    if (Array.isArray(additional)) {
-        for (let index = 0; index < additional.length; index += 1) {
-            const item = additional[index];
+    const additionalRateLimits = payload['additional_rate_limits'];
+    if (Array.isArray(additionalRateLimits)) {
+        for (let index = 0; index < additionalRateLimits.length; index += 1) {
+            const item = additionalRateLimits[index] as unknown;
             if (!isRecord(item)) {
                 continue;
             }
@@ -134,15 +140,18 @@ function parsePayload(payload: unknown): ParsedRateLimitPayload {
     }
 
     if (limits.length === 0) {
-        throw new Error('OpenAI WHAM usage payload does not include usable rate limit windows.');
+        return errProviderService(
+            'invalid_payload',
+            'OpenAI WHAM usage payload does not include usable rate limit windows.'
+        );
     }
 
     const planType = readString(payload['plan_type']);
 
-    return {
+    return okProviderService({
         ...(planType ? { planType } : {}),
         limits,
-    };
+    });
 }
 
 function selectPreferredLimit(
@@ -152,11 +161,12 @@ function selectPreferredLimit(
 }
 
 function unavailable(input: {
+    profileId: string;
     fetchedAt: number;
     reason: OpenAISubscriptionRateLimitsSummary['reason'];
     detail?: string;
 }): OpenAISubscriptionRateLimitsSummary {
-    return {
+    const summary: OpenAISubscriptionRateLimitsSummary = {
         providerId: 'openai',
         source: 'unavailable',
         fetchedAt: input.fetchedAt,
@@ -164,13 +174,29 @@ function unavailable(input: {
         ...(input.reason ? { reason: input.reason } : {}),
         ...(input.detail ? { detail: input.detail } : {}),
     };
+
+    appLog.warn({
+        tag: 'provider.openai-subscription-rate-limits',
+        message: 'OpenAI subscription rate limits unavailable.',
+        profileId: input.profileId,
+        reason: input.reason ?? null,
+        detail: input.detail ?? null,
+    });
+
+    return summary;
 }
 
 export async function getOpenAISubscriptionRateLimits(profileId: string): Promise<OpenAISubscriptionRateLimitsSummary> {
     const fetchedAt = Date.now();
+    appLog.info({
+        tag: 'provider.openai-subscription-rate-limits',
+        message: 'Fetching OpenAI subscription rate limits from WHAM usage endpoint.',
+        profileId,
+    });
     const authState = await providerAuthStore.getByProfileAndProvider(profileId, 'openai');
     if (!authState || authState.authMethod === 'none' || authState.authMethod === 'api_key') {
         return unavailable({
+            profileId,
             fetchedAt,
             reason: 'oauth_required',
             detail: 'OpenAI subscription limits are available only with OAuth-authenticated OpenAI sessions.',
@@ -179,6 +205,7 @@ export async function getOpenAISubscriptionRateLimits(profileId: string): Promis
 
     if (authState.authState !== 'authenticated') {
         return unavailable({
+            profileId,
             fetchedAt,
             reason: 'not_authenticated',
             detail: `OpenAI auth state "${authState.authState}" is not authenticated.`,
@@ -188,6 +215,7 @@ export async function getOpenAISubscriptionRateLimits(profileId: string): Promis
     const accessToken = await readSecretValue(profileId, 'openai', 'access_token');
     if (!accessToken) {
         return unavailable({
+            profileId,
             fetchedAt,
             reason: 'missing_access_token',
             detail: 'OpenAI OAuth access token is missing from secret storage.',
@@ -211,6 +239,7 @@ export async function getOpenAISubscriptionRateLimits(profileId: string): Promis
         });
     } catch (error) {
         return unavailable({
+            profileId,
             fetchedAt,
             reason: 'fetch_failed',
             detail: error instanceof Error ? error.message : String(error),
@@ -229,6 +258,7 @@ export async function getOpenAISubscriptionRateLimits(profileId: string): Promis
         }
 
         return unavailable({
+            profileId,
             fetchedAt,
             reason: 'fetch_failed',
             detail,
@@ -238,18 +268,38 @@ export async function getOpenAISubscriptionRateLimits(profileId: string): Promis
     try {
         const payload = (await response.json()) as unknown;
         const parsed = parsePayload(payload);
-        const preferred = selectPreferredLimit(parsed.limits);
+        if (parsed.isErr()) {
+            return unavailable({
+                profileId,
+                fetchedAt,
+                reason: 'invalid_payload',
+                detail: parsed.error.message,
+            });
+        }
+        const preferred = selectPreferredLimit(parsed.value.limits);
+
+        appLog.info({
+            tag: 'provider.openai-subscription-rate-limits',
+            message: 'Fetched OpenAI subscription rate limits from WHAM usage endpoint.',
+            profileId,
+            limitsCount: parsed.value.limits.length,
+            hasPrimary: Boolean(preferred?.primary),
+            hasSecondary: Boolean(preferred?.secondary),
+            ...(parsed.value.planType ? { planType: parsed.value.planType } : {}),
+        });
+
         return {
             providerId: 'openai',
             source: 'chatgpt_wham',
             fetchedAt,
-            ...(parsed.planType ? { planType: parsed.planType } : {}),
+            ...(parsed.value.planType ? { planType: parsed.value.planType } : {}),
             ...(preferred?.primary ? { primary: preferred.primary } : {}),
             ...(preferred?.secondary ? { secondary: preferred.secondary } : {}),
-            limits: parsed.limits,
+            limits: parsed.value.limits,
         };
     } catch (error) {
         return unavailable({
+            profileId,
             fetchedAt,
             reason: 'invalid_payload',
             detail: error instanceof Error ? error.message : String(error),

@@ -3,6 +3,7 @@ import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/
 import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
 import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
+import type { RunExecutionError } from '@/app/backend/runtime/services/runExecution/errors';
 import {
     emitCacheResolutionEvent,
     emitTransportSelectionEvent,
@@ -20,6 +21,7 @@ import type {
     StartRunResult,
 } from '@/app/backend/runtime/services/runExecution/types';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { appLog } from '@/app/main/logging';
 
 interface ActiveRun {
     profileId: string;
@@ -33,6 +35,12 @@ function createSessionKey(profileId: string, sessionId: string): string {
     return `${profileId}:${sessionId}`;
 }
 
+function toRunExecutionError(error: RunExecutionError): Error {
+    const exception = new Error(error.message);
+    (exception as { code?: string }).code = error.code;
+    return exception;
+}
+
 export class RunExecutionService {
     private readonly activeRuns = new Map<string, ActiveRun>();
     private readonly activeRunsBySession = new Map<string, string>();
@@ -40,34 +48,57 @@ export class RunExecutionService {
     async startRun(input: StartRunInput): Promise<StartRunResult> {
         const runnable = await sessionStore.ensureRunnableSession(input.profileId, input.sessionId);
         if (!runnable.ok) {
+            appLog.warn({
+                tag: 'run-execution',
+                message: 'Rejected run start because session is not runnable.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                reason: runnable.reason,
+            });
             return {
                 accepted: false,
                 reason: runnable.reason,
             };
         }
 
-        const resolvedMode = await resolveModeExecution({
+        const resolvedModeResult = await resolveModeExecution({
             profileId: input.profileId,
             topLevelTab: input.topLevelTab,
             modeKey: input.modeKey,
         });
+        if (resolvedModeResult.isErr()) {
+            throw toRunExecutionError(resolvedModeResult.error);
+        }
+        const resolvedMode = resolvedModeResult.value;
 
-        const resolvedTarget = await resolveRunTarget({
+        const resolvedTargetResult = await resolveRunTarget({
             profileId: input.profileId,
             ...(input.providerId ? { providerId: input.providerId } : {}),
             ...(input.modelId ? { modelId: input.modelId } : {}),
         });
+        if (resolvedTargetResult.isErr()) {
+            throw toRunExecutionError(resolvedTargetResult.error);
+        }
+        const resolvedTarget = resolvedTargetResult.value;
         const explicitTargetRequested = input.providerId !== undefined || input.modelId !== undefined;
         let activeTarget = resolvedTarget;
         let resolvedAuth: ResolvedRunAuth;
-        try {
-            resolvedAuth = await resolveRunAuth({
-                profileId: input.profileId,
-                providerId: activeTarget.providerId,
-            });
-        } catch (error) {
+        const resolvedAuthResult = await resolveRunAuth({
+            profileId: input.profileId,
+            providerId: activeTarget.providerId,
+        });
+        if (resolvedAuthResult.isErr()) {
             if (explicitTargetRequested) {
-                throw error;
+                appLog.warn({
+                    tag: 'run-execution',
+                    message: 'Explicit provider/model target is not runnable with current auth state.',
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    providerId: activeTarget.providerId,
+                    modelId: activeTarget.modelId,
+                    error: resolvedAuthResult.error.message,
+                });
+                throw toRunExecutionError(resolvedAuthResult.error);
             }
 
             const fallback = await resolveFirstRunnableRunTarget(input.profileId, {
@@ -75,11 +106,33 @@ export class RunExecutionService {
                 modelId: activeTarget.modelId,
             });
             if (!fallback) {
-                throw error;
+                appLog.warn({
+                    tag: 'run-execution',
+                    message: 'No runnable provider/model fallback found for session run.',
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    providerId: activeTarget.providerId,
+                    modelId: activeTarget.modelId,
+                    error: resolvedAuthResult.error.message,
+                });
+                throw toRunExecutionError(resolvedAuthResult.error);
             }
+
+            appLog.info({
+                tag: 'run-execution',
+                message: 'Using provider/model fallback for session run.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                requestedProviderId: activeTarget.providerId,
+                requestedModelId: activeTarget.modelId,
+                fallbackProviderId: fallback.target.providerId,
+                fallbackModelId: fallback.target.modelId,
+            });
 
             activeTarget = fallback.target;
             resolvedAuth = fallback.auth;
+        } else {
+            resolvedAuth = resolvedAuthResult.value;
         }
         const modelCapabilities = await providerStore.getModelCapabilities(
             input.profileId,
@@ -87,27 +140,63 @@ export class RunExecutionService {
             activeTarget.modelId
         );
         if (!modelCapabilities) {
-            throw new Error(`Model "${activeTarget.modelId}" is missing runtime capabilities.`);
+            appLog.warn({
+                tag: 'run-execution',
+                message: 'Model capabilities missing for run target.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                providerId: activeTarget.providerId,
+                modelId: activeTarget.modelId,
+            });
+            throw toRunExecutionError({
+                code: 'provider_model_missing',
+                message: `Model "${activeTarget.modelId}" is missing runtime capabilities.`,
+            });
         }
 
-        validateRunCapabilities({
+        const capabilityValidation = validateRunCapabilities({
             providerId: activeTarget.providerId,
             modelId: activeTarget.modelId,
             modelCapabilities,
             runtimeOptions: input.runtimeOptions,
         });
+        if (capabilityValidation.isErr()) {
+            appLog.warn({
+                tag: 'run-execution',
+                message: 'Rejected run start because runtime options are invalid for the selected model.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                providerId: activeTarget.providerId,
+                modelId: activeTarget.modelId,
+                error: capabilityValidation.error.message,
+            });
+            throw toRunExecutionError(capabilityValidation.error);
+        }
 
         const initialTransport = resolveInitialRunTransport({
             providerId: activeTarget.providerId,
             runtimeOptions: input.runtimeOptions,
         });
-        const resolvedCache = resolveRunCache({
+        const resolvedCacheResult = resolveRunCache({
             profileId: input.profileId,
             sessionId: input.sessionId,
             providerId: activeTarget.providerId,
             modelId: activeTarget.modelId,
             runtimeOptions: input.runtimeOptions,
         });
+        if (resolvedCacheResult.isErr()) {
+            appLog.warn({
+                tag: 'run-execution',
+                message: 'Failed to resolve cache settings for run start.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                providerId: activeTarget.providerId,
+                modelId: activeTarget.modelId,
+                error: resolvedCacheResult.error.message,
+            });
+            throw toRunExecutionError(resolvedCacheResult.error);
+        }
+        const resolvedCache = resolvedCacheResult.value;
 
         const run = await runStore.create({
             profileId: input.profileId,
@@ -235,6 +324,18 @@ export class RunExecutionService {
         });
         this.activeRunsBySession.set(createSessionKey(input.profileId, input.sessionId), run.id);
 
+        appLog.info({
+            tag: 'run-execution',
+            message: 'Started session run.',
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            runId: run.id,
+            providerId: activeTarget.providerId,
+            modelId: activeTarget.modelId,
+            topLevelTab: input.topLevelTab,
+            modeKey: input.modeKey,
+        });
+
         return {
             accepted: true,
             runId: run.id,
@@ -260,6 +361,13 @@ export class RunExecutionService {
         if (activeRun) {
             activeRun.controller.abort();
             await activeRun.completion;
+            appLog.info({
+                tag: 'run-execution',
+                message: 'Aborted active session run.',
+                profileId,
+                sessionId,
+                runId,
+            });
             return {
                 aborted: true,
                 runId,
@@ -279,6 +387,14 @@ export class RunExecutionService {
                 sessionId,
                 profileId,
             },
+        });
+
+        appLog.info({
+            tag: 'run-execution',
+            message: 'Aborted persisted run without active in-memory controller.',
+            profileId,
+            sessionId,
+            runId,
         });
 
         return {
@@ -322,6 +438,13 @@ export class RunExecutionService {
                         profileId: input.profileId,
                     },
                 });
+                appLog.info({
+                    tag: 'run-execution',
+                    message: 'Run moved to aborted terminal state.',
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    runId: input.runId,
+                });
                 return;
             }
 
@@ -343,6 +466,15 @@ export class RunExecutionService {
                     errorCode: 'provider_transport_error',
                     errorMessage: message,
                 },
+            });
+            appLog.warn({
+                tag: 'run-execution',
+                message: 'Run moved to failed terminal state.',
+                profileId: input.profileId,
+                sessionId: input.sessionId,
+                runId: input.runId,
+                errorCode: 'provider_transport_error',
+                errorMessage: message,
             });
         }
     }

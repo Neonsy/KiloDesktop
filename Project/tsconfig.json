@@ -22,7 +22,8 @@
         "baseUrl": ".",
         "paths": {
             "@/web/*": ["src/*"],
-            "@/app/*": ["electron/*"]
+            "@/app/*": ["electron/*"],
+            "@/scripts/*": ["scripts/*"]
         },
         "types": ["node", "vite/client"]
     },

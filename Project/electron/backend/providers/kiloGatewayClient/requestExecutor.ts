@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+
 import {
     DEFAULT_CLIENT_VERSION,
     DEFAULT_EDITOR_NAME,
@@ -5,8 +7,19 @@ import {
     HEADER_MODE,
     HEADER_ORGANIZATION_ID,
 } from '@/app/backend/providers/kiloGatewayClient/constants';
+import { appLog } from '@/app/main/logging';
 
 export type GatewayErrorCategory = 'auth' | 'rate_limit' | 'upstream' | 'schema' | 'network';
+
+export interface GatewayErrorShape {
+    code: 'timeout' | 'http_error' | 'schema_error' | 'network_error';
+    category: GatewayErrorCategory;
+    message: string;
+    endpoint: string;
+    statusCode?: number;
+}
+
+export type GatewayRequestResult<TPayload> = Result<ExecuteRequestOutput<TPayload>, GatewayErrorShape>;
 
 export class KiloGatewayError extends Error {
     readonly category: GatewayErrorCategory;
@@ -83,11 +96,20 @@ function mapStatusToCategory(statusCode: number): GatewayErrorCategory {
 
 export async function executeJsonRequest<TPayload>(
     input: ExecuteRequestInput
-): Promise<ExecuteRequestOutput<TPayload>> {
+): Promise<GatewayRequestResult<TPayload>> {
+    const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
         controller.abort();
     }, input.timeoutMs);
+
+    appLog.debug({
+        tag: 'provider.kilo-gateway',
+        message: 'Starting gateway request.',
+        endpoint: input.endpoint,
+        method: input.method ?? 'GET',
+        timeoutMs: input.timeoutMs,
+    });
 
     try {
         const requestInit: RequestInit = {
@@ -99,46 +121,92 @@ export async function executeJsonRequest<TPayload>(
         const response = await fetch(input.endpoint, requestInit);
 
         if (!response.ok) {
-            throw new KiloGatewayError({
+            const error: GatewayErrorShape = {
+                code: 'http_error',
                 message: `Gateway request failed: ${response.status.toString()} ${response.statusText}`,
                 category: mapStatusToCategory(response.status),
                 endpoint: input.endpoint,
                 statusCode: response.status,
+            };
+            appLog.warn({
+                tag: 'provider.kilo-gateway',
+                message: 'Gateway request failed with non-2xx response.',
+                endpoint: input.endpoint,
+                method: input.method ?? 'GET',
+                statusCode: response.status,
+                category: error.category,
+                latencyMs: Date.now() - startedAt,
             });
+            return err(error);
         }
 
         try {
             const payload = (await response.json()) as TPayload;
-            return {
+            const output: ExecuteRequestOutput<TPayload> = {
                 payload,
                 statusCode: response.status,
             };
+            appLog.info({
+                tag: 'provider.kilo-gateway',
+                message: 'Gateway request completed.',
+                endpoint: input.endpoint,
+                method: input.method ?? 'GET',
+                statusCode: response.status,
+                latencyMs: Date.now() - startedAt,
+            });
+            return ok(output);
         } catch (error) {
-            throw new KiloGatewayError({
+            const parseError: GatewayErrorShape = {
+                code: 'schema_error',
                 message: error instanceof Error ? error.message : 'Failed to parse JSON payload.',
                 category: 'schema',
                 endpoint: input.endpoint,
                 statusCode: response.status,
+            };
+            appLog.warn({
+                tag: 'provider.kilo-gateway',
+                message: 'Gateway response JSON parse failed.',
+                endpoint: input.endpoint,
+                method: input.method ?? 'GET',
+                statusCode: response.status,
+                latencyMs: Date.now() - startedAt,
+                error: parseError.message,
             });
+            return err(parseError);
         }
     } catch (error) {
-        if (error instanceof KiloGatewayError) {
-            throw error;
-        }
-
         if (error instanceof Error && error.name === 'AbortError') {
-            throw new KiloGatewayError({
+            const timeoutError: GatewayErrorShape = {
+                code: 'timeout',
                 message: `Gateway request timed out after ${input.timeoutMs.toString()}ms.`,
                 category: 'network',
                 endpoint: input.endpoint,
+            };
+            appLog.warn({
+                tag: 'provider.kilo-gateway',
+                message: 'Gateway request timed out.',
+                endpoint: input.endpoint,
+                method: input.method ?? 'GET',
+                timeoutMs: input.timeoutMs,
             });
+            return err(timeoutError);
         }
 
-        throw new KiloGatewayError({
+        const networkError: GatewayErrorShape = {
+            code: 'network_error',
             message: error instanceof Error ? error.message : 'Network request failed.',
             category: 'network',
             endpoint: input.endpoint,
+        };
+        appLog.warn({
+            tag: 'provider.kilo-gateway',
+            message: 'Gateway network request failed.',
+            endpoint: input.endpoint,
+            method: input.method ?? 'GET',
+            latencyMs: Date.now() - startedAt,
+            error: networkError.message,
         });
+        return err(networkError);
     } finally {
         clearTimeout(timeout);
     }

@@ -1,3 +1,5 @@
+import { err, ok, type Result } from 'neverthrow';
+
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type { ProviderModelCapabilities } from '@/app/backend/providers/types';
 import type { ProviderAuthMethod, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
@@ -18,11 +20,31 @@ export interface ProviderRuntimeValidationInput {
     runtimeOptions: RuntimeRunOptions;
 }
 
+export type ProviderBehaviorErrorCode = 'cache_key_invalid' | 'runtime_option_invalid';
+
+export interface ProviderBehaviorError {
+    code: ProviderBehaviorErrorCode;
+    message: string;
+}
+
+export type ProviderBehaviorResult<T> = Result<T, ProviderBehaviorError>;
+
+export function okProviderBehavior<T>(value: T): ProviderBehaviorResult<T> {
+    return ok(value);
+}
+
+export function errProviderBehavior(code: ProviderBehaviorErrorCode, message: string): ProviderBehaviorResult<never> {
+    return err({
+        code,
+        message,
+    });
+}
+
 export interface ProviderRuntimeBehavior {
     readonly providerId: FirstPartyProviderId;
     resolveInitialTransport(runtimeOptions: RuntimeRunOptions): RunTransportResolution;
-    resolveCache(input: ProviderRuntimeCacheInput): RunCacheResolution;
-    validateRunOptions(input: ProviderRuntimeValidationInput): void;
+    resolveCache(input: ProviderRuntimeCacheInput): ProviderBehaviorResult<RunCacheResolution>;
+    validateRunOptions(input: ProviderRuntimeValidationInput): ProviderBehaviorResult<void>;
     resolveBilledVia(authMethod: ProviderAuthMethod | 'none'): ProviderBilledVia;
 }
 

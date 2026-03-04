@@ -1,4 +1,5 @@
 import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import { appLog } from '@/app/main/logging';
 
 type RuntimeEventListener = (event: RuntimeEventRecordV1) => void;
 
@@ -15,7 +16,14 @@ class RuntimeEventBusImpl implements RuntimeEventBus {
             try {
                 listener(event);
             } catch (error) {
-                console.error('[runtime-event-bus] listener error', error);
+                appLog.error({
+                    tag: 'runtime-event-bus',
+                    message: 'Listener failed while handling runtime event.',
+                    ...(error instanceof Error ? { error: error.message } : { error: String(error) }),
+                    eventType: event.eventType,
+                    entityType: event.entityType,
+                    entityId: event.entityId,
+                });
             }
         }
     }

@@ -1,5 +1,6 @@
 import { shell } from 'electron';
 
+import { appLog } from '@/app/main/logging';
 import { isAppNavigation, isSafeExternalUrl } from '@/app/main/security/urlPolicy';
 
 import type { BrowserWindow } from 'electron';
@@ -21,7 +22,11 @@ export function attachNavigationGuards(win: BrowserWindow, options: NavigationGu
         if (isSafeExternalUrl(url)) {
             void shell.openExternal(url);
         } else {
-            console.warn(`[security] Blocked external URL: ${url}`);
+            appLog.warn({
+                tag: 'security',
+                message: `Blocked external URL: ${url}`,
+                url,
+            });
         }
         return { action: 'deny' };
     });
@@ -40,7 +45,11 @@ export function attachNavigationGuards(win: BrowserWindow, options: NavigationGu
         if (isSafeExternalUrl(url)) {
             void shell.openExternal(url);
         } else {
-            console.warn(`[security] Blocked external URL: ${url}`);
+            appLog.warn({
+                tag: 'security',
+                message: `Blocked external URL: ${url}`,
+                url,
+            });
         }
     });
 }

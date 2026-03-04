@@ -1,3 +1,9 @@
+import {
+    errProviderAdapter,
+    okProviderAdapter,
+    type ProviderAdapterResult,
+} from '@/app/backend/providers/adapters/errors';
+
 export interface RuntimeParsedPart {
     partType: 'text' | 'reasoning' | 'reasoning_summary' | 'reasoning_encrypted';
     payload: Record<string, unknown>;
@@ -185,9 +191,9 @@ function parseMessageContentAsParts(content: unknown): RuntimeParsedPart[] {
     return parts;
 }
 
-export function parseChatCompletionsPayload(payload: unknown): RuntimeParsedCompletion {
+export function parseChatCompletionsPayload(payload: unknown): ProviderAdapterResult<RuntimeParsedCompletion> {
     if (!isRecord(payload)) {
-        throw new Error('Invalid chat completion payload.');
+        return errProviderAdapter('invalid_payload', 'Invalid chat completion payload.');
     }
 
     const choices = Array.isArray(payload['choices']) ? payload['choices'] : [];
@@ -216,15 +222,15 @@ export function parseChatCompletionsPayload(payload: unknown): RuntimeParsedComp
         }
     }
 
-    return {
+    return okProviderAdapter({
         parts,
         usage: normalizeUsage(payload['usage']),
-    };
+    });
 }
 
-export function parseResponsesPayload(payload: unknown): RuntimeParsedCompletion {
+export function parseResponsesPayload(payload: unknown): ProviderAdapterResult<RuntimeParsedCompletion> {
     if (!isRecord(payload)) {
-        throw new Error('Invalid responses payload.');
+        return errProviderAdapter('invalid_payload', 'Invalid responses payload.');
     }
 
     const parts: RuntimeParsedPart[] = [];
@@ -283,8 +289,8 @@ export function parseResponsesPayload(payload: unknown): RuntimeParsedCompletion
         }
     }
 
-    return {
+    return okProviderAdapter({
         parts,
         usage: normalizeUsage(payload['usage']),
-    };
+    });
 }

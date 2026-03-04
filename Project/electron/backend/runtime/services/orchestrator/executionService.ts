@@ -1,13 +1,57 @@
+import { err, ok, type Result } from 'neverthrow';
+
 import { orchestratorStore, planStore, runStore } from '@/app/backend/persistence/stores';
 import type { OrchestratorRunRecord, OrchestratorStepRecord, PlanItemRecord, PlanRecord } from '@/app/backend/persistence/types';
 import type { EntityId, OrchestratorStartInput } from '@/app/backend/runtime/contracts';
 import { runExecutionService } from '@/app/backend/runtime/services/runExecution/service';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { appLog } from '@/app/main/logging';
 
 interface ActiveOrchestratorRun {
     profileId: string;
     sessionId: EntityId<'sess'>;
     cancelled: boolean;
+}
+
+type OrchestratorExecutionErrorCode = 'plan_not_found' | 'invalid_tab' | 'plan_not_approved';
+
+interface OrchestratorExecutionError {
+    code: OrchestratorExecutionErrorCode;
+    message: string;
+}
+
+function okOrchestrator<T>(value: T): Result<T, OrchestratorExecutionError> {
+    return ok(value);
+}
+
+function errOrchestrator(code: OrchestratorExecutionErrorCode, message: string): Result<never, OrchestratorExecutionError> {
+    return err({
+        code,
+        message,
+    });
+}
+
+function toOrchestratorException(error: OrchestratorExecutionError): Error {
+    const exception = new Error(error.message);
+    (exception as { code?: string }).code = error.code;
+    return exception;
+}
+
+function validateOrchestratorStart(
+    plan: PlanRecord | null | undefined,
+    planId: EntityId<'plan'>
+): Result<PlanRecord, OrchestratorExecutionError> {
+    if (!plan) {
+        return errOrchestrator('plan_not_found', `Plan "${planId}" was not found.`);
+    }
+    if (plan.topLevelTab !== 'orchestrator') {
+        return errOrchestrator('invalid_tab', 'Orchestrator runs can only start from orchestrator plans.');
+    }
+    if (plan.status !== 'approved' && plan.status !== 'implementing') {
+        return errOrchestrator('plan_not_approved', `Plan "${plan.id}" must be approved before orchestration.`);
+    }
+
+    return okOrchestrator(plan);
 }
 
 function buildStepPrompt(plan: PlanRecord, step: OrchestratorStepRecord): string {
@@ -41,16 +85,19 @@ export class OrchestratorExecutionService {
     private readonly activeRuns = new Map<EntityId<'orch'>, ActiveOrchestratorRun>();
 
     async start(input: OrchestratorStartInput): Promise<{ started: true; run: OrchestratorRunRecord; steps: OrchestratorStepRecord[] }> {
-        const plan = await planStore.getById(input.profileId, input.planId);
-        if (!plan) {
-            throw new Error(`Plan "${input.planId}" was not found.`);
+        const validation = validateOrchestratorStart(await planStore.getById(input.profileId, input.planId), input.planId);
+        if (validation.isErr()) {
+            appLog.warn({
+                tag: 'orchestrator',
+                message: 'Rejected orchestrator.start request.',
+                profileId: input.profileId,
+                planId: input.planId,
+                code: validation.error.code,
+                error: validation.error.message,
+            });
+            throw toOrchestratorException(validation.error);
         }
-        if (plan.topLevelTab !== 'orchestrator') {
-            throw new Error('Orchestrator runs can only start from orchestrator plans.');
-        }
-        if (plan.status !== 'approved' && plan.status !== 'implementing') {
-            throw new Error(`Plan "${plan.id}" must be approved before orchestration.`);
-        }
+        const plan = validation.value;
 
         const planItems = await planStore.listItems(plan.id);
         const stepDescriptions =
@@ -74,6 +121,16 @@ export class OrchestratorExecutionService {
                 orchestratorRunId: created.run.id,
                 stepCount: created.steps.length,
             },
+        });
+
+        appLog.info({
+            tag: 'orchestrator',
+            message: 'Started orchestrator run.',
+            profileId: input.profileId,
+            sessionId: plan.sessionId,
+            planId: plan.id,
+            orchestratorRunId: created.run.id,
+            stepCount: created.steps.length,
         });
 
         this.activeRuns.set(created.run.id, {
@@ -155,6 +212,13 @@ export class OrchestratorExecutionService {
             },
         });
 
+        appLog.info({
+            tag: 'orchestrator',
+            message: 'Aborted orchestrator run.',
+            profileId,
+            orchestratorRunId,
+        });
+
         return {
             aborted: true,
             runId: orchestratorRunId,
@@ -172,6 +236,11 @@ export class OrchestratorExecutionService {
             const active = this.activeRuns.get(input.orchestratorRunId);
             if (!active || active.cancelled) {
                 await orchestratorStore.setRunStatus(input.orchestratorRunId, { status: 'aborted' });
+                appLog.warn({
+                    tag: 'orchestrator',
+                    message: 'Stopping orchestrator execution because run is no longer active.',
+                    orchestratorRunId: input.orchestratorRunId,
+                });
                 return;
             }
 
@@ -194,6 +263,14 @@ export class OrchestratorExecutionService {
                     stepId: step.id,
                     sequence: step.sequence,
                 },
+            });
+
+            appLog.debug({
+                tag: 'orchestrator',
+                message: 'Started orchestrator step execution.',
+                orchestratorRunId: input.orchestratorRunId,
+                stepId: step.id,
+                sequence: step.sequence,
             });
 
             const started = await runExecutionService.startRun({
@@ -219,6 +296,14 @@ export class OrchestratorExecutionService {
                     errorMessage: started.reason,
                 });
                 await planStore.markFailed(input.plan.id);
+                appLog.warn({
+                    tag: 'orchestrator',
+                    message: 'Failed to start orchestrator step run.',
+                    orchestratorRunId: input.orchestratorRunId,
+                    stepId: step.id,
+                    sequence: step.sequence,
+                    reason: started.reason,
+                });
                 return;
             }
 
@@ -244,6 +329,14 @@ export class OrchestratorExecutionService {
                         runId: started.runId,
                     },
                 });
+                appLog.debug({
+                    tag: 'orchestrator',
+                    message: 'Completed orchestrator step execution.',
+                    orchestratorRunId: input.orchestratorRunId,
+                    stepId: step.id,
+                    sequence: step.sequence,
+                    runId: started.runId,
+                });
                 continue;
             }
 
@@ -255,6 +348,14 @@ export class OrchestratorExecutionService {
                 await orchestratorStore.setRunStatus(input.orchestratorRunId, {
                     status: 'aborted',
                     activeStepIndex: step.sequence,
+                });
+                appLog.warn({
+                    tag: 'orchestrator',
+                    message: 'Orchestrator step run ended as aborted.',
+                    orchestratorRunId: input.orchestratorRunId,
+                    stepId: step.id,
+                    sequence: step.sequence,
+                    runId: started.runId,
                 });
                 return;
             }
@@ -269,6 +370,14 @@ export class OrchestratorExecutionService {
                 errorMessage: 'Step run ended with error.',
             });
             await planStore.markFailed(input.plan.id);
+            appLog.warn({
+                tag: 'orchestrator',
+                message: 'Orchestrator step run failed.',
+                orchestratorRunId: input.orchestratorRunId,
+                stepId: step.id,
+                sequence: step.sequence,
+                runId: started.runId,
+            });
             return;
         }
 
@@ -286,6 +395,13 @@ export class OrchestratorExecutionService {
                 planId: input.plan.id,
                 stepCount: input.steps.length,
             },
+        });
+        appLog.info({
+            tag: 'orchestrator',
+            message: 'Completed orchestrator run.',
+            orchestratorRunId: input.orchestratorRunId,
+            planId: input.plan.id,
+            stepCount: input.steps.length,
         });
     }
 }

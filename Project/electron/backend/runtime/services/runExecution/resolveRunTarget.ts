@@ -1,14 +1,20 @@
 import { providerStore } from '@/app/backend/persistence/stores';
-import { assertSupportedProviderId } from '@/app/backend/providers/registry';
+import { toSupportedProviderIdResult } from '@/app/backend/providers/registry';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import {
+    errRunExecution,
+    okRunExecution,
+    type RunExecutionResult,
+} from '@/app/backend/runtime/services/runExecution/errors';
 import type { ResolvedRunTarget } from '@/app/backend/runtime/services/runExecution/types';
 
 function tryAssertProviderId(value: string): RuntimeProviderId | undefined {
-    try {
-        return assertSupportedProviderId(value);
-    } catch {
+    const supportedProviderIdResult = toSupportedProviderIdResult(value);
+    if (supportedProviderIdResult.isErr()) {
         return undefined;
     }
+
+    return supportedProviderIdResult.value;
 }
 
 async function resolveFirstModelForProvider(profileId: string, providerId: RuntimeProviderId): Promise<string | undefined> {
@@ -20,15 +26,27 @@ export async function resolveRunTarget(input: {
     profileId: string;
     providerId?: string;
     modelId?: string;
-}): Promise<ResolvedRunTarget> {
+}): Promise<RunExecutionResult<ResolvedRunTarget>> {
     const defaults = await providerStore.getDefaults(input.profileId);
 
-    let providerId = input.providerId ? assertSupportedProviderId(input.providerId) : undefined;
+    let providerId: RuntimeProviderId | undefined;
+    if (input.providerId) {
+        const assertedProviderId = tryAssertProviderId(input.providerId);
+        if (!assertedProviderId) {
+            return errRunExecution('provider_not_supported', `Provider "${input.providerId}" is not supported.`);
+        }
+        providerId = assertedProviderId;
+    }
+
     let modelId = input.modelId;
 
     if (!providerId && modelId) {
         const inferred = modelId.split('/')[0] ?? '';
-        providerId = assertSupportedProviderId(inferred);
+        const inferredProviderId = tryAssertProviderId(inferred);
+        if (!inferredProviderId) {
+            return errRunExecution('provider_not_supported', `Provider "${inferred}" is not supported.`);
+        }
+        providerId = inferredProviderId;
     }
 
     if (!providerId) {
@@ -58,16 +76,19 @@ export async function resolveRunTarget(input: {
     }
 
     if (!providerId || !modelId) {
-        throw new Error('No model available for any configured provider.');
+        return errRunExecution('provider_model_missing', 'No model available for any configured provider.');
     }
 
     const modelExists = await providerStore.modelExists(input.profileId, providerId, modelId);
     if (!modelExists) {
-        throw new Error(`Model "${modelId}" is not available for provider "${providerId}".`);
+        return errRunExecution(
+            'provider_model_not_available',
+            `Model "${modelId}" is not available for provider "${providerId}".`
+        );
     }
 
-    return {
+    return okRunExecution({
         providerId,
         modelId,
-    };
+    });
 }

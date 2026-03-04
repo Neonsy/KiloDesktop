@@ -40,14 +40,7 @@ const testGlobs = [
     'src/**/__tests__/**/*.{ts,tsx}',
 ];
 
-const neverthrowWorkflowGlobs = [
-    'electron/main/updates/**/*.ts',
-    'electron/**/services/**/*.{ts,tsx}',
-    'electron/**/domain/**/*.{ts,tsx}',
-    'src/**/services/**/*.{ts,tsx}',
-    'src/**/domain/**/*.{ts,tsx}',
-    'scripts/**/services/**/*.ts',
-];
+const neverthrowWorkflowGlobs = ['electron/**/*.{ts,tsx}', 'src/**/*.{ts,tsx}', 'scripts/**/*.ts'];
 
 const sharedTypeLanguageOptions = {
     parser: tseslint.parser,
@@ -211,6 +204,7 @@ export default [
             'import/no-unresolved': 'off',
             'no-restricted-imports': noRestrictedImportsRule,
             'no-secrets/no-secrets': noSecretsRule,
+            'no-console': 'error',
             'n/no-missing-import': 'off',
             'n/no-process-exit': 'off',
             'security/detect-child-process': 'warn',
@@ -228,7 +222,7 @@ export default [
             neverthrow: fixupPluginRules(neverthrowPlugin),
         },
         rules: {
-            'neverthrow/must-use-result': 'warn',
+            'neverthrow/must-use-result': 'error',
         },
     },
 

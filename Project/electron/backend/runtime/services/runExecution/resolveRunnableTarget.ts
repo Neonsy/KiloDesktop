@@ -1,6 +1,6 @@
 import { providerStore } from '@/app/backend/persistence/stores';
-import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import type { ResolvedRunAuth, ResolvedRunTarget } from '@/app/backend/runtime/services/runExecution/types';
 
 export interface RunnableRunTarget {
@@ -20,15 +20,14 @@ export async function resolveFirstRunnableRunTarget(
             continue;
         }
 
-        let auth: ResolvedRunAuth;
-        try {
-            auth = await resolveRunAuth({
-                profileId,
-                providerId: provider.id,
-            });
-        } catch {
+        const authResult = await resolveRunAuth({
+            profileId,
+            providerId: provider.id,
+        });
+        if (authResult.isErr()) {
             continue;
         }
+        const auth: ResolvedRunAuth = authResult.value;
 
         for (const model of models) {
             if (excluded && excluded.providerId === provider.id && excluded.modelId === model.id) {

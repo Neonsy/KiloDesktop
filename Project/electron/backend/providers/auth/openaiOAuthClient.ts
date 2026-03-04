@@ -6,6 +6,11 @@ import {
     OPENAI_OAUTH_TOKEN_URL,
 } from '@/app/backend/providers/auth/constants';
 import {
+    errAuthExecution,
+    okAuthExecution,
+    type AuthExecutionResult,
+} from '@/app/backend/providers/auth/errors';
+import {
     createOpaque,
     createPkceChallenge,
     isRecord,
@@ -15,16 +20,16 @@ import {
 } from '@/app/backend/providers/auth/helpers';
 import type { OpenAITokenPayload } from '@/app/backend/providers/auth/types';
 
-function parseOpenAITokenPayload(payload: unknown): OpenAITokenPayload {
+function parseOpenAITokenPayload(payload: unknown): AuthExecutionResult<OpenAITokenPayload> {
     if (!isRecord(payload)) {
-        throw new Error('Invalid OpenAI token payload.');
+        return errAuthExecution('invalid_payload', 'Invalid OpenAI token payload.');
     }
 
     const accessToken = readString(payload['access_token']);
     if (!accessToken) {
         const errorCode = readString(payload['error']) ?? 'unknown';
         const errorDescription = readString(payload['error_description']) ?? 'OpenAI token exchange failed.';
-        throw new Error(`${errorCode}: ${errorDescription}`);
+        return errAuthExecution('provider_request_failed', `${errorCode}: ${errorDescription}`);
     }
 
     const expiresIn =
@@ -35,7 +40,7 @@ function parseOpenAITokenPayload(payload: unknown): OpenAITokenPayload {
     const claimedAccountId = readString(payload['account_id']);
     const inferredAccountId = readOpenAIAccountId(accessToken);
 
-    return {
+    return okAuthExecution({
         accessToken,
         ...(refreshToken ? { refreshToken } : {}),
         ...(expiresIn !== undefined ? { expiresAt: plusSeconds(expiresIn) } : {}),
@@ -44,32 +49,48 @@ function parseOpenAITokenPayload(payload: unknown): OpenAITokenPayload {
             : inferredAccountId
               ? { accountId: inferredAccountId }
               : {}),
-    };
+    });
 }
 
-async function postForm(endpoint: string, body: URLSearchParams): Promise<unknown> {
-    const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-        },
-        body,
-        signal: AbortSignal.timeout(15_000),
-    });
-    const payload = (await response.json()) as unknown;
+async function postForm(endpoint: string, body: URLSearchParams): Promise<AuthExecutionResult<unknown>> {
+    let response: Response;
+
+    try {
+        response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Accept: 'application/json',
+            },
+            body,
+            signal: AbortSignal.timeout(15_000),
+        });
+    } catch (error) {
+        return errAuthExecution(
+            'provider_request_unavailable',
+            error instanceof Error ? error.message : 'OpenAI request failed before receiving a response.'
+        );
+    }
+
+    let payload: unknown;
+    try {
+        payload = (await response.json()) as unknown;
+    } catch {
+        return errAuthExecution('invalid_payload', 'OpenAI request returned invalid JSON payload.');
+    }
+
     if (!response.ok) {
         if (isRecord(payload)) {
             const errorCode = readString(payload['error']) ?? 'unknown';
             const errorDescription =
                 readString(payload['error_description']) ?? `OpenAI request failed (${String(response.status)}).`;
-            throw new Error(`${errorCode}: ${errorDescription}`);
+            return errAuthExecution('provider_request_failed', `${errorCode}: ${errorDescription}`);
         }
 
-        throw new Error(`OpenAI request failed (${String(response.status)}).`);
+        return errAuthExecution('provider_request_failed', `OpenAI request failed (${String(response.status)}).`);
     }
 
-    return payload;
+    return okAuthExecution(payload);
 }
 
 export interface OpenAIPkceStartResult {
@@ -87,17 +108,21 @@ export interface OpenAIDeviceStartResult {
     expiresInSeconds: number;
 }
 
-export async function startOpenAIDeviceAuth(): Promise<OpenAIDeviceStartResult> {
-    const payload = await postForm(
+export async function startOpenAIDeviceAuth(): Promise<AuthExecutionResult<OpenAIDeviceStartResult>> {
+    const payloadResult = await postForm(
         OPENAI_OAUTH_DEVICE_CODE_URL,
         new URLSearchParams({
             client_id: OPENAI_OAUTH_CLIENT_ID,
             scope: 'openid profile offline_access',
         })
     );
+    if (payloadResult.isErr()) {
+        return errAuthExecution(payloadResult.error.code, payloadResult.error.message);
+    }
+    const payload = payloadResult.value;
 
     if (!isRecord(payload)) {
-        throw new Error('Invalid OpenAI device auth payload.');
+        return errAuthExecution('invalid_payload', 'Invalid OpenAI device auth payload.');
     }
 
     const deviceCode = readString(payload['device_code']);
@@ -110,16 +135,16 @@ export async function startOpenAIDeviceAuth(): Promise<OpenAIDeviceStartResult> 
     const expiresInSeconds = typeof payload['expires_in'] === 'number' ? payload['expires_in'] : 900;
 
     if (!deviceCode || !userCode || !verificationUri) {
-        throw new Error('OpenAI device auth payload is missing required fields.');
+        return errAuthExecution('invalid_payload', 'OpenAI device auth payload is missing required fields.');
     }
 
-    return {
+    return okAuthExecution({
         deviceCode,
         userCode,
         verificationUri,
         intervalSeconds,
         expiresInSeconds,
-    };
+    });
 }
 
 export function startOpenAIPkceAuth(): OpenAIPkceStartResult {
@@ -146,8 +171,11 @@ export function startOpenAIPkceAuth(): OpenAIPkceStartResult {
     };
 }
 
-export async function exchangeOpenAIAuthorizationCode(code: string, codeVerifier: string): Promise<OpenAITokenPayload> {
-    const payload = await postForm(
+export async function exchangeOpenAIAuthorizationCode(
+    code: string,
+    codeVerifier: string
+): Promise<AuthExecutionResult<OpenAITokenPayload>> {
+    const payloadResult = await postForm(
         OPENAI_OAUTH_TOKEN_URL,
         new URLSearchParams({
             grant_type: 'authorization_code',
@@ -157,46 +185,66 @@ export async function exchangeOpenAIAuthorizationCode(code: string, codeVerifier
             code,
         })
     );
+    if (payloadResult.isErr()) {
+        return errAuthExecution(payloadResult.error.code, payloadResult.error.message);
+    }
 
-    return parseOpenAITokenPayload(payload);
+    return parseOpenAITokenPayload(payloadResult.value);
 }
 
-export async function exchangeOpenAIDeviceCode(deviceCode: string): Promise<OpenAITokenPayload | null> {
-    const response = await fetch(OPENAI_OAUTH_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-        },
-        body: new URLSearchParams({
-            grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
-            client_id: OPENAI_OAUTH_CLIENT_ID,
-            device_code: deviceCode,
-        }),
-        signal: AbortSignal.timeout(15_000),
-    });
-    const payload = (await response.json()) as unknown;
+export async function exchangeOpenAIDeviceCode(
+    deviceCode: string
+): Promise<AuthExecutionResult<OpenAITokenPayload | null>> {
+    let response: Response;
+    try {
+        response = await fetch(OPENAI_OAUTH_TOKEN_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Accept: 'application/json',
+            },
+            body: new URLSearchParams({
+                grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+                client_id: OPENAI_OAUTH_CLIENT_ID,
+                device_code: deviceCode,
+            }),
+            signal: AbortSignal.timeout(15_000),
+        });
+    } catch (error) {
+        return errAuthExecution(
+            'provider_request_unavailable',
+            error instanceof Error ? error.message : 'OpenAI device exchange request failed.'
+        );
+    }
+
+    let payload: unknown;
+    try {
+        payload = (await response.json()) as unknown;
+    } catch {
+        return errAuthExecution('invalid_payload', 'OpenAI device exchange returned invalid JSON payload.');
+    }
+
     if (!response.ok) {
         if (isRecord(payload) && readString(payload['error']) === 'authorization_pending') {
-            return null;
+            return okAuthExecution(null);
         }
 
         if (isRecord(payload) && readString(payload['error']) === 'expired_token') {
-            throw new Error('expired_token: OpenAI device code expired.');
+            return errAuthExecution('provider_request_failed', 'expired_token: OpenAI device code expired.');
         }
 
         const errorDescription = isRecord(payload)
             ? (readString(payload['error_description']) ??
               `OpenAI device exchange failed (${String(response.status)}).`)
             : `OpenAI device exchange failed (${String(response.status)}).`;
-        throw new Error(errorDescription);
+        return errAuthExecution('provider_request_failed', errorDescription);
     }
 
     return parseOpenAITokenPayload(payload);
 }
 
-export async function refreshOpenAIToken(refreshToken: string): Promise<OpenAITokenPayload> {
-    const payload = await postForm(
+export async function refreshOpenAIToken(refreshToken: string): Promise<AuthExecutionResult<OpenAITokenPayload>> {
+    const payloadResult = await postForm(
         OPENAI_OAUTH_TOKEN_URL,
         new URLSearchParams({
             grant_type: 'refresh_token',
@@ -204,6 +252,9 @@ export async function refreshOpenAIToken(refreshToken: string): Promise<OpenAITo
             refresh_token: refreshToken,
         })
     );
+    if (payloadResult.isErr()) {
+        return errAuthExecution(payloadResult.error.code, payloadResult.error.message);
+    }
 
-    return parseOpenAITokenPayload(payload);
+    return parseOpenAITokenPayload(payloadResult.value);
 }
