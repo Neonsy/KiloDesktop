@@ -138,6 +138,54 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         resource: string;
     }>();
 
+    expectTypeOf<Inputs['permission']['getEffectivePolicy']>().toExtend<{
+        profileId: string;
+        resource: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        workspaceFingerprint?: string;
+    }>();
+
+    expectTypeOf<Inputs['tool']['invoke']>().toExtend<{
+        profileId: string;
+        toolId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        args?: Record<string, unknown>;
+        workspaceFingerprint?: string;
+    }>();
+
+    expectTypeOf<Inputs['plan']['start']>().toExtend<{
+        profileId: string;
+        sessionId: string;
+        topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        modeKey: string;
+        prompt: string;
+        workspaceFingerprint?: string;
+    }>();
+
+    expectTypeOf<Inputs['orchestrator']['start']>().toExtend<{
+        profileId: string;
+        planId: string;
+        runtimeOptions: {
+            reasoning: {
+                effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+                summary: 'auto' | 'none';
+                includeEncrypted: boolean;
+            };
+            cache: {
+                strategy: 'auto' | 'manual';
+                key?: string;
+            };
+            transport: {
+                openai: 'responses' | 'chat' | 'auto';
+            };
+        };
+        providerId?: 'kilo' | 'openai';
+        modelId?: string;
+        workspaceFingerprint?: string;
+    }>();
+
     expectTypeOf<Outputs['mcp']['listServers']>().toExtend<{
         servers: Array<{
             id: string;

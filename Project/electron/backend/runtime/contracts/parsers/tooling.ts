@@ -1,12 +1,25 @@
+import { topLevelTabs } from '@/app/backend/runtime/contracts/enums';
 import type { McpByServerInput, ToolInvokeInput } from '@/app/backend/runtime/contracts/types';
-import { createParser, readObject, readString } from '@/app/backend/runtime/contracts/parsers/helpers';
+import {
+    createParser,
+    readEnumValue,
+    readObject,
+    readOptionalString,
+    readProfileId,
+    readString,
+} from '@/app/backend/runtime/contracts/parsers/helpers';
 
 export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
     const source = readObject(input, 'input');
     const args = source.args;
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
 
     return {
+        profileId: readProfileId(source),
         toolId: readString(source.toolId, 'toolId'),
+        topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        modeKey: readString(source.modeKey, 'modeKey'),
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
         ...(args !== undefined ? { args: readObject(args, 'args') } : {}),
     };
 }

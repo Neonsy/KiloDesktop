@@ -137,7 +137,9 @@ export type RuntimeEntityType =
     | 'conversation'
     | 'thread'
     | 'tag'
-    | 'diff';
+    | 'diff'
+    | 'plan'
+    | 'orchestrator';
 
 export interface RuntimeEventRecordV1 {
     sequence: number;
@@ -267,6 +269,79 @@ export interface RunUsageRecord {
     costMicrounits?: number;
     billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription';
     recordedAt: string;
+}
+
+export interface PlanQuestionRecord {
+    id: string;
+    question: string;
+}
+
+export interface PlanRecord {
+    id: EntityId<'plan'>;
+    profileId: string;
+    sessionId: EntityId<'sess'>;
+    topLevelTab: 'chat' | 'agent' | 'orchestrator';
+    modeKey: string;
+    status: 'awaiting_answers' | 'draft' | 'approved' | 'implementing' | 'implemented' | 'failed' | 'cancelled';
+    sourcePrompt: string;
+    summaryMarkdown: string;
+    questions: PlanQuestionRecord[];
+    answers: Record<string, string>;
+    workspaceFingerprint?: string;
+    implementationRunId?: EntityId<'run'>;
+    orchestratorRunId?: EntityId<'orch'>;
+    approvedAt?: string;
+    implementedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface PlanItemRecord {
+    id: EntityId<'step'>;
+    planId: EntityId<'plan'>;
+    sequence: number;
+    description: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+    runId?: EntityId<'run'>;
+    errorMessage?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface OrchestratorRunRecord {
+    id: EntityId<'orch'>;
+    profileId: string;
+    sessionId: EntityId<'sess'>;
+    planId: EntityId<'plan'>;
+    status: 'running' | 'completed' | 'aborted' | 'failed';
+    activeStepIndex?: number;
+    startedAt: string;
+    completedAt?: string;
+    abortedAt?: string;
+    errorMessage?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface OrchestratorStepRecord {
+    id: EntityId<'step'>;
+    orchestratorRunId: EntityId<'orch'>;
+    sequence: number;
+    description: string;
+    status: 'pending' | 'running' | 'completed' | 'failed' | 'aborted';
+    runId?: EntityId<'run'>;
+    errorMessage?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface PermissionPolicyOverrideRecord {
+    profileId: string;
+    scopeKey: string;
+    resource: string;
+    policy: PermissionPolicy;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface ProviderUsageSummary {

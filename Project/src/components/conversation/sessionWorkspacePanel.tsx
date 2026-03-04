@@ -3,6 +3,7 @@ import { ComposerActionPanel } from '@/web/components/conversation/panels/compos
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
 
 import type { MessagePartRecord, MessageRecord, SessionSummaryRecord, RunRecord } from '@/app/backend/persistence/types';
+import type { ReactNode } from 'react';
 
 interface SessionWorkspacePanelProps {
     sessions: SessionSummaryRecord[];
@@ -20,6 +21,7 @@ interface SessionWorkspacePanelProps {
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
+    modePanel?: ReactNode;
     onSelectSession: (sessionId: string) => void;
     onSelectRun: (runId: string) => void;
     onProviderChange: (providerId: string) => void;
@@ -45,6 +47,7 @@ export function SessionWorkspacePanel({
     providerOptions,
     modelOptions,
     runErrorMessage,
+    modePanel,
     onSelectSession,
     onSelectRun,
     onProviderChange,
@@ -105,6 +108,8 @@ export function SessionWorkspacePanel({
                         </button>
                     ))}
                 </div>
+
+                {modePanel}
 
                 <MessageTimelinePanel messages={messages} partsByMessageId={partsByMessageId} />
 

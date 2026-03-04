@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
+import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
 import { SessionWorkspacePanel } from '@/web/components/conversation/sessionWorkspacePanel';
@@ -127,6 +128,12 @@ export function ConversationShell({ topLevelTab, modeKey }: ConversationShellPro
     const setThreadTagsMutation = trpc.conversation.setThreadTags.useMutation();
     const createSessionMutation = trpc.session.create.useMutation();
     const startRunMutation = trpc.session.startRun.useMutation();
+    const planStartMutation = trpc.plan.start.useMutation();
+    const planAnswerMutation = trpc.plan.answerQuestion.useMutation();
+    const planReviseMutation = trpc.plan.revise.useMutation();
+    const planApproveMutation = trpc.plan.approve.useMutation();
+    const planImplementMutation = trpc.plan.implement.useMutation();
+    const orchestratorAbortMutation = trpc.orchestrator.abort.useMutation();
 
     useEffect(() => {
         if (uiState.sort || !listThreadsQuery.data?.sort) {
@@ -243,6 +250,32 @@ export function ConversationShell({ topLevelTab, modeKey }: ConversationShellPro
     const selectedRunId = uiState.selectedRunId;
     const selectedTagId = uiState.selectedTagId;
     const workspaceFilter = uiState.workspaceFilter;
+    const fallbackSessionId = 'sess_missing' as EntityId<'sess'>;
+    const selectedSessionIdForQueries = isEntityId(selectedSessionId, 'sess') ? selectedSessionId : fallbackSessionId;
+    const isPlanningMode = modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator');
+
+    const activePlanQuery = trpc.plan.getActive.useQuery(
+        {
+            profileId,
+            sessionId: selectedSessionIdForQueries,
+            topLevelTab,
+        },
+        {
+            enabled: Boolean(selectedSessionId) && (topLevelTab === 'agent' || topLevelTab === 'orchestrator'),
+            refetchOnWindowFocus: false,
+        }
+    );
+
+    const orchestratorLatestQuery = trpc.orchestrator.latestBySession.useQuery(
+        {
+            profileId,
+            sessionId: selectedSessionIdForQueries,
+        },
+        {
+            enabled: Boolean(selectedSessionId) && topLevelTab === 'orchestrator',
+            refetchOnWindowFocus: false,
+        }
+    );
 
     const sessionOverride = selectedSessionId ? sessionTargetBySessionId[selectedSessionId] : undefined;
 
@@ -418,7 +451,7 @@ export function ConversationShell({ topLevelTab, modeKey }: ConversationShellPro
                     {...(selectedRunId ? { selectedRunId } : {})}
                     prompt={prompt}
                     isCreatingSession={createSessionMutation.isPending}
-                    isStartingRun={startRunMutation.isPending}
+                    isStartingRun={startRunMutation.isPending || planStartMutation.isPending}
                     canCreateSession={Boolean(selectedThreadId)}
                     selectedProviderId={selectedProviderIdForComposer}
                     selectedModelId={selectedModelIdForComposer}
@@ -491,6 +524,30 @@ export function ConversationShell({ topLevelTab, modeKey }: ConversationShellPro
                             return;
                         }
 
+                        if (isPlanningMode) {
+                            void planStartMutation
+                                .mutateAsync({
+                                    profileId,
+                                    sessionId: selectedSessionId,
+                                    topLevelTab,
+                                    modeKey,
+                                    prompt: prompt.trim(),
+                                    ...(selectedThread?.workspaceFingerprint
+                                        ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
+                                        : {}),
+                                })
+                                .then(() => {
+                                    setPrompt('');
+                                    setRunSubmitError(undefined);
+                                    void activePlanQuery.refetch();
+                                })
+                                .catch((error: unknown) => {
+                                    const message = error instanceof Error ? error.message : String(error);
+                                    setRunSubmitError(`Plan start failed: ${message}`);
+                                });
+                            return;
+                        }
+
                         if (!resolvedRunTarget) {
                             setRunSubmitError('No runnable provider/model found. Open Settings > Providers to configure one.');
                             return;
@@ -532,6 +589,95 @@ export function ConversationShell({ topLevelTab, modeKey }: ConversationShellPro
                                 setRunSubmitError(toActionableRunError(message, providerLabel));
                             });
                     }}
+                    modePanel={
+                        <ModeExecutionPanel
+                            topLevelTab={topLevelTab}
+                            modeKey={modeKey}
+                            isLoadingPlan={activePlanQuery.isLoading}
+                            isPlanMutating={
+                                planStartMutation.isPending ||
+                                planAnswerMutation.isPending ||
+                                planReviseMutation.isPending ||
+                                planApproveMutation.isPending ||
+                                planImplementMutation.isPending
+                            }
+                            isOrchestratorMutating={orchestratorAbortMutation.isPending}
+                            onAnswerQuestion={(planId, questionId, answer) => {
+                                void planAnswerMutation
+                                    .mutateAsync({
+                                        profileId,
+                                        planId,
+                                        questionId,
+                                        answer,
+                                    })
+                                    .then(() => {
+                                        void activePlanQuery.refetch();
+                                    });
+                            }}
+                            onRevisePlan={(planId, summaryMarkdown, items) => {
+                                void planReviseMutation
+                                    .mutateAsync({
+                                        profileId,
+                                        planId,
+                                        summaryMarkdown,
+                                        items: items.map((description) => ({ description })),
+                                    })
+                                    .then(() => {
+                                        void activePlanQuery.refetch();
+                                    });
+                            }}
+                            onApprovePlan={(planId) => {
+                                void planApproveMutation
+                                    .mutateAsync({
+                                        profileId,
+                                        planId,
+                                    })
+                                    .then(() => {
+                                        void activePlanQuery.refetch();
+                                    })
+                                    .catch((error: unknown) => {
+                                        const message = error instanceof Error ? error.message : String(error);
+                                        setRunSubmitError(`Plan approval failed: ${message}`);
+                                    });
+                            }}
+                            onImplementPlan={(planId) => {
+                                void planImplementMutation
+                                    .mutateAsync({
+                                        profileId,
+                                        planId,
+                                        runtimeOptions: DEFAULT_RUN_OPTIONS,
+                                        ...(resolvedRunTarget ? { providerId: resolvedRunTarget.providerId } : {}),
+                                        ...(resolvedRunTarget ? { modelId: resolvedRunTarget.modelId } : {}),
+                                        ...(selectedThread?.workspaceFingerprint
+                                            ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
+                                            : {}),
+                                    })
+                                    .then(() => {
+                                        void activePlanQuery.refetch();
+                                        void orchestratorLatestQuery.refetch();
+                                        void runtimeSnapshot.refetch();
+                                    })
+                                    .catch((error: unknown) => {
+                                        const message = error instanceof Error ? error.message : String(error);
+                                        setRunSubmitError(`Plan implementation failed: ${message}`);
+                                    });
+                            }}
+                            onAbortOrchestrator={(orchestratorRunId) => {
+                                void orchestratorAbortMutation
+                                    .mutateAsync({
+                                        profileId,
+                                        orchestratorRunId,
+                                    })
+                                    .then(() => {
+                                        void orchestratorLatestQuery.refetch();
+                                    });
+                            }}
+                            {...(activePlanQuery.data?.found ? { activePlan: activePlanQuery.data.plan } : {})}
+                            {...(orchestratorLatestQuery.data?.found
+                                ? { orchestratorView: orchestratorLatestQuery.data }
+                                : {})}
+                        />
+                    }
                 />
             </section>
         </main>
