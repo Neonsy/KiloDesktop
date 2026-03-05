@@ -74,6 +74,8 @@ export interface ProviderModelRecord {
     providerId: RuntimeProviderId;
     label: string;
     sourceProvider?: string;
+    source?: string;
+    updatedAt?: string;
     supportsTools: boolean;
     supportsReasoning: boolean;
     supportsVision: boolean;
@@ -82,6 +84,12 @@ export interface ProviderModelRecord {
     inputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
     outputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
     promptFamily?: string;
+    contextLength?: number;
+    maxOutputTokens?: number;
+    inputPrice?: number;
+    outputPrice?: number;
+    cacheReadPrice?: number;
+    cacheWritePrice?: number;
     price?: number;
     latency?: number;
     tps?: number;

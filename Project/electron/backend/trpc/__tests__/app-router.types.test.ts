@@ -167,6 +167,14 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             inputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
             outputModalities: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
             promptFamily?: string;
+            contextLength?: number;
+            maxOutputTokens?: number;
+            inputPrice?: number;
+            outputPrice?: number;
+            cacheReadPrice?: number;
+            cacheWritePrice?: number;
+            latency?: number;
+            tps?: number;
         }>;
     }>();
     expectTypeOf<Outputs['provider'][typeof OPENAI_USAGE_PROCEDURE]>().toExtend<{
