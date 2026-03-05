@@ -11,12 +11,14 @@ import type {
 } from '@/app/backend/persistence/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
+import { appLog } from '@/app/main/logging';
 
 function readNumber(value: number | null): number | undefined {
     return value === null ? undefined : value;
 }
 
-const billedViaValues = ['kilo_gateway', 'openai_api', 'openai_subscription'] as const;
+const billedViaValues = ['kilo_gateway', 'openai_api', 'openai_subscription', 'zai_api', 'moonshot_api'] as const;
 type BilledVia = (typeof billedViaValues)[number];
 
 function parseBilledVia(value: string): BilledVia {
@@ -76,7 +78,12 @@ function readAggregateNumber(value: unknown): number {
         }
     }
 
-    throw new Error(`Invalid numeric aggregate value: ${String(value)}`);
+    const message = `Invalid numeric aggregate value: ${String(value)}`;
+    appLog.error({
+        tag: 'persistence.run-usage',
+        message,
+    });
+    throw new DataCorruptionError(message);
 }
 
 interface OpenAISubscriptionAggregateRow {
@@ -138,7 +145,7 @@ export interface UpsertRunUsageInput {
     totalTokens?: number;
     latencyMs?: number;
     costMicrounits?: number;
-    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription';
+    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription' | 'zai_api' | 'moonshot_api';
 }
 
 export class RunUsageStore {

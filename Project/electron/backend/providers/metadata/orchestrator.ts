@@ -3,7 +3,11 @@ import type { ProviderModelRecord } from '@/app/backend/persistence/types';
 import { getProviderMetadataAdapter } from '@/app/backend/providers/metadata/adapters';
 import { normalizeCatalogMetadata, toProviderCatalogUpsert } from '@/app/backend/providers/metadata/normalize';
 import { providerAuthExecutionService } from '@/app/backend/providers/providerAuthExecutionService';
-import { toProviderServiceException } from '@/app/backend/providers/service/errors';
+import {
+    errProviderService,
+    okProviderService,
+    type ProviderServiceResult,
+} from '@/app/backend/providers/service/errors';
 import { ensureSupportedProvider, resolveSecret } from '@/app/backend/providers/service/helpers';
 import type { ProviderSyncResult } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
@@ -14,6 +18,22 @@ const DEFAULT_METADATA_CACHE_TTL_MS = 5 * 60 * 1000;
 interface ProviderMetadataCacheEntry {
     loadedAtMs: number;
     models: ProviderModelRecord[];
+}
+
+interface LogContext {
+    requestId?: string;
+    correlationId?: string;
+}
+
+function withLogContext(context?: LogContext): Record<string, string> {
+    if (!context) {
+        return {};
+    }
+
+    return {
+        ...(context.requestId ? { requestId: context.requestId } : {}),
+        ...(context.correlationId ? { correlationId: context.correlationId } : {}),
+    };
 }
 
 function readMetadataCacheTtlMs(): number {
@@ -39,10 +59,13 @@ export class ProviderMetadataOrchestrator {
     private readonly cache = new Map<string, ProviderMetadataCacheEntry>();
     private readonly refreshInFlight = new Map<string, Promise<ProviderSyncResult>>();
 
-    async listModels(profileId: string, providerId: RuntimeProviderId): Promise<ProviderModelRecord[]> {
+    async listModels(
+        profileId: string,
+        providerId: RuntimeProviderId
+    ): Promise<ProviderServiceResult<ProviderModelRecord[]>> {
         const ensuredProviderResult = await ensureSupportedProvider(providerId);
         if (ensuredProviderResult.isErr()) {
-            throw toProviderServiceException(ensuredProviderResult.error);
+            return errProviderService(ensuredProviderResult.error.code, ensuredProviderResult.error.message);
         }
 
         const supportedProviderId = ensuredProviderResult.value;
@@ -51,17 +74,28 @@ export class ProviderMetadataOrchestrator {
         const now = Date.now();
 
         if (cached && now - cached.loadedAtMs <= this.metadataCacheTtlMs) {
-            return cached.models;
+            return okProviderService(cached.models);
         }
 
         const persistedModels = await providerStore.listModels(profileId, supportedProviderId);
+        if (persistedModels.length === 0) {
+            const syncResult = await this.syncSupportedCatalog(profileId, supportedProviderId, true, 'manual_force');
+            if (syncResult.ok) {
+                const refreshedModels = await providerStore.listModels(profileId, supportedProviderId);
+                this.cache.set(key, {
+                    loadedAtMs: now,
+                    models: refreshedModels,
+                });
+                return okProviderService(refreshedModels);
+            }
+        }
         this.cache.set(key, {
             loadedAtMs: now,
             models: persistedModels,
         });
         this.scheduleBackgroundRefresh(profileId, supportedProviderId);
 
-        return persistedModels;
+        return okProviderService(persistedModels);
     }
 
     async listModelsByProfile(profileId: string): Promise<ProviderModelRecord[]> {
@@ -85,7 +119,12 @@ export class ProviderMetadataOrchestrator {
         return models;
     }
 
-    async syncCatalog(profileId: string, providerId: RuntimeProviderId, force = false): Promise<ProviderSyncResult> {
+    async syncCatalog(
+        profileId: string,
+        providerId: RuntimeProviderId,
+        force = false,
+        context?: LogContext
+    ): Promise<ProviderServiceResult<ProviderSyncResult>> {
         const ensuredProviderResult = await ensureSupportedProvider(providerId);
         if (ensuredProviderResult.isErr()) {
             appLog.warn({
@@ -95,12 +134,21 @@ export class ProviderMetadataOrchestrator {
                 providerId,
                 reason: ensuredProviderResult.error.code,
                 error: ensuredProviderResult.error.message,
+                ...withLogContext(context),
             });
-            throw toProviderServiceException(ensuredProviderResult.error);
+            return errProviderService(ensuredProviderResult.error.code, ensuredProviderResult.error.message);
         }
 
         const supportedProviderId = ensuredProviderResult.value;
-        return this.syncSupportedCatalog(profileId, supportedProviderId, force, force ? 'manual_force' : 'manual');
+        return okProviderService(
+            await this.syncSupportedCatalog(
+                profileId,
+                supportedProviderId,
+                force,
+                force ? 'manual_force' : 'manual',
+                context
+            )
+        );
     }
 
     private scheduleBackgroundRefresh(profileId: string, providerId: RuntimeProviderId): void {
@@ -124,7 +172,8 @@ export class ProviderMetadataOrchestrator {
         profileId: string,
         providerId: RuntimeProviderId,
         force: boolean,
-        reason: 'manual' | 'manual_force' | 'background'
+        reason: 'manual' | 'manual_force' | 'background',
+        context?: LogContext
     ): Promise<ProviderSyncResult> {
         const key = buildCacheKey(profileId, providerId);
         const inFlight = this.refreshInFlight.get(key);
@@ -132,7 +181,7 @@ export class ProviderMetadataOrchestrator {
             return inFlight;
         }
 
-        const refreshPromise = this.executeSync(profileId, providerId, force, reason);
+        const refreshPromise = this.executeSync(profileId, providerId, force, reason, context);
         this.refreshInFlight.set(key, refreshPromise);
         try {
             return await refreshPromise;
@@ -145,7 +194,8 @@ export class ProviderMetadataOrchestrator {
         profileId: string,
         providerId: RuntimeProviderId,
         force: boolean,
-        reason: 'manual' | 'manual_force' | 'background'
+        reason: 'manual' | 'manual_force' | 'background',
+        context?: LogContext
     ): Promise<ProviderSyncResult> {
         appLog.info({
             tag: 'provider.metadata-orchestrator',
@@ -154,6 +204,7 @@ export class ProviderMetadataOrchestrator {
             providerId,
             force,
             reason,
+            ...withLogContext(context),
         });
 
         const adapter = getProviderMetadataAdapter(providerId);
@@ -188,6 +239,7 @@ export class ProviderMetadataOrchestrator {
                 providerId,
                 reason: fetchResult.reason,
                 detail: fetchResult.detail ?? null,
+                ...withLogContext(context),
             });
 
             return {
@@ -208,6 +260,7 @@ export class ProviderMetadataOrchestrator {
                 profileId,
                 providerId,
                 droppedCount: normalized.droppedCount,
+                ...withLogContext(context),
             });
         }
 
@@ -250,6 +303,7 @@ export class ProviderMetadataOrchestrator {
             overrideCount: normalized.overrideCount,
             derivedCount: normalized.derivedCount,
             droppedCount: normalized.droppedCount,
+            ...withLogContext(context),
         });
 
         return {

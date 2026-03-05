@@ -53,6 +53,11 @@
 - Do not add new throw-based control flow for expected runtime errors; return typed error results instead.
 - Reserve `throw` for truly unrecoverable programmer/configuration faults only.
 
+### 8) Trust React Compiler First
+- React Compiler is enabled; prefer plain React code and let the compiler optimize it.
+- Add manual memoization (`useMemo`, `useCallback`, `memo`) only where compiler coverage is known to miss or profiling proves a real regression.
+- Do not add defensive/manual memo wrappers by default.
+
 ## Repository Documentation Status
 - Root `README.md` is intentionally empty; it serves as a pointer target to `Markdown/README`.
 - `Project/README.md` is intentionally not filled yet.

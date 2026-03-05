@@ -1,5 +1,5 @@
 import { providerAuthFlowStore, providerAuthStore } from '@/app/backend/persistence/stores';
-import { AUTH_METHODS_BY_PROVIDER } from '@/app/backend/providers/auth/constants';
+import { getAuthMethodsForProvider } from '@/app/backend/providers/auth/constants';
 import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import { plusSeconds } from '@/app/backend/providers/auth/helpers';
 import { startOpenAIDeviceAuth, startOpenAIPkceAuth } from '@/app/backend/providers/auth/openaiOAuthClient';
@@ -8,7 +8,7 @@ import { kiloGatewayClient } from '@/app/backend/providers/kiloGatewayClient';
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 function assertMethodAllowed(providerId: RuntimeProviderId, method: ProviderAuthMethod): AuthExecutionResult<void> {
-    if (!AUTH_METHODS_BY_PROVIDER[providerId].includes(method)) {
+    if (!getAuthMethodsForProvider(providerId).includes(method)) {
         return errAuthExecution(
             'method_not_supported',
             `Auth method "${method}" is not supported for provider "${providerId}".`

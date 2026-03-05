@@ -1,5 +1,6 @@
 import { providerStore, runStore, settingsStore, threadStore } from '@/app/backend/persistence/stores';
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
+import { isSupportedProviderId } from '@/app/backend/providers/registry';
 import type { ProviderRuntimeInput, ProviderRuntimePart } from '@/app/backend/providers/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
@@ -11,7 +12,17 @@ const TITLE_AI_MODE = 'ai_optional';
 const DEFAULT_TITLE_MODE = 'template';
 
 function providerLabel(providerId: RuntimeProviderId): string {
-    return providerId === 'openai' ? 'OpenAI' : 'Kilo';
+    if (providerId === 'openai') {
+        return 'OpenAI';
+    }
+    if (providerId === 'zai') {
+        return 'Z.AI';
+    }
+    if (providerId === 'moonshot') {
+        return 'Moonshot';
+    }
+
+    return 'Kilo';
 }
 
 function normalizeWhitespace(value: string): string {
@@ -45,12 +56,11 @@ function parseRuntimeTextPart(part: ProviderRuntimePart): string | undefined {
 
 function inferProviderIdFromModel(modelId: string): RuntimeProviderId | null {
     const normalized = modelId.trim().toLowerCase();
-    if (normalized.startsWith('openai/')) {
-        return 'openai';
+    const providerPrefix = normalized.split('/')[0];
+    if (providerPrefix && isSupportedProviderId(providerPrefix)) {
+        return providerPrefix;
     }
-    if (normalized.startsWith('kilo/')) {
-        return 'kilo';
-    }
+
     return null;
 }
 
@@ -156,7 +166,7 @@ async function generateAiTitle(input: {
             ...(auth.value.organizationId ? { organizationId: auth.value.organizationId } : {}),
             signal: controller.signal,
         };
-        await adapter.streamCompletion(runtimeInput, {
+        const streamResult = await adapter.streamCompletion(runtimeInput, {
             onPart: (part) => {
                 const text = parseRuntimeTextPart(part);
                 if (text) {
@@ -164,6 +174,9 @@ async function generateAiTitle(input: {
                 }
             },
         });
+        if (streamResult.isErr()) {
+            return undefined;
+        }
     } catch {
         return undefined;
     } finally {

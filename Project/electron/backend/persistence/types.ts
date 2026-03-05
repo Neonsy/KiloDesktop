@@ -314,7 +314,7 @@ export interface RunUsageRecord {
     totalTokens?: number;
     latencyMs?: number;
     costMicrounits?: number;
-    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription';
+    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription' | 'zai_api' | 'moonshot_api';
     recordedAt: string;
 }
 

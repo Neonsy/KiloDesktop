@@ -1,3 +1,4 @@
+import type { ProviderAdapterResult as AdapterResult } from '@/app/backend/providers/adapters/errors';
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type {
     KiloDynamicSort,
@@ -192,7 +193,12 @@ export interface ProviderRuntimeInput {
 }
 
 export interface ProviderRuntimeAdapter {
-    streamCompletion(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void>;
+    streamCompletion(
+        input: ProviderRuntimeInput,
+        handlers: ProviderRuntimeHandlers
+    ): Promise<ProviderAdapterResult<void>>;
 }
+
+export type ProviderAdapterResult<T> = AdapterResult<T>;
 
 export interface ProviderAdapter extends ProviderCatalogAdapter, ProviderRuntimeAdapter {}

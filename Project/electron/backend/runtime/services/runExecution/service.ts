@@ -557,7 +557,61 @@ export class RunExecutionService {
         signal: AbortSignal;
     }): Promise<void> {
         try {
-            await executeRun(input);
+            const executionResult = await executeRun(input);
+            if (executionResult.isErr()) {
+                if (input.signal.aborted) {
+                    await runStore.finalize(input.runId, {
+                        status: 'aborted',
+                    });
+                    await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'aborted');
+                    await runtimeEventLogService.append({
+                        entityType: 'run',
+                        entityId: input.runId,
+                        eventType: 'run.aborted',
+                        payload: {
+                            runId: input.runId,
+                            sessionId: input.sessionId,
+                            profileId: input.profileId,
+                        },
+                    });
+                    appLog.info({
+                        tag: 'run-execution',
+                        message: 'Run moved to aborted terminal state.',
+                        profileId: input.profileId,
+                        sessionId: input.sessionId,
+                        runId: input.runId,
+                    });
+                    return;
+                }
+                await runStore.finalize(input.runId, {
+                    status: 'error',
+                    errorCode: executionResult.error.code,
+                    errorMessage: executionResult.error.message,
+                });
+                await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'error');
+                await runtimeEventLogService.append({
+                    entityType: 'run',
+                    entityId: input.runId,
+                    eventType: 'run.failed',
+                    payload: {
+                        runId: input.runId,
+                        sessionId: input.sessionId,
+                        profileId: input.profileId,
+                        errorCode: executionResult.error.code,
+                        errorMessage: executionResult.error.message,
+                    },
+                });
+                appLog.warn({
+                    tag: 'run-execution',
+                    message: 'Run moved to failed terminal state.',
+                    profileId: input.profileId,
+                    sessionId: input.sessionId,
+                    runId: input.runId,
+                    errorCode: executionResult.error.code,
+                    errorMessage: executionResult.error.message,
+                });
+                return;
+            }
         } catch (error) {
             if (isAbortError(error) || input.signal.aborted) {
                 await runStore.finalize(input.runId, {
@@ -587,7 +641,7 @@ export class RunExecutionService {
             const message = error instanceof Error ? error.message : String(error);
             await runStore.finalize(input.runId, {
                 status: 'error',
-                errorCode: 'provider_transport_error',
+                errorCode: 'invariant_violation',
                 errorMessage: message,
             });
             await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'error');
@@ -599,7 +653,7 @@ export class RunExecutionService {
                     runId: input.runId,
                     sessionId: input.sessionId,
                     profileId: input.profileId,
-                    errorCode: 'provider_transport_error',
+                    errorCode: 'invariant_violation',
                     errorMessage: message,
                 },
             });
@@ -609,7 +663,7 @@ export class RunExecutionService {
                 profileId: input.profileId,
                 sessionId: input.sessionId,
                 runId: input.runId,
-                errorCode: 'provider_transport_error',
+                errorCode: 'invariant_violation',
                 errorMessage: message,
             });
         }

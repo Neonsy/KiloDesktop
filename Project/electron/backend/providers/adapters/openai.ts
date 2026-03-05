@@ -1,7 +1,8 @@
-import { syncOpenAICatalog } from '@/app/backend/providers/adapters/openai/catalog';
 import { streamOpenAIRuntime } from '@/app/backend/providers/adapters/openai/runtime';
+import { syncStaticCatalog } from '@/app/backend/providers/metadata/staticCatalog/adapter';
 import type {
     ProviderAdapter,
+    ProviderAdapterResult,
     ProviderCatalogSyncResult,
     ProviderRuntimeHandlers,
     ProviderRuntimeInput,
@@ -18,14 +19,14 @@ export class OpenAIProviderAdapter implements ProviderAdapter {
         organizationId?: string;
         force?: boolean;
     }): Promise<ProviderCatalogSyncResult> {
-        return syncOpenAICatalog({
-            authMethod: input.authMethod,
-            ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-        });
+        return syncStaticCatalog('openai', input);
     }
 
-    async streamCompletion(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void> {
-        await streamOpenAIRuntime(input, handlers);
+    async streamCompletion(
+        input: ProviderRuntimeInput,
+        handlers: ProviderRuntimeHandlers
+    ): Promise<ProviderAdapterResult<void>> {
+        return streamOpenAIRuntime(input, handlers);
     }
 }
 

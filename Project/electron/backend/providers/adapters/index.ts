@@ -1,5 +1,7 @@
 import { kiloProviderAdapter } from '@/app/backend/providers/adapters/kilo';
+import { moonshotProviderAdapter } from '@/app/backend/providers/adapters/moonshot';
 import { openAIProviderAdapter } from '@/app/backend/providers/adapters/openai';
+import { zaiProviderAdapter } from '@/app/backend/providers/adapters/zai';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type { ProviderAdapter } from '@/app/backend/providers/types';
@@ -7,6 +9,8 @@ import type { ProviderAdapter } from '@/app/backend/providers/types';
 const adapters: Record<FirstPartyProviderId, ProviderAdapter> = {
     kilo: kiloProviderAdapter,
     openai: openAIProviderAdapter,
+    zai: zaiProviderAdapter,
+    moonshot: moonshotProviderAdapter,
 };
 
 export function getProviderAdapter(providerId: FirstPartyProviderId): ProviderAdapter {

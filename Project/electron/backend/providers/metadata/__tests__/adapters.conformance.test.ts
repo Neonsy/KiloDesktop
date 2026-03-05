@@ -39,6 +39,34 @@ describe('provider metadata adapter conformance', () => {
         expectConforms(result);
     });
 
+    it('zai adapter returns models with required catalog fields', async () => {
+        const adapter = getProviderMetadataAdapter('zai');
+        const result = await adapter.fetchCatalog({
+            profileId: 'profile_test',
+            authMethod: 'api_key',
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) {
+            throw new Error('Expected Z.AI metadata fetch to succeed for static catalog.');
+        }
+        expectConforms(result);
+    });
+
+    it('moonshot adapter returns models with required catalog fields', async () => {
+        const adapter = getProviderMetadataAdapter('moonshot');
+        const result = await adapter.fetchCatalog({
+            profileId: 'profile_test',
+            authMethod: 'api_key',
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) {
+            throw new Error('Expected Moonshot metadata fetch to succeed for static catalog.');
+        }
+        expectConforms(result);
+    });
+
     it('kilo adapter returns models with required catalog fields', async () => {
         vi.stubGlobal(
             'fetch',

@@ -12,6 +12,13 @@ import type {
     ProviderUsageSummary,
 } from '@/app/backend/persistence/types';
 import { providerMetadataOrchestrator } from '@/app/backend/providers/metadata/orchestrator';
+import { getProviderDefinition } from '@/app/backend/providers/registry';
+import { getEndpointProfileState, resolveApiKeyCta } from '@/app/backend/providers/service/endpointProfiles';
+import {
+    errProviderService,
+    okProviderService,
+    type ProviderServiceResult,
+} from '@/app/backend/providers/service/errors';
 import { defaultAuthState, ensureSupportedProvider } from '@/app/backend/providers/service/helpers';
 import { getOpenAISubscriptionRateLimits as getOpenAISubscriptionRateLimitsFromWham } from '@/app/backend/providers/service/openaiSubscriptionRateLimits';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
@@ -26,19 +33,59 @@ export async function listProviders(profileId: string): Promise<ProviderListItem
     ]);
 
     const authStateByProvider = new Map(authStates.map((state) => [state.providerId, state]));
-    return providers.map((provider) => {
-        const authState = authStateByProvider.get(provider.id) ?? defaultAuthState(profileId, provider.id);
-        return {
-            ...provider,
-            isDefault: defaults.providerId === provider.id,
-            authMethod: authState.authMethod,
-            authState: authState.authState,
-        };
-    });
+    return Promise.all(
+        providers.map(async (provider) => {
+            const authState = authStateByProvider.get(provider.id) ?? defaultAuthState(profileId, provider.id);
+            const definition = getProviderDefinition(provider.id);
+            const endpointProfileResult = await getEndpointProfileState(profileId, provider.id);
+            const endpointProfile = endpointProfileResult.isErr()
+                ? {
+                      providerId: provider.id,
+                      value: definition.endpointProfiles[0]?.value ?? 'default',
+                      label: definition.endpointProfiles[0]?.label ?? 'Default',
+                      options: definition.endpointProfiles.map((profile) => ({
+                          value: profile.value,
+                          label: profile.label,
+                      })),
+                  }
+                : endpointProfileResult.value;
+            const apiKeyCtaResult = await resolveApiKeyCta(profileId, provider.id);
+            const apiKeyCta = apiKeyCtaResult.isErr()
+                ? { label: 'Get API Key', url: 'https://kilocode.ai' }
+                : apiKeyCtaResult.value;
+            return {
+                ...provider,
+                isDefault: defaults.providerId === provider.id,
+                authMethod: authState.authMethod,
+                authState: authState.authState,
+                availableAuthMethods: definition.authMethods,
+                endpointProfile: {
+                    value: endpointProfile.value,
+                    label: endpointProfile.label,
+                },
+                endpointProfiles: endpointProfile.options,
+                apiKeyCta,
+                features: {
+                    catalogStrategy: definition.catalogStrategy,
+                    supportsKiloRouting: definition.supportsKiloRouting,
+                    supportsModelProviderListing: definition.supportsModelProviderListing,
+                    supportsEndpointProfiles: definition.endpointProfiles.length > 1,
+                },
+            };
+        })
+    );
 }
 
-export async function listModels(profileId: string, providerId: RuntimeProviderId): Promise<ProviderModelRecord[]> {
-    return providerMetadataOrchestrator.listModels(profileId, providerId);
+export async function listModels(
+    profileId: string,
+    providerId: RuntimeProviderId
+): Promise<ProviderServiceResult<ProviderModelRecord[]>> {
+    const result = await providerMetadataOrchestrator.listModels(profileId, providerId);
+    if (result.isErr()) {
+        return errProviderService(result.error.code, result.error.message);
+    }
+
+    return okProviderService(result.value);
 }
 
 export async function listModelsByProfile(profileId: string): Promise<ProviderModelRecord[]> {

@@ -86,6 +86,20 @@ export type ProviderRefreshAuthInput = ProviderByIdInput;
 
 export type ProviderGetAccountContextInput = ProviderByIdInput;
 
+export type ProviderEndpointProfileValue =
+    | 'gateway'
+    | 'default'
+    | 'coding_international'
+    | 'general_international'
+    | 'coding_plan'
+    | 'standard_api';
+
+export type ProviderGetEndpointProfileInput = ProviderByIdInput;
+
+export interface ProviderSetEndpointProfileInput extends ProviderByIdInput {
+    value: string;
+}
+
 export interface ProviderSetOrganizationInput extends ProfileInput {
     providerId: 'kilo';
     organizationId?: string | null;

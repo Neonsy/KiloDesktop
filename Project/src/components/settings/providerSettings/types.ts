@@ -21,6 +21,25 @@ export interface ProviderListItem {
     isDefault: boolean;
     authState: string;
     authMethod: string;
+    availableAuthMethods: string[];
+    endpointProfile: {
+        value: string;
+        label: string;
+    };
+    endpointProfiles: Array<{
+        value: string;
+        label: string;
+    }>;
+    apiKeyCta: {
+        label: string;
+        url: string;
+    };
+    features: {
+        catalogStrategy: 'dynamic' | 'static';
+        supportsKiloRouting: boolean;
+        supportsModelProviderListing: boolean;
+        supportsEndpointProfiles: boolean;
+    };
 }
 
 export interface ProviderAuthStateView {
