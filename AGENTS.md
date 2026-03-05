@@ -57,5 +57,12 @@
 - Root `README.md` is intentionally empty; it serves as a pointer target to `Markdown/README`.
 - `Project/README.md` is intentionally not filled yet.
 
+## Theming System (Locked)
+- The canonical theming system is token-based (semantic CSS variables), compatible with Tailwind v4.
+- Supported modes are `light`, `dark`, and `auto`; default is `auto`.
+- Theme switching is done at the root (class/data-attribute), while components consume semantic tokens only.
+- Do not hardcode per-component palette values where a semantic token exists.
+- Future built-in/custom themes must extend the same token contract, not replace it with ad-hoc style branches.
+
 ## Practical Rule
 - Every PR should leave the touched area clearer than it was.
