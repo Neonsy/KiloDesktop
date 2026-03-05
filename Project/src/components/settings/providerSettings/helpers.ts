@@ -1,7 +1,12 @@
+import { providerIds } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export function isProviderId(value: string | undefined): value is RuntimeProviderId {
-    return value === 'kilo' || value === 'openai';
+    if (!value) {
+        return false;
+    }
+
+    return providerIds.some((providerId) => providerId === value);
 }
 
 export function methodLabel(method: string): string {

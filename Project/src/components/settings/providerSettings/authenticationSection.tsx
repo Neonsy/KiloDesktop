@@ -11,13 +11,18 @@ interface ProviderAuthenticationSectionProps {
     selectedProviderAuthMethod: string;
     selectedAuthState: ProviderAuthStateView | undefined;
     methods: string[];
+    endpointProfileValue: string;
+    endpointProfileOptions: Array<{ value: string; label: string }>;
+    apiKeyCta?: { label: string; url: string };
     apiKeyInput: string;
     activeAuthFlow: ActiveAuthFlow | undefined;
     isSavingApiKey: boolean;
+    isSavingEndpointProfile: boolean;
     isStartingAuth: boolean;
     isPollingAuth: boolean;
     isCancellingAuth: boolean;
     onApiKeyInputChange: (value: string) => void;
+    onEndpointProfileChange: (value: string) => void;
     onSaveApiKey: () => void;
     onStartOAuthDevice: () => void;
     onStartDeviceCode: () => void;
@@ -31,13 +36,18 @@ export function ProviderAuthenticationSection({
     selectedProviderAuthMethod,
     selectedAuthState,
     methods,
+    endpointProfileValue,
+    endpointProfileOptions,
+    apiKeyCta,
     apiKeyInput,
     activeAuthFlow,
     isSavingApiKey,
+    isSavingEndpointProfile,
     isStartingAuth,
     isPollingAuth,
     isCancellingAuth,
     onApiKeyInputChange,
+    onEndpointProfileChange,
     onSaveApiKey,
     onStartOAuthDevice,
     onStartDeviceCode,
@@ -74,13 +84,41 @@ export function ProviderAuthenticationSection({
                 </div>
             ) : null}
 
+            {endpointProfileOptions.length > 1 ? (
+                <div className='grid grid-cols-[1fr_auto] gap-2'>
+                    <select
+                        value={endpointProfileValue}
+                        onChange={(event) => {
+                            onEndpointProfileChange(event.target.value);
+                        }}
+                        className='border-border bg-background h-9 rounded-md border px-2 text-sm'
+                        disabled={isSavingEndpointProfile}>
+                        {endpointProfileOptions.map((profile) => (
+                            <option key={profile.value} value={profile.value}>
+                                {profile.label}
+                            </option>
+                        ))}
+                    </select>
+                    <span className='text-muted-foreground flex items-center text-xs'>Endpoint profile</span>
+                </div>
+            ) : null}
+
+            {apiKeyCta ? (
+                <Button type='button' size='sm' variant='outline' asChild>
+                    <a href={apiKeyCta.url} target='_blank' rel='noreferrer'>
+                        {apiKeyCta.label}
+                        <ExternalLink className='h-3.5 w-3.5' />
+                    </a>
+                </Button>
+            ) : null}
+
             <div className='flex flex-wrap gap-2'>
                 {methods.includes('oauth_device') ? (
                     <Button
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={isStartingAuth || selectedProviderId !== 'openai'}
+                        disabled={isStartingAuth || !selectedProviderId}
                         onClick={onStartOAuthDevice}>
                         Start OAuth Device
                     </Button>
@@ -90,7 +128,7 @@ export function ProviderAuthenticationSection({
                         type='button'
                         size='sm'
                         variant='outline'
-                        disabled={isStartingAuth || selectedProviderId !== 'kilo'}
+                        disabled={isStartingAuth || !selectedProviderId}
                         onClick={onStartDeviceCode}>
                         Start Device Code
                     </Button>

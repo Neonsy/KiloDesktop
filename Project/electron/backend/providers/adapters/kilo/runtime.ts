@@ -1,4 +1,8 @@
-import { toProviderAdapterException } from '@/app/backend/providers/adapters/errors';
+import {
+    errProviderAdapter,
+    okProviderAdapter,
+    type ProviderAdapterResult,
+} from '@/app/backend/providers/adapters/errors';
 import {
     buildKiloRuntimeBody,
     buildKiloRuntimeHeaders,
@@ -9,7 +13,12 @@ import { KILO_GATEWAY_BASE_URL } from '@/app/backend/providers/kiloGatewayClient
 import type { ProviderRuntimeHandlers, ProviderRuntimeInput } from '@/app/backend/providers/types';
 import { appLog } from '@/app/main/logging';
 
-function throwKiloRuntimeError(input: ProviderRuntimeInput, context: string, code: string, error: string): never {
+function failKiloRuntime(
+    input: ProviderRuntimeInput,
+    context: string,
+    code: string,
+    error: string
+): ProviderAdapterResult<never> {
     appLog.warn({
         tag: 'provider.kilo',
         message: `Kilo runtime ${context} failed.`,
@@ -21,16 +30,16 @@ function throwKiloRuntimeError(input: ProviderRuntimeInput, context: string, cod
         error,
     });
 
-    throw toProviderAdapterException({
-        code: 'provider_request_failed',
-        message: error,
-    });
+    return errProviderAdapter('provider_request_failed', error);
 }
 
-export async function streamKiloRuntime(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void> {
+export async function streamKiloRuntime(
+    input: ProviderRuntimeInput,
+    handlers: ProviderRuntimeHandlers
+): Promise<ProviderAdapterResult<void>> {
     const tokenResult = resolveKiloRuntimeAuthToken(input);
     if (tokenResult.isErr()) {
-        throwKiloRuntimeError(input, 'auth resolution', tokenResult.error.code, tokenResult.error.message);
+        return failKiloRuntime(input, 'auth resolution', tokenResult.error.code, tokenResult.error.message);
     }
     const token = tokenResult.value;
     const startedAt = Date.now();
@@ -64,7 +73,7 @@ export async function streamKiloRuntime(input: ProviderRuntimeInput, handlers: P
             signal: input.signal,
         });
     } catch (error) {
-        throwKiloRuntimeError(
+        return failKiloRuntime(
             input,
             'request',
             'provider_request_unavailable',
@@ -73,7 +82,7 @@ export async function streamKiloRuntime(input: ProviderRuntimeInput, handlers: P
     }
 
     if (!response.ok) {
-        throwKiloRuntimeError(
+        return failKiloRuntime(
             input,
             'request',
             'provider_request_failed',
@@ -84,7 +93,7 @@ export async function streamKiloRuntime(input: ProviderRuntimeInput, handlers: P
     const payload: unknown = await response.json();
     const parsed = parseChatCompletionsPayload(payload);
     if (parsed.isErr()) {
-        throwKiloRuntimeError(input, 'payload parse', parsed.error.code, parsed.error.message);
+        return failKiloRuntime(input, 'payload parse', parsed.error.code, parsed.error.message);
     }
 
     for (const part of parsed.value.parts) {
@@ -97,4 +106,6 @@ export async function streamKiloRuntime(input: ProviderRuntimeInput, handlers: P
             latencyMs: Date.now() - startedAt,
         });
     }
+
+    return okProviderAdapter(undefined);
 }

@@ -6,6 +6,8 @@ import path from 'node:path';
 
 import { runtimeSqlMigrations } from '@/app/backend/persistence/generatedMigrations';
 import type { DatabaseSchema } from '@/app/backend/persistence/schema';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
+import { appLog } from '@/app/main/logging';
 
 import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
 
@@ -30,11 +32,13 @@ const DB_FILE_EXTENSIONS = new Set(['.db', '.sqlite']);
 const PROVIDER_SEED = [
     { id: 'kilo', label: 'Kilo', supportsByok: 0 },
     { id: 'openai', label: 'OpenAI', supportsByok: 1 },
+    { id: 'zai', label: 'Z.AI', supportsByok: 1 },
+    { id: 'moonshot', label: 'Moonshot (Kimi)', supportsByok: 1 },
 ] as const;
 
 const MODEL_SEED: Array<{
     id: string;
-    providerId: 'kilo' | 'openai';
+    providerId: 'kilo' | 'openai' | 'zai' | 'moonshot';
     label: string;
     supportsTools: boolean;
     supportsReasoning: boolean;
@@ -46,6 +50,28 @@ const MODEL_SEED: Array<{
         id: 'openai/gpt-5-mini',
         providerId: 'openai',
         label: 'GPT-5 Mini',
+        supportsTools: true,
+        supportsReasoning: true,
+    },
+    { id: 'zai/glm-4.5', providerId: 'zai', label: 'GLM 4.5', supportsTools: true, supportsReasoning: true },
+    {
+        id: 'zai/glm-4.5-air',
+        providerId: 'zai',
+        label: 'GLM 4.5 Air',
+        supportsTools: true,
+        supportsReasoning: true,
+    },
+    {
+        id: 'moonshot/kimi-k2',
+        providerId: 'moonshot',
+        label: 'Kimi K2',
+        supportsTools: true,
+        supportsReasoning: true,
+    },
+    {
+        id: 'moonshot/kimi-for-coding',
+        providerId: 'moonshot',
+        label: 'Kimi for Coding',
         supportsTools: true,
         supportsReasoning: true,
     },
@@ -159,6 +185,15 @@ const DEFAULT_MODEL_ID = 'kilo/auto';
 
 let persistenceContext: PersistenceContext | null = null;
 
+function failInvariant(message: string, details?: Record<string, unknown>): never {
+    appLog.error({
+        tag: 'persistence.db',
+        message,
+        ...(details ?? {}),
+    });
+    throw new InvariantError(message);
+}
+
 function isMemoryDbPath(dbPath: string): boolean {
     return dbPath === TEST_MEMORY_PATH;
 }
@@ -176,26 +211,30 @@ function resolveDefaultDbPath(): string {
 function resolveSafeFileDbPath(dbPath: string): string {
     const trimmed = dbPath.trim();
     if (trimmed.length === 0) {
-        throw new Error('Persistence DB path must be a non-empty string.');
+        failInvariant('Persistence DB path must be a non-empty string.');
     }
 
     if (!path.isAbsolute(trimmed)) {
-        throw new Error(`Persistence DB path must be absolute. Received: "${trimmed}"`);
+        failInvariant(`Persistence DB path must be absolute. Received: "${trimmed}"`, { dbPath: trimmed });
     }
 
     const normalized = path.resolve(trimmed);
     const extension = path.extname(normalized).toLowerCase();
 
     if (!DB_FILE_EXTENSIONS.has(extension)) {
-        throw new Error(
-            `Persistence DB path must use one of: ${Array.from(DB_FILE_EXTENSIONS).join(', ')}. Received: "${normalized}"`
+        failInvariant(
+            `Persistence DB path must use one of: ${Array.from(DB_FILE_EXTENSIONS).join(', ')}. Received: "${normalized}"`,
+            { dbPath: normalized, extension }
         );
     }
 
     const directory = path.dirname(normalized);
     const parsedDirectory = path.parse(directory);
     if (directory === parsedDirectory.root) {
-        throw new Error(`Persistence DB path directory cannot be filesystem root: "${normalized}"`);
+        failInvariant(`Persistence DB path directory cannot be filesystem root: "${normalized}"`, {
+            dbPath: normalized,
+            directory,
+        });
     }
 
     return normalized;
@@ -209,7 +248,9 @@ function resolveDbPath(options: InitializePersistenceOptions): string {
 
     if (options.dataDir?.trim()) {
         if (!path.isAbsolute(options.dataDir)) {
-            throw new Error(`Persistence dataDir must be absolute. Received: "${options.dataDir}"`);
+            failInvariant(`Persistence dataDir must be absolute. Received: "${options.dataDir}"`, {
+                dataDir: options.dataDir,
+            });
         }
 
         return resolveSafeFileDbPath(path.join(path.resolve(options.dataDir), DEFAULT_DB_FILENAME));

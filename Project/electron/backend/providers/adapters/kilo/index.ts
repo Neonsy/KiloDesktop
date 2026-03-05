@@ -2,6 +2,7 @@ import { syncKiloCatalog } from '@/app/backend/providers/adapters/kilo/catalog';
 import { streamKiloRuntime } from '@/app/backend/providers/adapters/kilo/runtime';
 import type {
     ProviderAdapter,
+    ProviderAdapterResult,
     ProviderCatalogSyncResult,
     ProviderRuntimeHandlers,
     ProviderRuntimeInput,
@@ -21,8 +22,11 @@ export class KiloProviderAdapter implements ProviderAdapter {
         return syncKiloCatalog(input);
     }
 
-    async streamCompletion(input: ProviderRuntimeInput, handlers: ProviderRuntimeHandlers): Promise<void> {
-        await streamKiloRuntime(input, handlers);
+    async streamCompletion(
+        input: ProviderRuntimeInput,
+        handlers: ProviderRuntimeHandlers
+    ): Promise<ProviderAdapterResult<void>> {
+        return streamKiloRuntime(input, handlers);
     }
 }
 

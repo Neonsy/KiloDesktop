@@ -1,3 +1,4 @@
+import { providerIds as registeredProviderIds } from '@/app/backend/providers/registry';
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 
 export const conversationScopes = ['detached', 'workspace'] as const;
@@ -74,7 +75,7 @@ export type StreamEventType = (typeof streamEventTypes)[number];
 export const runtimeResetTargets = ['workspace', 'workspace_all', 'profile_settings', 'full'] as const;
 export type RuntimeResetTarget = (typeof runtimeResetTargets)[number];
 
-export const providerIds = ['kilo', 'openai'] as const;
+export const providerIds = registeredProviderIds;
 export type RuntimeProviderId = FirstPartyProviderId;
 
 export const providerAuthMethods = ['api_key', 'device_code', 'oauth_pkce', 'oauth_device'] as const;

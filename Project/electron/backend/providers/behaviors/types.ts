@@ -5,7 +5,7 @@ import type { ProviderModelCapabilities } from '@/app/backend/providers/types';
 import type { ProviderAuthMethod, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
 import type { RunCacheResolution, RunTransportResolution } from '@/app/backend/runtime/services/runExecution/types';
 
-export type ProviderBilledVia = 'kilo_gateway' | 'openai_api' | 'openai_subscription';
+export type ProviderBilledVia = 'kilo_gateway' | 'openai_api' | 'openai_subscription' | 'zai_api' | 'moonshot_api';
 
 export interface ProviderRuntimeCacheInput {
     profileId: string;

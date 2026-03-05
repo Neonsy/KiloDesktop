@@ -79,7 +79,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                 openai: 'responses' | 'chat' | 'auto';
             };
         };
-        providerId?: 'kilo' | 'openai';
+        providerId?: string;
         modelId?: string;
     }>();
     expectTypeOf<Inputs['session']['revert']>().toExtend<{
@@ -160,7 +160,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Outputs['provider']['listModels']>().toExtend<{
         models: Array<{
             id: string;
-            providerId: 'kilo' | 'openai';
+            providerId: string;
             supportsTools: boolean;
             supportsReasoning: boolean;
             supportsVision: boolean;
@@ -211,25 +211,25 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
 
     expectTypeOf<Inputs['provider']['setApiKey']>().toExtend<{
         profileId: string;
-        providerId: 'kilo' | 'openai';
+        providerId: string;
         apiKey: string;
     }>();
 
     expectTypeOf<Inputs['provider']['startAuth']>().toExtend<{
         profileId: string;
-        providerId: 'kilo' | 'openai';
+        providerId: string;
         method: 'api_key' | 'device_code' | 'oauth_pkce' | 'oauth_device';
     }>();
 
     expectTypeOf<Inputs['provider']['pollAuth']>().toExtend<{
         profileId: string;
-        providerId: 'kilo' | 'openai';
+        providerId: string;
         flowId: string;
     }>();
 
     expectTypeOf<Inputs['provider']['completeAuth']>().toExtend<{
         profileId: string;
-        providerId: 'kilo' | 'openai';
+        providerId: string;
         flowId: string;
         code?: string;
     }>();
@@ -238,6 +238,15 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         providerId: 'kilo';
         organizationId?: string | null;
+    }>();
+    expectTypeOf<Inputs['provider']['getEndpointProfile']>().toExtend<{
+        profileId: string;
+        providerId: string;
+    }>();
+    expectTypeOf<Inputs['provider']['setEndpointProfile']>().toExtend<{
+        profileId: string;
+        providerId: string;
+        value: string;
     }>();
     expectTypeOf<Inputs['provider']['getModelRoutingPreference']>().toExtend<{
         profileId: string;
@@ -306,7 +315,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                 openai: 'responses' | 'chat' | 'auto';
             };
         };
-        providerId?: 'kilo' | 'openai';
+        providerId?: string;
         modelId?: string;
         workspaceFingerprint?: string;
     }>();

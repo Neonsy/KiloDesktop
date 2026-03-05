@@ -84,6 +84,14 @@ export async function resolveRunTarget(input: {
 
     const modelExists = await providerStore.modelExists(input.profileId, providerId, modelId);
     if (!modelExists) {
+        const fallbackModel = await resolveFirstModelForProvider(input.profileId, providerId);
+        if (fallbackModel && fallbackModel !== modelId) {
+            return okRunExecution({
+                providerId,
+                modelId: fallbackModel,
+            });
+        }
+
         return errRunExecution(
             'provider_model_not_available',
             `Model "${modelId}" is not available for provider "${providerId}".`

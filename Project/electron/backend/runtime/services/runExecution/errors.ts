@@ -5,6 +5,7 @@ export type RunExecutionErrorCode =
     | 'mode_not_available'
     | 'mode_policy_invalid'
     | 'runtime_option_invalid'
+    | 'invalid_payload'
     | 'cache_resolution_failed'
     | 'provider_not_authenticated'
     | 'provider_auth_invalid_state'
@@ -12,7 +13,9 @@ export type RunExecutionErrorCode =
     | 'provider_auth_unsupported'
     | 'provider_not_supported'
     | 'provider_model_not_available'
-    | 'provider_model_missing';
+    | 'provider_model_missing'
+    | 'provider_request_failed'
+    | 'provider_request_unavailable';
 
 export interface RunExecutionError {
     code: RunExecutionErrorCode;

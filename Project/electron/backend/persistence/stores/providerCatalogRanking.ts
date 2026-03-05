@@ -27,6 +27,18 @@ export function sortProviderModels(
     providerId: RuntimeProviderId,
     models: ProviderModelRecord[]
 ): ProviderModelRecord[] {
+    if (providerId === 'moonshot') {
+        return models.slice().sort((left, right) => {
+            const leftCoding = left.id === 'moonshot/kimi-for-coding';
+            const rightCoding = right.id === 'moonshot/kimi-for-coding';
+            if (leftCoding !== rightCoding) {
+                return leftCoding ? -1 : 1;
+            }
+
+            return left.label.localeCompare(right.label);
+        });
+    }
+
     if (providerId !== 'kilo') {
         return models.slice().sort((left, right) => left.label.localeCompare(right.label));
     }

@@ -5,6 +5,7 @@ import {
     providerClearAuthInputSchema,
     providerCompleteAuthInputSchema,
     providerGetAccountContextInputSchema,
+    providerGetEndpointProfileInputSchema,
     providerGetModelRoutingPreferenceInputSchema,
     providerListAuthMethodsInputSchema,
     providerListModelProvidersInputSchema,
@@ -14,6 +15,7 @@ import {
     providerRefreshAuthInputSchema,
     providerSetApiKeyInputSchema,
     providerSetDefaultInputSchema,
+    providerSetEndpointProfileInputSchema,
     providerSetModelRoutingPreferenceInputSchema,
     providerSetOrganizationInputSchema,
     providerStartAuthInputSchema,
@@ -22,16 +24,21 @@ import {
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
-function isProviderNotFoundError(error: unknown): boolean {
-    if (!(error instanceof Error)) {
-        return false;
+function throwWithCode(code: string, message: string): never {
+    const error = new Error(message);
+    (error as { code?: string }).code = code;
+    throw error;
+}
+
+function mapAuthErrorToOperationalCode(code: string): string {
+    if (code === 'method_not_supported' || code === 'method_not_implemented' || code === 'refresh_not_supported') {
+        return 'provider_auth_unsupported';
+    }
+    if (code === 'pkce_code_required') {
+        return 'invalid_payload';
     }
 
-    return (
-        error.message.includes('Unsupported provider') ||
-        error.message.includes('not registered') ||
-        error.message.includes('provider_not_found')
-    );
+    return code;
 }
 
 export const providerRouter = router({
@@ -50,18 +57,22 @@ export const providerRouter = router({
             return { rateLimits: await providerManagementService.getOpenAISubscriptionRateLimits(input.profileId) };
         }),
     listModels: publicProcedure.input(providerListModelsInputSchema).query(async ({ input }) => {
-        try {
-            return {
-                models: await providerManagementService.listModels(input.profileId, input.providerId),
-                reason: null,
-            };
-        } catch (error) {
-            if (isProviderNotFoundError(error)) {
+        const modelsResult = await providerManagementService.listModels(input.profileId, input.providerId);
+        if (modelsResult.isErr()) {
+            if (
+                modelsResult.error.code === 'provider_not_supported' ||
+                modelsResult.error.code === 'provider_not_registered'
+            ) {
                 return { models: [], reason: 'provider_not_found' as const };
             }
 
-            throw error;
+            throwWithCode(modelsResult.error.code, modelsResult.error.message);
         }
+
+        return {
+            models: modelsResult.value,
+            reason: null,
+        };
     }),
     listAuthMethods: publicProcedure.input(providerListAuthMethodsInputSchema).query(({ input }) => {
         return {
@@ -69,25 +80,20 @@ export const providerRouter = router({
         };
     }),
     getAuthState: publicProcedure.input(providerByIdInputSchema).query(async ({ input }) => {
-        try {
-            const state = await providerManagementService.getAuthState(input.profileId, input.providerId);
-            return {
-                found: true as const,
-                state,
-            };
-        } catch (error) {
-            if (isProviderNotFoundError(error)) {
-                return {
-                    found: false as const,
-                    reason: 'provider_not_found' as const,
-                };
-            }
-
-            throw error;
-        }
+        const state = await providerManagementService.getAuthState(input.profileId, input.providerId);
+        return {
+            found: true as const,
+            state,
+        };
     }),
-    startAuth: publicProcedure.input(providerStartAuthInputSchema).mutation(async ({ input }) => {
-        const result = await providerManagementService.startAuth(input);
+    startAuth: publicProcedure.input(providerStartAuthInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await providerManagementService.startAuth(input, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
         await runtimeEventLogService.append({
             entityType: 'provider',
             entityId: input.providerId,
@@ -96,14 +102,20 @@ export const providerRouter = router({
                 profileId: input.profileId,
                 providerId: input.providerId,
                 method: input.method,
-                flowId: result.flow.id,
+                flowId: result.value.flow.id,
             },
         });
 
-        return result;
+        return result.value;
     }),
-    pollAuth: publicProcedure.input(providerPollAuthInputSchema).mutation(async ({ input }) => {
-        const result = await providerManagementService.pollAuth(input);
+    pollAuth: publicProcedure.input(providerPollAuthInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await providerManagementService.pollAuth(input, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
         await runtimeEventLogService.append({
             entityType: 'provider',
             entityId: input.providerId,
@@ -112,15 +124,21 @@ export const providerRouter = router({
                 profileId: input.profileId,
                 providerId: input.providerId,
                 flowId: input.flowId,
-                flowStatus: result.flow.status,
-                authState: result.state.authState,
+                flowStatus: result.value.flow.status,
+                authState: result.value.state.authState,
             },
         });
 
-        return result;
+        return result.value;
     }),
-    completeAuth: publicProcedure.input(providerCompleteAuthInputSchema).mutation(async ({ input }) => {
-        const result = await providerManagementService.completeAuth(input);
+    completeAuth: publicProcedure.input(providerCompleteAuthInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await providerManagementService.completeAuth(input, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
         await runtimeEventLogService.append({
             entityType: 'provider',
             entityId: input.providerId,
@@ -129,15 +147,21 @@ export const providerRouter = router({
                 profileId: input.profileId,
                 providerId: input.providerId,
                 flowId: input.flowId,
-                flowStatus: result.flow.status,
-                authState: result.state.authState,
+                flowStatus: result.value.flow.status,
+                authState: result.value.state.authState,
             },
         });
 
-        return result;
+        return result.value;
     }),
-    cancelAuth: publicProcedure.input(providerCancelAuthInputSchema).mutation(async ({ input }) => {
-        const result = await providerManagementService.cancelAuth(input);
+    cancelAuth: publicProcedure.input(providerCancelAuthInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await providerManagementService.cancelAuth(input, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
         await runtimeEventLogService.append({
             entityType: 'provider',
             entityId: input.providerId,
@@ -149,10 +173,17 @@ export const providerRouter = router({
             },
         });
 
-        return result;
+        return result.value;
     }),
-    refreshAuth: publicProcedure.input(providerRefreshAuthInputSchema).mutation(async ({ input }) => {
-        const state = await providerManagementService.refreshAuth(input.profileId, input.providerId);
+    refreshAuth: publicProcedure.input(providerRefreshAuthInputSchema).mutation(async ({ input, ctx }) => {
+        const stateResult = await providerManagementService.refreshAuth(input.profileId, input.providerId, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (stateResult.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(stateResult.error.code), stateResult.error.message);
+        }
+        const state = stateResult.value;
         await runtimeEventLogService.append({
             entityType: 'provider',
             entityId: input.providerId,
@@ -167,14 +198,59 @@ export const providerRouter = router({
         return { state };
     }),
     getAccountContext: publicProcedure.input(providerGetAccountContextInputSchema).query(async ({ input }) => {
-        return providerManagementService.getAccountContext(input.profileId, input.providerId);
+        const result = await providerManagementService.getAccountContext(input.profileId, input.providerId);
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
+        return result.value;
     }),
+    getEndpointProfile: publicProcedure.input(providerGetEndpointProfileInputSchema).query(async ({ input }) => {
+        const endpointResult = await providerManagementService.getEndpointProfile(input.profileId, input.providerId);
+        if (endpointResult.isErr()) {
+            throwWithCode(endpointResult.error.code, endpointResult.error.message);
+        }
+        return {
+            endpointProfile: endpointResult.value,
+        };
+    }),
+    setEndpointProfile: publicProcedure
+        .input(providerSetEndpointProfileInputSchema)
+        .mutation(async ({ input, ctx }) => {
+            const endpointResult = await providerManagementService.setEndpointProfile(
+                input.profileId,
+                input.providerId,
+                input.value,
+                {
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                }
+            );
+            if (endpointResult.isErr()) {
+                throwWithCode(endpointResult.error.code, endpointResult.error.message);
+            }
+            const endpointProfile = endpointResult.value;
+            await runtimeEventLogService.append({
+                entityType: 'provider',
+                entityId: input.providerId,
+                eventType: 'provider.endpoint-profile.set',
+                payload: {
+                    profileId: input.profileId,
+                    providerId: input.providerId,
+                    value: endpointProfile.value,
+                },
+            });
+
+            return { endpointProfile };
+        }),
     setOrganization: publicProcedure.input(providerSetOrganizationInputSchema).mutation(async ({ input }) => {
         const result = await providerManagementService.setOrganization(
             input.profileId,
             input.providerId,
             input.organizationId
         );
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
         await runtimeEventLogService.append({
             entityType: 'provider',
             entityId: input.providerId,
@@ -186,7 +262,7 @@ export const providerRouter = router({
             },
         });
 
-        return result;
+        return result.value;
     }),
     getModelRoutingPreference: publicProcedure
         .input(providerGetModelRoutingPreferenceInputSchema)
@@ -220,83 +296,73 @@ export const providerRouter = router({
             providers: await providerManagementService.listModelProviders(input),
         };
     }),
-    setApiKey: publicProcedure.input(providerSetApiKeyInputSchema).mutation(async ({ input }) => {
-        try {
-            const state = await providerManagementService.setApiKey(input.profileId, input.providerId, input.apiKey);
-            await runtimeEventLogService.append({
-                entityType: 'provider',
-                entityId: input.providerId,
-                eventType: 'provider.auth.api-key-set',
-                payload: {
-                    profileId: input.profileId,
-                    providerId: input.providerId,
-                },
-            });
-
-            return {
-                success: true as const,
-                reason: null,
-                state,
-            };
-        } catch (error) {
-            if (isProviderNotFoundError(error)) {
+    setApiKey: publicProcedure.input(providerSetApiKeyInputSchema).mutation(async ({ input, ctx }) => {
+        const stateResult = await providerManagementService.setApiKey(input.profileId, input.providerId, input.apiKey, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (stateResult.isErr()) {
+            if (stateResult.error.code === 'method_not_supported') {
                 return {
                     success: false as const,
                     reason: 'provider_not_found' as const,
                 };
             }
-
-            throw error;
+            throwWithCode(mapAuthErrorToOperationalCode(stateResult.error.code), stateResult.error.message);
         }
-    }),
-    clearAuth: publicProcedure.input(providerClearAuthInputSchema).mutation(async ({ input }) => {
-        try {
-            const result = await providerManagementService.clearAuth(input.profileId, input.providerId);
-            await runtimeEventLogService.append({
-                entityType: 'provider',
-                entityId: input.providerId,
-                eventType: 'provider.auth.cleared',
-                payload: {
-                    profileId: input.profileId,
-                    providerId: input.providerId,
-                },
-            });
+        await runtimeEventLogService.append({
+            entityType: 'provider',
+            entityId: input.providerId,
+            eventType: 'provider.auth.api-key-set',
+            payload: {
+                profileId: input.profileId,
+                providerId: input.providerId,
+            },
+        });
 
-            return {
-                success: true as const,
-                reason: null,
-                ...result,
-            };
-        } catch (error) {
-            if (isProviderNotFoundError(error)) {
+        return {
+            success: true as const,
+            reason: null,
+            state: stateResult.value,
+        };
+    }),
+    clearAuth: publicProcedure.input(providerClearAuthInputSchema).mutation(async ({ input, ctx }) => {
+        const clearResult = await providerManagementService.clearAuth(input.profileId, input.providerId, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (clearResult.isErr()) {
+            if (clearResult.error.code === 'method_not_supported') {
                 return {
                     success: false as const,
                     reason: 'provider_not_found' as const,
                 };
             }
-
-            throw error;
+            throwWithCode(mapAuthErrorToOperationalCode(clearResult.error.code), clearResult.error.message);
         }
+        await runtimeEventLogService.append({
+            entityType: 'provider',
+            entityId: input.providerId,
+            eventType: 'provider.auth.cleared',
+            payload: {
+                profileId: input.profileId,
+                providerId: input.providerId,
+            },
+        });
+
+        return {
+            success: true as const,
+            reason: null,
+            ...clearResult.value,
+        };
     }),
-    syncCatalog: publicProcedure.input(providerSyncCatalogInputSchema).mutation(async ({ input }) => {
-        try {
-            const result = await providerManagementService.syncCatalog(input.profileId, input.providerId, input.force);
-            await runtimeEventLogService.append({
-                entityType: 'provider',
-                entityId: input.providerId,
-                eventType: 'provider.catalog.sync',
-                payload: {
-                    profileId: input.profileId,
-                    providerId: input.providerId,
-                    ok: result.ok,
-                    status: result.status,
-                    reason: result.reason ?? null,
-                    modelCount: result.modelCount,
-                },
-            });
-            return result;
-        } catch (error) {
-            if (isProviderNotFoundError(error)) {
+    syncCatalog: publicProcedure.input(providerSyncCatalogInputSchema).mutation(async ({ input, ctx }) => {
+        const result = await providerManagementService.syncCatalog(input.profileId, input.providerId, input.force, {
+            requestId: ctx.requestId,
+            correlationId: ctx.correlationId,
+        });
+        if (result.isErr()) {
+            if (result.error.code === 'provider_not_supported' || result.error.code === 'provider_not_registered') {
                 return {
                     ok: false as const,
                     status: 'error' as const,
@@ -305,9 +371,22 @@ export const providerRouter = router({
                     modelCount: 0,
                 };
             }
-
-            throw error;
+            throwWithCode(result.error.code, result.error.message);
         }
+        await runtimeEventLogService.append({
+            entityType: 'provider',
+            entityId: input.providerId,
+            eventType: 'provider.catalog.sync',
+            payload: {
+                profileId: input.profileId,
+                providerId: input.providerId,
+                ok: result.value.ok,
+                status: result.value.status,
+                reason: result.value.reason ?? null,
+                modelCount: result.value.modelCount,
+            },
+        });
+        return result.value;
     }),
     setDefault: publicProcedure.input(providerSetDefaultInputSchema).mutation(async ({ input }) => {
         const result = await providerManagementService.setDefault(input.profileId, input.providerId, input.modelId);

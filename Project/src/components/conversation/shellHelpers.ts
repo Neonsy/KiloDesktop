@@ -1,4 +1,5 @@
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
+import { providerIds } from '@/app/backend/runtime/contracts';
 import type { EntityId, EntityIdPrefix, RuntimeProviderId, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
 
 export const DEFAULT_RUN_OPTIONS: RuntimeRunOptions = {
@@ -25,7 +26,11 @@ export function isEntityId<P extends EntityIdPrefix>(value: string | undefined, 
 }
 
 export function isProviderId(value: string | undefined): value is RuntimeProviderId {
-    return value === 'kilo' || value === 'openai';
+    if (!value) {
+        return false;
+    }
+
+    return providerIds.some((providerId) => providerId === value);
 }
 
 export function isProviderRunnable(authState: string, authMethod: string): boolean {

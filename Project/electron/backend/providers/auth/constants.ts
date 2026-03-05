@@ -1,3 +1,4 @@
+import { getProviderDefinition, providerIds } from '@/app/backend/providers/registry';
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export const OPENAI_OAUTH_AUTHORIZE_URL =
@@ -10,7 +11,13 @@ export const OPENAI_OAUTH_CLIENT_ID = process.env['OPENAI_OAUTH_CLIENT_ID']?.tri
 export const OPENAI_OAUTH_REDIRECT_URI =
     process.env['OPENAI_OAUTH_REDIRECT_URI']?.trim() || 'http://127.0.0.1:1455/provider/openai/callback';
 
-export const AUTH_METHODS_BY_PROVIDER: Record<RuntimeProviderId, ProviderAuthMethod[]> = {
-    kilo: ['device_code', 'api_key'],
-    openai: ['api_key', 'oauth_pkce', 'oauth_device'],
-};
+export function getAuthMethodsForProvider(providerId: RuntimeProviderId): ProviderAuthMethod[] {
+    return getProviderDefinition(providerId).authMethods;
+}
+
+export function listProviderAuthMethods(): Array<{ providerId: RuntimeProviderId; methods: ProviderAuthMethod[] }> {
+    return providerIds.map((providerId) => ({
+        providerId,
+        methods: getAuthMethodsForProvider(providerId),
+    }));
+}

@@ -3,6 +3,11 @@ import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import { getProviderRuntimeBehavior } from '@/app/backend/providers/behaviors';
 import type { ProviderRuntimeTransportSelection, ProviderRuntimeUsage } from '@/app/backend/providers/types';
 import type { KiloDynamicSort, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import {
+    errRunExecution,
+    okRunExecution,
+    type RunExecutionResult,
+} from '@/app/backend/runtime/services/runExecution/errors';
 import { emitPartEvents, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
 import type {
     ChatContextMessage,
@@ -25,7 +30,24 @@ interface RunUsageWriteInput {
     totalTokens?: number;
     latencyMs?: number;
     costMicrounits?: number;
-    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription';
+    billedVia: 'kilo_gateway' | 'openai_api' | 'openai_subscription' | 'zai_api' | 'moonshot_api';
+}
+
+function mapProviderAdapterError(input: {
+    code: 'auth_missing' | 'invalid_payload' | 'provider_request_failed' | 'provider_request_unavailable';
+    message: string;
+}): ReturnType<typeof errRunExecution> {
+    if (input.code === 'auth_missing') {
+        return errRunExecution('provider_not_authenticated', input.message);
+    }
+    if (input.code === 'invalid_payload') {
+        return errRunExecution('invalid_payload', input.message);
+    }
+    if (input.code === 'provider_request_unavailable') {
+        return errRunExecution('provider_request_unavailable', input.message);
+    }
+
+    return errRunExecution('provider_request_failed', input.message);
 }
 
 export interface ExecuteRunInput {
@@ -60,13 +82,13 @@ export function isAbortError(error: unknown): boolean {
     return error instanceof Error && error.name === 'AbortError';
 }
 
-export async function executeRun(input: ExecuteRunInput): Promise<void> {
+export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionResult<void>> {
     const adapter = getProviderAdapter(input.providerId);
     const behavior = getProviderRuntimeBehavior(input.providerId);
     let usage: UsageAccumulator = {};
     let transportSelection = input.transportSelection;
 
-    await adapter.streamCompletion(
+    const streamResult = await adapter.streamCompletion(
         {
             profileId: input.profileId,
             sessionId: input.sessionId,
@@ -124,6 +146,12 @@ export async function executeRun(input: ExecuteRunInput): Promise<void> {
             },
         }
     );
+    if (streamResult.isErr()) {
+        return mapProviderAdapterError({
+            code: streamResult.error.code,
+            message: streamResult.error.message,
+        });
+    }
 
     await runStore.finalize(input.runId, {
         status: 'completed',
@@ -178,4 +206,6 @@ export async function executeRun(input: ExecuteRunInput): Promise<void> {
             usage: recordedUsage,
         },
     });
+
+    return okRunExecution(undefined);
 }

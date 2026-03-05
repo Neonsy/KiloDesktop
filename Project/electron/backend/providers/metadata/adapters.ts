@@ -1,5 +1,5 @@
 import { syncKiloCatalog } from '@/app/backend/providers/adapters/kilo/catalog';
-import { syncOpenAICatalog } from '@/app/backend/providers/adapters/openai/catalog';
+import { syncStaticCatalog } from '@/app/backend/providers/metadata/staticCatalog/adapter';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type { ProviderMetadataAdapter } from '@/app/backend/providers/types';
@@ -11,19 +11,32 @@ const kiloMetadataAdapter: ProviderMetadataAdapter = {
     },
 };
 
-const openAIMetadataAdapter: ProviderMetadataAdapter = {
+const openAIStaticMetadataAdapter: ProviderMetadataAdapter = {
     id: 'openai',
     fetchCatalog(input) {
-        return syncOpenAICatalog({
-            authMethod: input.authMethod,
-            ...(input.apiKey ? { apiKey: input.apiKey } : {}),
-        });
+        return syncStaticCatalog('openai', input);
+    },
+};
+
+const zaiStaticMetadataAdapter: ProviderMetadataAdapter = {
+    id: 'zai',
+    fetchCatalog(input) {
+        return syncStaticCatalog('zai', input);
+    },
+};
+
+const moonshotStaticMetadataAdapter: ProviderMetadataAdapter = {
+    id: 'moonshot',
+    fetchCatalog(input) {
+        return syncStaticCatalog('moonshot', input);
     },
 };
 
 const metadataAdapters: Record<FirstPartyProviderId, ProviderMetadataAdapter> = {
     kilo: kiloMetadataAdapter,
-    openai: openAIMetadataAdapter,
+    openai: openAIStaticMetadataAdapter,
+    zai: zaiStaticMetadataAdapter,
+    moonshot: moonshotStaticMetadataAdapter,
 };
 
 export function getProviderMetadataAdapter(providerId: FirstPartyProviderId): ProviderMetadataAdapter {

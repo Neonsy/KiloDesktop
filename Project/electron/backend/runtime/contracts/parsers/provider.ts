@@ -16,6 +16,7 @@ import type {
     ProviderCancelAuthInput,
     ProviderClearAuthInput,
     ProviderCompleteAuthInput,
+    ProviderGetEndpointProfileInput,
     ProviderGetAccountContextInput,
     ProviderListAuthMethodsInput,
     ProviderListModelProvidersInput,
@@ -23,6 +24,7 @@ import type {
     ProviderListProvidersInput,
     ProviderPollAuthInput,
     ProviderRefreshAuthInput,
+    ProviderSetEndpointProfileInput,
     ProviderGetModelRoutingPreferenceInput,
     ProviderSetModelRoutingPreferenceInput,
     ProviderSetApiKeyInput,
@@ -157,6 +159,20 @@ export function parseProviderSetOrganizationInput(input: unknown): ProviderSetOr
     };
 }
 
+export function parseProviderGetEndpointProfileInput(input: unknown): ProviderGetEndpointProfileInput {
+    return parseProviderByIdInput(input);
+}
+
+export function parseProviderSetEndpointProfileInput(input: unknown): ProviderSetEndpointProfileInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        providerId: readProviderId(source.providerId, 'providerId'),
+        value: readString(source.value, 'value'),
+    };
+}
+
 function readKiloProviderId(value: unknown, field: string): 'kilo' {
     const providerId = readProviderId(value, field);
     if (providerId !== 'kilo') {
@@ -231,6 +247,8 @@ export const providerCompleteAuthInputSchema = createParser(parseProviderComplet
 export const providerCancelAuthInputSchema = createParser(parseProviderCancelAuthInput);
 export const providerRefreshAuthInputSchema = createParser(parseProviderRefreshAuthInput);
 export const providerGetAccountContextInputSchema = createParser(parseProviderGetAccountContextInput);
+export const providerGetEndpointProfileInputSchema = createParser(parseProviderGetEndpointProfileInput);
+export const providerSetEndpointProfileInputSchema = createParser(parseProviderSetEndpointProfileInput);
 export const providerSetOrganizationInputSchema = createParser(parseProviderSetOrganizationInput);
 export const providerGetModelRoutingPreferenceInputSchema = createParser(parseProviderGetModelRoutingPreferenceInput);
 export const providerSetModelRoutingPreferenceInputSchema = createParser(parseProviderSetModelRoutingPreferenceInput);

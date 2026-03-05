@@ -1198,14 +1198,11 @@ describe('runtime contracts', () => {
         expect(providersBefore.providers.some((item) => item.id === 'kilo')).toBe(true);
     });
 
-    it('supports provider auth control plane and sync failures are explicit', async () => {
+    it('supports provider auth control plane and static catalog sync remains explicit', async () => {
         const caller = createCaller();
 
         const before = await caller.provider.getAuthState({ profileId, providerId: 'openai' });
         expect(before.found).toBe(true);
-        if (!before.found) {
-            throw new Error('Expected auth state lookup to succeed.');
-        }
         expect(before.state.authState).toBe('logged_out');
 
         const configured = await caller.provider.setApiKey({
@@ -1226,8 +1223,9 @@ describe('runtime contracts', () => {
             profileId,
             providerId: 'openai',
         });
-        expect(syncResult.ok).toBe(false);
-        expect(syncResult.reason).toBe('sync_failed');
+        expect(syncResult.ok).toBe(true);
+        expect(syncResult.status === 'synced' || syncResult.status === 'unchanged').toBe(true);
+        expect(syncResult.modelCount).toBeGreaterThan(0);
 
         const cleared = await caller.provider.clearAuth({
             profileId,
@@ -1245,17 +1243,6 @@ describe('runtime contracts', () => {
 
     it('syncs openai api catalog and keeps codex model ids', async () => {
         const caller = createCaller();
-        vi.stubGlobal(
-            'fetch',
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                statusText: 'OK',
-                json: () => ({
-                    data: [{ id: 'gpt-5-codex' }, { id: 'gpt-5' }, { id: 'gpt-4o' }],
-                }),
-            })
-        );
 
         const configured = await caller.provider.setApiKey({
             profileId,
@@ -1269,7 +1256,7 @@ describe('runtime contracts', () => {
             providerId: 'openai',
         });
         expect(syncResult.ok).toBe(true);
-        expect(syncResult.modelCount).toBe(3);
+        expect(syncResult.modelCount).toBe(4);
 
         const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
         expect(models.models.some((model) => model.id === 'openai/gpt-5-codex')).toBe(true);
