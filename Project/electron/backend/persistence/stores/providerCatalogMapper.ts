@@ -62,6 +62,9 @@ interface ProviderCatalogModelRow {
     input_modalities_json: string | null;
     output_modalities_json: string | null;
     prompt_family: string | null;
+    context_length: number | null;
+    source: string;
+    updated_at: string;
 }
 
 interface ProviderDiscoverySnapshotRow {
@@ -115,6 +118,66 @@ function extractPrice(pricing: Record<string, unknown>, raw: Record<string, unkn
     return undefined;
 }
 
+function extractInputPrice(pricing: Record<string, unknown>): number | undefined {
+    const keys = ['input', 'prompt', 'input_price', 'inputPrice'];
+    for (const key of keys) {
+        const value = readNumberFromRecord(pricing, key);
+        if (value !== undefined) {
+            return value;
+        }
+    }
+
+    return undefined;
+}
+
+function extractOutputPrice(pricing: Record<string, unknown>): number | undefined {
+    const keys = ['output', 'completion', 'output_price', 'outputPrice'];
+    for (const key of keys) {
+        const value = readNumberFromRecord(pricing, key);
+        if (value !== undefined) {
+            return value;
+        }
+    }
+
+    return undefined;
+}
+
+function extractCacheReadPrice(pricing: Record<string, unknown>): number | undefined {
+    const keys = ['cache_read', 'cacheRead', 'cache_read_input'];
+    for (const key of keys) {
+        const value = readNumberFromRecord(pricing, key);
+        if (value !== undefined) {
+            return value;
+        }
+    }
+
+    return undefined;
+}
+
+function extractCacheWritePrice(pricing: Record<string, unknown>): number | undefined {
+    const keys = ['cache_write', 'cacheWrite', 'cache_creation_input'];
+    for (const key of keys) {
+        const value = readNumberFromRecord(pricing, key);
+        if (value !== undefined) {
+            return value;
+        }
+    }
+
+    return undefined;
+}
+
+function extractMaxOutputTokens(raw: Record<string, unknown>): number | undefined {
+    const keys = ['max_output_tokens', 'maxOutputTokens', 'max_completion_tokens', 'max_tokens'];
+    for (const key of keys) {
+        const value = readNumberFromRecord(raw, key);
+        if (value !== undefined) {
+            return value;
+        }
+    }
+
+    return undefined;
+}
+
 function extractLatency(raw: Record<string, unknown>): number | undefined {
     const performance = readNestedRecord(raw, 'performance');
     const keys = ['latency', 'latency_ms', 'avg_latency', 'avg_latency_ms'];
@@ -158,6 +221,11 @@ export function mapProviderCatalogModel(row: ProviderCatalogModelRow): ProviderM
     const outputModalities = parseModalities(row.output_modalities_json);
     const pricing = parseJsonObject(row.pricing_json);
     const raw = parseJsonObject(row.raw_json);
+    const inputPrice = extractInputPrice(pricing);
+    const outputPrice = extractOutputPrice(pricing);
+    const cacheReadPrice = extractCacheReadPrice(pricing);
+    const cacheWritePrice = extractCacheWritePrice(pricing);
+    const maxOutputTokens = extractMaxOutputTokens(raw);
     const price = extractPrice(pricing, raw);
     const latency = extractLatency(raw);
     const tps = extractTps(raw);
@@ -167,6 +235,8 @@ export function mapProviderCatalogModel(row: ProviderCatalogModelRow): ProviderM
         providerId: parseProviderId(row.provider_id, 'provider_model_catalog.provider_id'),
         label: row.label,
         ...(row.upstream_provider ? { sourceProvider: row.upstream_provider } : {}),
+        source: row.source,
+        updatedAt: row.updated_at,
         supportsTools: row.supports_tools === 1,
         supportsReasoning: row.supports_reasoning === 1,
         supportsVision: row.supports_vision === null ? inputModalities.includes('image') : row.supports_vision === 1,
@@ -177,6 +247,12 @@ export function mapProviderCatalogModel(row: ProviderCatalogModelRow): ProviderM
         inputModalities,
         outputModalities,
         ...(row.prompt_family ? { promptFamily: row.prompt_family } : {}),
+        ...(row.context_length !== null ? { contextLength: row.context_length } : {}),
+        ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+        ...(inputPrice !== undefined ? { inputPrice } : {}),
+        ...(outputPrice !== undefined ? { outputPrice } : {}),
+        ...(cacheReadPrice !== undefined ? { cacheReadPrice } : {}),
+        ...(cacheWritePrice !== undefined ? { cacheWritePrice } : {}),
         ...(price !== undefined ? { price } : {}),
         ...(latency !== undefined ? { latency } : {}),
         ...(tps !== undefined ? { tps } : {}),

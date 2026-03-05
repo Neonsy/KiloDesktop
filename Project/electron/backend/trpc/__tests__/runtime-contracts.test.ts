@@ -1365,6 +1365,7 @@ describe('runtime contracts', () => {
         expect(kiloAuto.supportsVision).toBe(true);
         expect(kiloAuto.inputModalities.includes('image')).toBe(true);
         expect(kiloAuto.promptFamily).toBe('codex');
+        expect(kiloAuto.contextLength).toBe(200000);
     });
 
     it('supports openai oauth device auth start and pending polling', async () => {

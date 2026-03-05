@@ -33,6 +33,37 @@ export interface ProviderCatalogModel {
     raw: Record<string, unknown>;
 }
 
+export type MetadataKnownSource = 'provider_api' | 'override_registry' | 'derived_hint' | 'unknown';
+
+export interface NormalizedModelMetadata {
+    providerId: FirstPartyProviderId;
+    modelId: string;
+    label: string;
+    source: MetadataKnownSource;
+    updatedAt: string;
+    sourceProvider?: string;
+    isFree?: boolean;
+    supportsTools?: boolean;
+    supportsReasoning?: boolean;
+    supportsVision?: boolean;
+    supportsAudioInput?: boolean;
+    supportsAudioOutput?: boolean;
+    inputModalities?: ProviderModelModality[];
+    outputModalities?: ProviderModelModality[];
+    promptFamily?: string;
+    contextLength?: number;
+    maxOutputTokens?: number;
+    inputPrice?: number;
+    outputPrice?: number;
+    cacheReadPrice?: number;
+    cacheWritePrice?: number;
+    price?: number;
+    latency?: number;
+    tps?: number;
+    pricing?: Record<string, unknown>;
+    raw?: Record<string, unknown>;
+}
+
 export interface ProviderCatalogSyncSuccess {
     ok: true;
     status: 'synced' | 'unchanged';
@@ -55,6 +86,18 @@ export type ProviderCatalogSyncResult = ProviderCatalogSyncSuccess | ProviderCat
 export interface ProviderCatalogAdapter {
     readonly id: FirstPartyProviderId;
     syncCatalog(input: {
+        profileId: string;
+        authMethod: ProviderAuthMethod | 'none';
+        apiKey?: string;
+        accessToken?: string;
+        organizationId?: string;
+        force?: boolean;
+    }): Promise<ProviderCatalogSyncResult>;
+}
+
+export interface ProviderMetadataAdapter {
+    readonly id: FirstPartyProviderId;
+    fetchCatalog(input: {
         profileId: string;
         authMethod: ProviderAuthMethod | 'none';
         apiKey?: string;

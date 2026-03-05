@@ -11,7 +11,7 @@ import type {
     ProviderModelRecord,
     ProviderUsageSummary,
 } from '@/app/backend/persistence/types';
-import { toProviderServiceException } from '@/app/backend/providers/service/errors';
+import { providerMetadataOrchestrator } from '@/app/backend/providers/metadata/orchestrator';
 import { defaultAuthState, ensureSupportedProvider } from '@/app/backend/providers/service/helpers';
 import { getOpenAISubscriptionRateLimits as getOpenAISubscriptionRateLimitsFromWham } from '@/app/backend/providers/service/openaiSubscriptionRateLimits';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
@@ -38,16 +38,11 @@ export async function listProviders(profileId: string): Promise<ProviderListItem
 }
 
 export async function listModels(profileId: string, providerId: RuntimeProviderId): Promise<ProviderModelRecord[]> {
-    const ensuredProviderResult = await ensureSupportedProvider(providerId);
-    if (ensuredProviderResult.isErr()) {
-        throw toProviderServiceException(ensuredProviderResult.error);
-    }
-
-    return providerStore.listModels(profileId, ensuredProviderResult.value);
+    return providerMetadataOrchestrator.listModels(profileId, providerId);
 }
 
 export async function listModelsByProfile(profileId: string): Promise<ProviderModelRecord[]> {
-    return providerStore.listModelsByProfile(profileId);
+    return providerMetadataOrchestrator.listModelsByProfile(profileId);
 }
 
 export async function getDefaults(profileId: string): Promise<{ providerId: string; modelId: string }> {

@@ -42,6 +42,9 @@ export class ProviderCatalogStore {
                 'input_modalities_json',
                 'output_modalities_json',
                 'prompt_family',
+                'context_length',
+                'source',
+                'updated_at',
             ])
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
@@ -70,6 +73,9 @@ export class ProviderCatalogStore {
                 'input_modalities_json',
                 'output_modalities_json',
                 'prompt_family',
+                'context_length',
+                'source',
+                'updated_at',
             ])
             .where('profile_id', '=', profileId)
             .execute();
