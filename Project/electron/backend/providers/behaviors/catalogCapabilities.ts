@@ -3,7 +3,7 @@ import type { ProviderModelModality } from '@/app/backend/providers/types';
 const allowedModalities: ProviderModelModality[] = ['text', 'audio', 'image', 'video', 'pdf'];
 
 function isModelModality(value: string): value is ProviderModelModality {
-    return allowedModalities.includes(value as ProviderModelModality);
+    return allowedModalities.some((modality) => modality === value);
 }
 
 export function normalizeModalities(input: string[] | undefined): ProviderModelModality[] {
