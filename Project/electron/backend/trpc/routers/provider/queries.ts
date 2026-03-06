@@ -1,0 +1,92 @@
+import { providerManagementService } from '@/app/backend/providers/service';
+import {
+    providerByIdInputSchema,
+    providerGetAccountContextInputSchema,
+    providerGetEndpointProfileInputSchema,
+    providerGetModelRoutingPreferenceInputSchema,
+    providerListAuthMethodsInputSchema,
+    providerListModelProvidersInputSchema,
+    providerListModelsInputSchema,
+    providerListProvidersInputSchema,
+} from '@/app/backend/runtime/contracts';
+import { publicProcedure } from '@/app/backend/trpc/init';
+import { isProviderNotFoundCode, mapAuthErrorToOperationalCode, throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
+
+export const providerQueryProcedures = {
+    listProviders: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        return { providers: await providerManagementService.listProviders(input.profileId) };
+    }),
+    getDefaults: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        return {
+            defaults: await providerManagementService.getDefaults(input.profileId),
+        };
+    }),
+    getUsageSummary: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        return { summaries: await providerManagementService.listUsageSummaries(input.profileId) };
+    }),
+    getOpenAISubscriptionUsage: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        return { usage: await providerManagementService.getOpenAISubscriptionUsage(input.profileId) };
+    }),
+    getOpenAISubscriptionRateLimits: publicProcedure
+        .input(providerListProvidersInputSchema)
+        .query(async ({ input }) => {
+            return { rateLimits: await providerManagementService.getOpenAISubscriptionRateLimits(input.profileId) };
+        }),
+    listModels: publicProcedure.input(providerListModelsInputSchema).query(async ({ input }) => {
+        const modelsResult = await providerManagementService.listModels(input.profileId, input.providerId);
+        if (modelsResult.isErr()) {
+            if (isProviderNotFoundCode(modelsResult.error.code)) {
+                return { models: [], reason: 'provider_not_found' as const };
+            }
+
+            throwWithCode(modelsResult.error.code, modelsResult.error.message);
+        }
+
+        return {
+            models: modelsResult.value,
+            reason: null,
+        };
+    }),
+    listAuthMethods: publicProcedure.input(providerListAuthMethodsInputSchema).query(({ input }) => {
+        return {
+            methods: providerManagementService.listAuthMethods(input.profileId),
+        };
+    }),
+    getAuthState: publicProcedure.input(providerByIdInputSchema).query(async ({ input }) => {
+        const state = await providerManagementService.getAuthState(input.profileId, input.providerId);
+        return {
+            found: true as const,
+            state,
+        };
+    }),
+    getAccountContext: publicProcedure.input(providerGetAccountContextInputSchema).query(async ({ input }) => {
+        const result = await providerManagementService.getAccountContext(input.profileId, input.providerId);
+        if (result.isErr()) {
+            throwWithCode(mapAuthErrorToOperationalCode(result.error.code), result.error.message);
+        }
+
+        return result.value;
+    }),
+    getEndpointProfile: publicProcedure.input(providerGetEndpointProfileInputSchema).query(async ({ input }) => {
+        const endpointResult = await providerManagementService.getEndpointProfile(input.profileId, input.providerId);
+        if (endpointResult.isErr()) {
+            throwWithCode(endpointResult.error.code, endpointResult.error.message);
+        }
+
+        return {
+            endpointProfile: endpointResult.value,
+        };
+    }),
+    getModelRoutingPreference: publicProcedure
+        .input(providerGetModelRoutingPreferenceInputSchema)
+        .query(async ({ input }) => {
+            return {
+                preference: await providerManagementService.getModelRoutingPreference(input),
+            };
+        }),
+    listModelProviders: publicProcedure.input(providerListModelProvidersInputSchema).query(async ({ input }) => {
+        return {
+            providers: await providerManagementService.listModelProviders(input),
+        };
+    }),
+};

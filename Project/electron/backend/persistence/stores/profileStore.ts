@@ -1,7 +1,7 @@
-import { randomUUID } from 'node:crypto';
-
 import { getPersistence } from '@/app/backend/persistence/db';
 import {
+    createProfileId,
+    createTimestamp,
     DEFAULT_DUPLICATE_SUFFIX,
     DEFAULT_PROFILE_NAME,
     initializeProfileBaseline,
@@ -9,7 +9,6 @@ import {
     normalizeName,
     resolveTemplateProfileId,
 } from '@/app/backend/persistence/stores/profileStoreHelpers';
-import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { ActiveProfileState, ProfileDeletionGuardResult, ProfileRecord } from '@/app/backend/persistence/types';
 
 export class ProfileStore {
@@ -79,7 +78,7 @@ export class ProfileStore {
 
     async setActive(profileId: string): Promise<ProfileRecord | null> {
         const { db } = getPersistence();
-        const timestamp = nowIso();
+        const timestamp = createTimestamp();
 
         return db.transaction().execute(async (tx) => {
             const profile = await tx
@@ -116,8 +115,8 @@ export class ProfileStore {
 
     async create(name?: string): Promise<ProfileRecord> {
         const { db } = getPersistence();
-        const timestamp = nowIso();
-        const profileId = `profile_${randomUUID()}`;
+        const timestamp = createTimestamp();
+        const profileId = createProfileId();
 
         return db.transaction().execute(async (tx) => {
             const templateProfileId = await resolveTemplateProfileId(tx);
@@ -155,7 +154,7 @@ export class ProfileStore {
 
     async rename(profileId: string, name: string): Promise<ProfileRecord | null> {
         const { db } = getPersistence();
-        const timestamp = nowIso();
+        const timestamp = createTimestamp();
         const nextName = normalizeName(name, DEFAULT_PROFILE_NAME);
 
         const updatedRows = await db
@@ -174,8 +173,8 @@ export class ProfileStore {
 
     async duplicate(profileId: string, name?: string): Promise<ProfileRecord | null> {
         const { db } = getPersistence();
-        const timestamp = nowIso();
-        const duplicateId = `profile_${randomUUID()}`;
+        const timestamp = createTimestamp();
+        const duplicateId = createProfileId();
 
         return db.transaction().execute(async (tx) => {
             const source = await tx
@@ -222,7 +221,7 @@ export class ProfileStore {
 
     async delete(profileId: string): Promise<ProfileDeletionGuardResult> {
         const { db } = getPersistence();
-        const timestamp = nowIso();
+        const timestamp = createTimestamp();
 
         return db.transaction().execute(async (tx) => {
             const profiles = await tx

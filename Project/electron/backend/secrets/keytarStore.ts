@@ -82,6 +82,14 @@ function isKeytarModule(value: unknown): value is KeytarModule {
     );
 }
 
+function getDefaultExport(value: unknown): unknown {
+    if (!value || typeof value !== 'object' || !('default' in value)) {
+        return undefined;
+    }
+
+    return value.default;
+}
+
 function getErrorReason(error: unknown): string {
     if (error instanceof Error && error.message.trim().length > 0) {
         return error.message;
@@ -96,8 +104,7 @@ export function createKeytarSecretStore(serviceName = DEFAULT_SERVICE_NAME): {
 } {
     try {
         const imported: unknown = require('keytar');
-        const defaultExport =
-            imported && typeof imported === 'object' ? (imported as Record<string, unknown>)['default'] : undefined;
+        const defaultExport = getDefaultExport(imported);
         const moduleValue = isKeytarModule(imported) ? imported : isKeytarModule(defaultExport) ? defaultExport : null;
 
         if (!moduleValue) {

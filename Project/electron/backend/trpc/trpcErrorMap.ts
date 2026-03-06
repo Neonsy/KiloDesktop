@@ -91,6 +91,12 @@ export function extractErrorCode(error: unknown): OperationalErrorCode | undefin
         return undefined;
     }
 
-    const { code } = error as { code?: unknown };
-    return typeof code === 'string' ? (code as OperationalErrorCode) : undefined;
+    const code = Reflect.get(error, 'code');
+    if (typeof code !== 'string') {
+        return undefined;
+    }
+
+    return TRPC_CODE_BY_OPERATIONAL_ERROR_CODE.has(code as OperationalErrorCode)
+        ? (code as OperationalErrorCode)
+        : undefined;
 }
