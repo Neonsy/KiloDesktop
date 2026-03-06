@@ -22,6 +22,10 @@ import { resolveModeExecution } from '@/app/backend/runtime/services/runExecutio
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
 import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
+import {
+    moveRunToAbortedState,
+    moveRunToFailedState,
+} from '@/app/backend/runtime/services/runExecution/terminalState';
 import { resolveInitialRunTransport } from '@/app/backend/runtime/services/runExecution/transport';
 import type {
     ChatContextMessage,
@@ -500,27 +504,11 @@ export class RunExecutionService {
             };
         }
 
-        await runStore.finalize(runId, {
-            status: 'aborted',
-        });
-        await sessionStore.markRunTerminal(profileId, sessionId, 'aborted');
-        await runtimeEventLogService.append({
-            entityType: 'run',
-            entityId: runId,
-            eventType: 'run.aborted',
-            payload: {
-                runId,
-                sessionId,
-                profileId,
-            },
-        });
-
-        appLog.info({
-            tag: 'run-execution',
-            message: 'Aborted persisted run without active in-memory controller.',
+        await moveRunToAbortedState({
             profileId,
             sessionId,
             runId,
+            logMessage: 'Aborted persisted run without active in-memory controller.',
         });
 
         return {
@@ -560,111 +548,43 @@ export class RunExecutionService {
             const executionResult = await executeRun(input);
             if (executionResult.isErr()) {
                 if (input.signal.aborted) {
-                    await runStore.finalize(input.runId, {
-                        status: 'aborted',
-                    });
-                    await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'aborted');
-                    await runtimeEventLogService.append({
-                        entityType: 'run',
-                        entityId: input.runId,
-                        eventType: 'run.aborted',
-                        payload: {
-                            runId: input.runId,
-                            sessionId: input.sessionId,
-                            profileId: input.profileId,
-                        },
-                    });
-                    appLog.info({
-                        tag: 'run-execution',
-                        message: 'Run moved to aborted terminal state.',
+                    await moveRunToAbortedState({
                         profileId: input.profileId,
                         sessionId: input.sessionId,
                         runId: input.runId,
+                        logMessage: 'Run moved to aborted terminal state.',
                     });
                     return;
                 }
-                await runStore.finalize(input.runId, {
-                    status: 'error',
-                    errorCode: executionResult.error.code,
-                    errorMessage: executionResult.error.message,
-                });
-                await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'error');
-                await runtimeEventLogService.append({
-                    entityType: 'run',
-                    entityId: input.runId,
-                    eventType: 'run.failed',
-                    payload: {
-                        runId: input.runId,
-                        sessionId: input.sessionId,
-                        profileId: input.profileId,
-                        errorCode: executionResult.error.code,
-                        errorMessage: executionResult.error.message,
-                    },
-                });
-                appLog.warn({
-                    tag: 'run-execution',
-                    message: 'Run moved to failed terminal state.',
+                await moveRunToFailedState({
                     profileId: input.profileId,
                     sessionId: input.sessionId,
                     runId: input.runId,
                     errorCode: executionResult.error.code,
                     errorMessage: executionResult.error.message,
+                    logMessage: 'Run moved to failed terminal state.',
                 });
                 return;
             }
         } catch (error) {
             if (isAbortError(error) || input.signal.aborted) {
-                await runStore.finalize(input.runId, {
-                    status: 'aborted',
-                });
-                await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'aborted');
-                await runtimeEventLogService.append({
-                    entityType: 'run',
-                    entityId: input.runId,
-                    eventType: 'run.aborted',
-                    payload: {
-                        runId: input.runId,
-                        sessionId: input.sessionId,
-                        profileId: input.profileId,
-                    },
-                });
-                appLog.info({
-                    tag: 'run-execution',
-                    message: 'Run moved to aborted terminal state.',
+                await moveRunToAbortedState({
                     profileId: input.profileId,
                     sessionId: input.sessionId,
                     runId: input.runId,
+                    logMessage: 'Run moved to aborted terminal state.',
                 });
                 return;
             }
 
             const message = error instanceof Error ? error.message : String(error);
-            await runStore.finalize(input.runId, {
-                status: 'error',
-                errorCode: 'invariant_violation',
-                errorMessage: message,
-            });
-            await sessionStore.markRunTerminal(input.profileId, input.sessionId, 'error');
-            await runtimeEventLogService.append({
-                entityType: 'run',
-                entityId: input.runId,
-                eventType: 'run.failed',
-                payload: {
-                    runId: input.runId,
-                    sessionId: input.sessionId,
-                    profileId: input.profileId,
-                    errorCode: 'invariant_violation',
-                    errorMessage: message,
-                },
-            });
-            appLog.warn({
-                tag: 'run-execution',
-                message: 'Run moved to failed terminal state.',
+            await moveRunToFailedState({
                 profileId: input.profileId,
                 sessionId: input.sessionId,
                 runId: input.runId,
                 errorCode: 'invariant_violation',
                 errorMessage: message,
+                logMessage: 'Run moved to failed terminal state.',
             });
         }
     }

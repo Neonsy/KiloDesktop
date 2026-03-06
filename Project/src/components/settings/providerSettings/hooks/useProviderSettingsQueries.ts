@@ -13,7 +13,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         { profileId: input.profileId },
         { refetchOnWindowFocus: false }
     );
-    const snapshotQuery = trpc.runtime.getSnapshot.useQuery(
+    const defaultsQuery = trpc.provider.getDefaults.useQuery(
         { profileId: input.profileId },
         { refetchOnWindowFocus: false }
     );
@@ -97,7 +97,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
 
     return {
         providersQuery,
-        snapshotQuery,
+        defaultsQuery,
         listModelsQuery,
         authStateQuery,
         kiloRoutingPreferenceQuery,

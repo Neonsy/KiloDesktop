@@ -126,8 +126,10 @@ describe('runtime contracts', () => {
         const caller = createCaller();
 
         const snapshot = await caller.runtime.getSnapshot({ profileId });
+        const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
         const sessions = await caller.session.list({ profileId });
         const providers = await caller.provider.listProviders({ profileId });
+        const defaults = await caller.provider.getDefaults({ profileId });
         const modes = await caller.mode.list({ profileId, topLevelTab: 'agent' });
         const activeMode = await caller.mode.getActive({ profileId, topLevelTab: 'agent' });
         const pendingPermissions = await caller.permission.listPending();
@@ -149,6 +151,11 @@ describe('runtime contracts', () => {
         expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
         expect(snapshot.providerAuthStates.length).toBeGreaterThan(0);
         expect(snapshot.secretReferences).toEqual([]);
+        expect(shellBootstrap.lastSequence).toBeGreaterThanOrEqual(0);
+        expect(shellBootstrap.threadTags).toEqual([]);
+        expect(shellBootstrap.providers.length).toBeGreaterThan(0);
+        expect(shellBootstrap.providerModels.length).toBeGreaterThan(0);
+        expect(defaults.defaults.providerId).toBe('kilo');
         expect(providers.providers.length).toBeGreaterThan(0);
         expect(modes.modes.some((mode) => mode.modeKey === 'code')).toBe(true);
         expect(activeMode.activeMode.modeKey).toBe('code');

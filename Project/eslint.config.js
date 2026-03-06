@@ -241,6 +241,13 @@ export default [
             'security/detect-non-literal-fs-filename': 'off',
         },
     },
+    {
+        files: ['electron/backend/persistence/runtimeBaseline.ts'],
+        rules: {
+            // This file reads and writes only the validated runtime baseline marker next to the resolved DB path.
+            'security/detect-non-literal-fs-filename': 'off',
+        },
+    },
 
     {
         files: testGlobs,

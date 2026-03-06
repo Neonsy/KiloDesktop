@@ -32,7 +32,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
 
     const {
         providersQuery,
-        snapshotQuery,
+        defaultsQuery,
         listModelsQuery,
         authStateQuery,
         kiloRoutingPreferenceQuery,
@@ -47,7 +47,7 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
     });
 
     const providers = providersQuery.data?.providers ?? [];
-    const defaults = snapshotQuery.data?.defaults;
+    const defaults = defaultsQuery.data?.defaults;
     const providerItems: ProviderListItem[] = providers;
     const selectedProvider = providers.find((provider) => provider.id === selectedProviderId);
 
@@ -77,8 +77,8 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
         refetchProviders: () => {
             void providersQuery.refetch();
         },
-        refetchSnapshot: () => {
-            void snapshotQuery.refetch();
+        refetchDefaults: () => {
+            void defaultsQuery.refetch();
         },
         refetchAuthState: () => {
             void authStateQuery.refetch();

@@ -45,6 +45,11 @@ export const providerRouter = router({
     listProviders: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
         return { providers: await providerManagementService.listProviders(input.profileId) };
     }),
+    getDefaults: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
+        return {
+            defaults: await providerManagementService.getDefaults(input.profileId),
+        };
+    }),
     getUsageSummary: publicProcedure.input(providerListProvidersInputSchema).query(async ({ input }) => {
         return { summaries: await providerManagementService.listUsageSummaries(input.profileId) };
     }),

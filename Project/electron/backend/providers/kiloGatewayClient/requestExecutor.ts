@@ -19,7 +19,7 @@ export interface GatewayErrorShape {
     statusCode?: number;
 }
 
-export type GatewayRequestResult<TPayload> = Result<ExecuteRequestOutput<TPayload>, GatewayErrorShape>;
+export type GatewayRequestResult = Result<ExecuteRequestOutput, GatewayErrorShape>;
 
 export class KiloGatewayError extends Error {
     readonly category: GatewayErrorCategory;
@@ -49,9 +49,13 @@ export interface ExecuteRequestInput {
     body?: unknown;
 }
 
-export interface ExecuteRequestOutput<TPayload> {
-    payload: TPayload;
+export interface ExecuteRequestOutput {
+    payload: Record<string, unknown>;
     statusCode: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function buildHeaders(input?: RequestHeadersInput): Record<string, string> {
@@ -94,9 +98,7 @@ function mapStatusToCategory(statusCode: number): GatewayErrorCategory {
     return 'upstream';
 }
 
-export async function executeJsonRequest<TPayload>(
-    input: ExecuteRequestInput
-): Promise<GatewayRequestResult<TPayload>> {
+export async function executeJsonRequest(input: ExecuteRequestInput): Promise<GatewayRequestResult> {
     const startedAt = Date.now();
     const controller = new AbortController();
     const timeout = setTimeout(() => {
@@ -141,8 +143,26 @@ export async function executeJsonRequest<TPayload>(
         }
 
         try {
-            const payload = (await response.json()) as TPayload;
-            const output: ExecuteRequestOutput<TPayload> = {
+            const payload: unknown = await response.json();
+            if (!isRecord(payload)) {
+                const parseError: GatewayErrorShape = {
+                    code: 'schema_error',
+                    message: 'Gateway response payload must be a JSON object.',
+                    category: 'schema',
+                    endpoint: input.endpoint,
+                    statusCode: response.status,
+                };
+                appLog.warn({
+                    tag: 'provider.kilo-gateway',
+                    message: 'Gateway response payload shape is invalid.',
+                    endpoint: input.endpoint,
+                    method: input.method ?? 'GET',
+                    statusCode: response.status,
+                    latencyMs: Date.now() - startedAt,
+                });
+                return err(parseError);
+            }
+            const output: ExecuteRequestOutput = {
                 payload,
                 statusCode: response.status,
             };

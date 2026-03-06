@@ -1,8 +1,5 @@
-import { useEffect } from 'react';
-
 import type { ConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { isEntityId } from '@/web/components/conversation/shellHelpers';
-import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -11,10 +8,15 @@ interface UseConversationShellQueriesInput {
     profileId: string;
     uiState: ConversationUiState;
     selectedSessionId: string | undefined;
+    selectedRunId: string | undefined;
     topLevelTab: TopLevelTab;
 }
 
 export function useConversationShellQueries(input: UseConversationShellQueriesInput) {
+    const shellBootstrapQuery = trpc.runtime.getShellBootstrap.useQuery(
+        { profileId: input.profileId },
+        { refetchOnWindowFocus: false }
+    );
     const listBucketsQuery = trpc.conversation.listBuckets.useQuery(
         { profileId: input.profileId },
         { refetchOnWindowFocus: false }
@@ -40,6 +42,33 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
     const selectedSessionIdForQueries = isEntityId(input.selectedSessionId, 'sess')
         ? input.selectedSessionId
         : fallbackSessionId;
+    const selectedRunIdForQueries = isEntityId(input.selectedRunId, 'run') ? input.selectedRunId : undefined;
+
+    const sessionsQuery = trpc.session.list.useQuery(
+        { profileId: input.profileId },
+        { refetchOnWindowFocus: false }
+    );
+    const runsQuery = trpc.session.listRuns.useQuery(
+        {
+            profileId: input.profileId,
+            sessionId: selectedSessionIdForQueries,
+        },
+        {
+            enabled: isEntityId(input.selectedSessionId, 'sess'),
+            refetchOnWindowFocus: false,
+        }
+    );
+    const messagesQuery = trpc.session.listMessages.useQuery(
+        {
+            profileId: input.profileId,
+            sessionId: selectedSessionIdForQueries,
+            ...(selectedRunIdForQueries ? { runId: selectedRunIdForQueries } : {}),
+        },
+        {
+            enabled: isEntityId(input.selectedSessionId, 'sess'),
+            refetchOnWindowFocus: false,
+        }
+    );
 
     const activePlanQuery = trpc.plan.getActive.useQuery(
         {
@@ -66,27 +95,14 @@ export function useConversationShellQueries(input: UseConversationShellQueriesIn
         }
     );
 
-    const lastSequence = useRuntimeEventStreamStore((state) => state.lastSequence);
-    useEffect(() => {
-        if (lastSequence <= 0) {
-            return;
-        }
-
-        const timer = window.setTimeout(() => {
-            void listBucketsQuery.refetch();
-            void listTagsQuery.refetch();
-            void listThreadsQuery.refetch();
-        }, 120);
-
-        return () => {
-            window.clearTimeout(timer);
-        };
-    }, [lastSequence, listBucketsQuery, listTagsQuery, listThreadsQuery]);
-
     return {
+        shellBootstrapQuery,
         listBucketsQuery,
         listTagsQuery,
         listThreadsQuery,
+        sessionsQuery,
+        runsQuery,
+        messagesQuery,
         activePlanQuery,
         orchestratorLatestQuery,
     };

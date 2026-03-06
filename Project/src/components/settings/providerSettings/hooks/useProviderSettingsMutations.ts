@@ -11,7 +11,7 @@ interface UseProviderSettingsMutationsInput {
     setApiKeyInput: (value: string) => void;
     setActiveAuthFlow: (value: ActiveAuthFlow | undefined) => void;
     refetchProviders: () => void;
-    refetchSnapshot: () => void;
+    refetchDefaults: () => void;
     refetchAuthState: () => void;
     refetchListModels: () => void;
     refetchKiloRoutingPreference: () => void;
@@ -32,7 +32,7 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
             input.setStatusMessage('Default provider/model updated.');
             input.refetchProviders();
-            input.refetchSnapshot();
+            input.refetchDefaults();
         },
     });
 
@@ -58,7 +58,7 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
             input.setStatusMessage('Endpoint profile updated.');
             input.refetchProviders();
             input.refetchListModels();
-            input.refetchSnapshot();
+            input.refetchDefaults();
         },
     });
 
@@ -73,7 +73,7 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
 
             input.setStatusMessage(`Catalog synced (${String(result.modelCount)} models).`);
             input.refetchListModels();
-            input.refetchSnapshot();
+            input.refetchDefaults();
         },
     });
 

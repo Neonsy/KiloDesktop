@@ -90,6 +90,16 @@ function compareVersions(a: ParsedChannelVersion, b: ParsedChannelVersion): numb
     return a.prerelease - b.prerelease;
 }
 
+function isGitHubReleaseListItem(value: unknown): value is GitHubReleaseListItem {
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        typeof (value as Record<string, unknown>)['tag_name'] === 'string' &&
+        typeof (value as Record<string, unknown>)['draft'] === 'boolean' &&
+        typeof (value as Record<string, unknown>)['prerelease'] === 'boolean'
+    );
+}
+
 function selectMatchingRelease(
     releases: GitHubReleaseListItem[],
     channel: UpdateChannel
@@ -172,8 +182,14 @@ export async function resolveLatestReleaseForChannel(
             `GitHub API returned an unexpected release payload while resolving ${channel} channel.`
         );
     }
+    if (!releases.every(isGitHubReleaseListItem)) {
+        throw new GitHubReleaseResolverError(
+            'invalid_response',
+            `GitHub API returned malformed release items while resolving ${channel} channel.`
+        );
+    }
 
-    const matchingRelease = selectMatchingRelease(releases as GitHubReleaseListItem[], channel);
+    const matchingRelease = selectMatchingRelease(releases, channel);
 
     if (!matchingRelease) {
         throw new GitHubReleaseResolverError(

@@ -151,6 +151,9 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         providerId: string;
     }>();
+    expectTypeOf<Inputs['provider']['getDefaults']>().toExtend<{
+        profileId: string;
+    }>();
     expectTypeOf<Inputs['provider'][typeof OPENAI_USAGE_PROCEDURE]>().toExtend<{
         profileId: string;
     }>();
@@ -345,6 +348,9 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Inputs['runtime']['getSnapshot']>().toExtend<{
         profileId: string;
     }>();
+    expectTypeOf<Inputs['runtime']['getShellBootstrap']>().toExtend<{
+        profileId: string;
+    }>();
 
     expectTypeOf<Outputs['runtime']['getSnapshot']>().toExtend<{
         generatedAt: string;
@@ -358,6 +364,17 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             id: string;
             runStatus: 'idle' | 'running' | 'completed' | 'aborted' | 'error';
         }>;
+    }>();
+    expectTypeOf<Outputs['runtime']['getShellBootstrap']>().toExtend<{
+        lastSequence: number;
+        threadTags: Array<{
+            threadId: string;
+            tagId: string;
+        }>;
+        defaults: {
+            providerId: string;
+            modelId: string;
+        };
     }>();
 
     expect(true).toBe(true);

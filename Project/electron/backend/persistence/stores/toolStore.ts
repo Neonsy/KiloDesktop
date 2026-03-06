@@ -1,12 +1,14 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import type { ToolRecord } from '@/app/backend/persistence/types';
+import { permissionPolicies } from '@/app/backend/runtime/contracts';
 
 function mapToolRecord(row: { id: string; label: string; description: string; permission_policy: string }): ToolRecord {
     return {
         id: row.id,
         label: row.label,
         description: row.description,
-        permissionPolicy: row.permission_policy as ToolRecord['permissionPolicy'],
+        permissionPolicy: parseEnumValue(row.permission_policy, 'tools_catalog.permission_policy', permissionPolicies),
     };
 }
 

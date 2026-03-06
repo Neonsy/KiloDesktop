@@ -1,7 +1,8 @@
 import { getPersistence } from '@/app/backend/persistence/db';
+import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
-import type { ModeExecutionPolicy, TopLevelTab } from '@/app/backend/runtime/contracts';
+import { topLevelTabs, type ModeExecutionPolicy, type TopLevelTab } from '@/app/backend/runtime/contracts';
 
 function parseExecutionPolicy(value: string): ModeExecutionPolicy {
     const parsed = parseJsonValue<Record<string, unknown>>(value, {});
@@ -30,7 +31,7 @@ function mapModeDefinition(row: {
     return {
         id: row.id,
         profileId: row.profile_id,
-        topLevelTab: row.top_level_tab as TopLevelTab,
+        topLevelTab: parseEnumValue(row.top_level_tab, 'mode_definitions.top_level_tab', topLevelTabs),
         modeKey: row.mode_key,
         label: row.label,
         prompt: parseJsonValue(row.prompt_json, {}),
