@@ -17,7 +17,6 @@ import { submitPrompt as submitPromptFromComposer } from '@/web/components/conve
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shellTabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
-import { useRuntimeSnapshot } from '@/web/lib/runtime/useRuntimeSnapshot';
 import { trpc } from '@/web/trpc/client';
 
 import type { EntityId, RuntimeProviderId, TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -39,11 +38,11 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
     >({});
     const uiState = useConversationUiState(profileId);
 
-    const runtimeSnapshot = useRuntimeSnapshot(profileId);
     const queries = useConversationShellQueries({
         profileId,
         uiState,
         selectedSessionId: uiState.selectedSessionId,
+        selectedRunId: uiState.selectedRunId,
         topLevelTab,
     });
     const mutations = useConversationShellMutations();
@@ -114,7 +113,7 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
 
     const sidebarState = useThreadSidebarState({
         threads: queries.listThreadsQuery.data?.threads ?? [],
-        threadTags: runtimeSnapshot.data?.threadTags ?? [],
+        threadTags: queries.shellBootstrapQuery.data?.threadTags ?? [],
         selectedTagId: uiState.selectedTagId,
         selectedThreadId: uiState.selectedThreadId,
         onSelectedThreadInvalid: () => {
@@ -130,10 +129,10 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
         : undefined;
 
     const sessionRunSelection = useSessionRunSelection({
-        allSessions: runtimeSnapshot.data?.sessions ?? [],
-        allRuns: runtimeSnapshot.data?.runs ?? [],
-        allMessages: runtimeSnapshot.data?.messages ?? [],
-        allMessageParts: runtimeSnapshot.data?.messageParts ?? [],
+        allSessions: queries.sessionsQuery.data?.sessions ?? [],
+        allRuns: queries.runsQuery.data?.runs ?? [],
+        allMessages: queries.messagesQuery.data?.messages ?? [],
+        allMessageParts: queries.messagesQuery.data?.messageParts ?? [],
         selectedThreadId: uiState.selectedThreadId,
         selectedSessionId: uiState.selectedSessionId,
         selectedRunId: uiState.selectedRunId,
@@ -158,9 +157,9 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
     const workspaceFilter = uiState.workspaceFilter;
     const sessionOverride = selectedSessionId ? sessionTargetBySessionId[selectedSessionId] : undefined;
     const runTargetState = useConversationShellRunTarget({
-        providers: runtimeSnapshot.data?.providers ?? [],
-        providerModels: runtimeSnapshot.data?.providerModels ?? [],
-        defaults: runtimeSnapshot.data?.defaults,
+        providers: queries.shellBootstrapQuery.data?.providers ?? [],
+        providerModels: queries.shellBootstrapQuery.data?.providerModels ?? [],
+        defaults: queries.shellBootstrapQuery.data?.defaults,
         runs: sessionRunSelection.runs,
         ...(sessionOverride ? { sessionOverride } : {}),
     });
@@ -207,9 +206,9 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
 
     const planOrchestrator = buildConversationShellPlanOrchestrator({
         profileId,
-        runtimeSnapshotRefetch: runtimeSnapshot.refetch,
         activePlanRefetch: queries.activePlanQuery.refetch,
         orchestratorLatestRefetch: queries.orchestratorLatestQuery.refetch,
+        sessionRunsRefetch: queries.runsQuery.refetch,
         onError: setRunSubmitError,
         resolvedRunTarget: runTargetState.resolvedRunTarget,
         workspaceFingerprint: selectedThread?.workspaceFingerprint,
@@ -283,9 +282,10 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                         ...input,
                     });
                     uiState.setSelectedThreadId(result.thread.id);
+                    uiState.setSelectedSessionId(undefined);
+                    uiState.setSelectedRunId(undefined);
                     void queries.listBucketsQuery.refetch();
                     void queries.listThreadsQuery.refetch();
-                    void runtimeSnapshot.refetch();
                 }}
                 onAddTagToThread={async (threadId, label) => {
                     if (!isEntityId(threadId, 'thr')) {
@@ -311,7 +311,7 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                         tagIds: validTagIds,
                     });
                     void queries.listTagsQuery.refetch();
-                    void runtimeSnapshot.refetch();
+                    void queries.shellBootstrapQuery.refetch();
                 }}
             />
 
@@ -322,7 +322,7 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                             {selectedThread?.title ?? 'No Thread Selected'}
                         </p>
                         <p className='text-muted-foreground text-xs'>
-                            Stream: {streamState} · Events: {runtimeSnapshot.data?.lastSequence ?? 0}
+                            Stream: {streamState} · Events: {queries.shellBootstrapQuery.data?.lastSequence ?? 0}
                         </p>
                         {tabSwitchNotice ? <p className='text-primary text-xs'>{tabSwitchNotice}</p> : null}
                     </div>
@@ -399,8 +399,10 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                                     return;
                                 }
                                 uiState.setSelectedSessionId(result.session.id);
+                                uiState.setSelectedRunId(undefined);
                                 setRunSubmitError(undefined);
-                                void runtimeSnapshot.refetch();
+                                void queries.sessionsQuery.refetch();
+                                void queries.listThreadsQuery.refetch();
                             });
                     }}
                     onPromptChange={(nextPrompt) => {
@@ -430,7 +432,10 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                                 void queries.activePlanQuery.refetch();
                             },
                             onRuntimeRefetch: () => {
-                                void runtimeSnapshot.refetch();
+                                void queries.sessionsQuery.refetch();
+                                void queries.runsQuery.refetch();
+                                void queries.messagesQuery.refetch();
+                                void queries.listThreadsQuery.refetch();
                             },
                             onError: (message) => {
                                 setRunSubmitError(message);
@@ -552,7 +557,9 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                             }
                             setPendingMessageEdit(undefined);
                             setPrompt('');
-                            void runtimeSnapshot.refetch();
+                            void queries.sessionsQuery.refetch();
+                            void queries.runsQuery.refetch();
+                            void queries.messagesQuery.refetch();
                             void queries.listThreadsQuery.refetch();
                         })
                         .catch((error: unknown) => {

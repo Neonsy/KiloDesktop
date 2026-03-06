@@ -165,17 +165,24 @@ export class SessionStore {
 
         const rows = await db
             .selectFrom('sessions')
-            .selectAll()
+            .leftJoin(
+                db
+                    .selectFrom('runs')
+                    .select(['session_id'])
+                    .select((eb) => eb.fn.count<number>('id').as('turn_count'))
+                    .where('profile_id', '=', profileId)
+                    .groupBy('session_id')
+                    .as('run_counts'),
+                'run_counts.session_id',
+                'sessions.id'
+            )
+            .selectAll('sessions')
+            .select('run_counts.turn_count')
             .where('profile_id', '=', profileId)
             .orderBy('updated_at', 'desc')
             .execute();
 
-        const summaries: SessionSummaryRecord[] = [];
-        for (const row of rows) {
-            summaries.push(mapSessionSummary(row, await this.countTurns(profileId, row.id)));
-        }
-
-        return summaries;
+        return rows.map((row) => mapSessionSummary(row, row.turn_count ?? 0));
     }
 
     async status(

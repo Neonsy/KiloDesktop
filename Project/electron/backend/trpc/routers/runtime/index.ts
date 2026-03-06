@@ -7,6 +7,7 @@ import {
 import { runtimeEventBus } from '@/app/backend/runtime/services/runtimeEventBus';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset';
+import { runtimeShellBootstrapService } from '@/app/backend/runtime/services/runtimeShellBootstrap';
 import { runtimeSnapshotService } from '@/app/backend/runtime/services/runtimeSnapshot';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 
@@ -38,6 +39,9 @@ function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<R
 export const runtimeRouter = router({
     getSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return runtimeSnapshotService.getSnapshot(input.profileId);
+    }),
+    getShellBootstrap: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
+        return runtimeShellBootstrapService.getShellBootstrap(input.profileId);
     }),
     subscribeEvents: publicProcedure.input(runtimeEventsSubscriptionInputSchema).subscription(async function* ({
         input,

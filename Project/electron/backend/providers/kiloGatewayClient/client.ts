@@ -62,7 +62,7 @@ export class KiloGatewayClient {
             timeoutMs: this.timeoutMs,
             ...(headers ? { headers } : {}),
         };
-        const result = await executeJsonRequest<Record<string, unknown>>(requestInput);
+        const result = await executeJsonRequest(requestInput);
         if (result.isErr()) {
             throw this.toGatewayException(result.error);
         }
@@ -81,7 +81,7 @@ export class KiloGatewayClient {
             ...(input?.headers ? { headers: input.headers } : {}),
             ...(input?.body !== undefined ? { body: input.body } : {}),
         };
-        const result = await executeJsonRequest<Record<string, unknown>>(requestInput);
+        const result = await executeJsonRequest(requestInput);
         if (result.isErr()) {
             throw this.toGatewayException(result.error);
         }

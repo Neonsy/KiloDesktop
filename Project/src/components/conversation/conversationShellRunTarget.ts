@@ -8,13 +8,19 @@ import {
     type RunTargetSelection,
 } from '@/web/components/conversation/shellHelpers';
 
-import type { RunRecord, RuntimeSnapshotV1 } from '@/app/backend/persistence/types';
+import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 interface UseConversationShellRunTargetInput {
-    providers: RuntimeSnapshotV1['providers'];
-    providerModels: RuntimeSnapshotV1['providerModels'];
-    defaults: RuntimeSnapshotV1['defaults'] | undefined;
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    defaults:
+        | {
+              providerId: string;
+              modelId: string;
+          }
+        | undefined;
     sessionOverride?: { providerId?: RuntimeProviderId; modelId?: string };
     runs: RunRecord[];
 }
@@ -25,7 +31,7 @@ export function useConversationShellRunTarget(input: UseConversationShellRunTarg
     }, [input.providers]);
 
     const modelsByProvider = useMemo(() => {
-        const map = new Map<RuntimeProviderId, RuntimeSnapshotV1['providerModels']>();
+        const map = new Map<RuntimeProviderId, ProviderModelRecord[]>();
         for (const model of input.providerModels) {
             const existing = map.get(model.providerId) ?? [];
             existing.push(model);

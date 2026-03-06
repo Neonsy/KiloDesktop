@@ -3,6 +3,7 @@ import { ipcLink } from 'electron-trpc-experimental/renderer';
 import { useEffect } from 'react';
 
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
+import { invalidateQueriesForRuntimeEvent } from '@/web/lib/runtime/runtimeEventInvalidation';
 import { trpcClient as runtimeClient } from '@/web/lib/trpcClient';
 import { useWindowStateStreamStore } from '@/web/lib/window/stateStream';
 import { trpc } from '@/web/trpc/client';
@@ -65,6 +66,7 @@ function isWindowStateEvent(value: unknown): value is WindowStateEvent {
 }
 
 function RuntimeEventStreamBootstrap(): ReactNode {
+    const utils = trpc.useUtils();
     const setConnecting = useRuntimeEventStreamStore((state) => state.setConnecting);
     const setError = useRuntimeEventStreamStore((state) => state.setError);
     const pushEvent = useRuntimeEventStreamStore((state) => state.pushEvent);
@@ -79,6 +81,7 @@ function RuntimeEventStreamBootstrap(): ReactNode {
                 onData: (event) => {
                     if (isRuntimeEventRecord(event)) {
                         pushEvent(event);
+                        void invalidateQueriesForRuntimeEvent(utils, event);
                         return;
                     }
 
@@ -94,7 +97,7 @@ function RuntimeEventStreamBootstrap(): ReactNode {
         return () => {
             subscription.unsubscribe();
         };
-    }, [setConnecting, setError, pushEvent]);
+    }, [setConnecting, setError, pushEvent, utils]);
 
     return null;
 }

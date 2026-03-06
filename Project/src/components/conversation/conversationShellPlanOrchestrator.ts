@@ -10,9 +10,9 @@ interface MutationLike<TInput> {
 
 interface BuildConversationShellPlanOrchestratorInput {
     profileId: string;
-    runtimeSnapshotRefetch: () => Promise<unknown>;
     activePlanRefetch: () => Promise<unknown>;
     orchestratorLatestRefetch: () => Promise<unknown>;
+    sessionRunsRefetch: () => Promise<unknown>;
     onError: (message: string) => void;
     resolvedRunTarget: RunTargetSelection | undefined;
     workspaceFingerprint: string | undefined;
@@ -128,7 +128,7 @@ export function buildConversationShellPlanOrchestrator(input: BuildConversationS
                 .then(() => {
                     void input.activePlanRefetch();
                     void input.orchestratorLatestRefetch();
-                    void input.runtimeSnapshotRefetch();
+                    void input.sessionRunsRefetch();
                 })
                 .catch((error: unknown) => {
                     const message = error instanceof Error ? error.message : String(error);

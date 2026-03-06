@@ -1,3 +1,5 @@
+import type { ProviderModelRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
+import type { ProviderListItem } from '@/app/backend/providers/service/types';
 import type { ContextBudget, RuntimeResetTarget, StreamEventType } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
@@ -13,6 +15,19 @@ export interface StreamEventEnvelope {
 
 export interface RuntimeEventsSubscriptionInput {
     afterSequence?: number;
+}
+
+export type RuntimeShellBootstrapInput = ProfileInput;
+
+export interface RuntimeShellBootstrap {
+    lastSequence: number;
+    providers: ProviderListItem[];
+    providerModels: ProviderModelRecord[];
+    threadTags: ThreadTagRecord[];
+    defaults: {
+        providerId: string;
+        modelId: string;
+    };
 }
 
 export interface WindowStateSubscriptionInput {
