@@ -30,6 +30,7 @@ export interface SessionsTable {
     conversation_id: string;
     thread_id: string;
     kind: string;
+    worktree_id: string | null;
     run_status: string;
     pending_completion_run_id: string | null;
     created_at: string;
@@ -197,6 +198,10 @@ export interface ThreadsTable {
     top_level_tab: string;
     parent_thread_id: string | null;
     root_thread_id: string;
+    execution_environment_mode: string;
+    execution_branch: string | null;
+    base_branch: string | null;
+    worktree_id: string | null;
     last_assistant_at: string | null;
     created_at: string;
     updated_at: string;
@@ -236,11 +241,27 @@ export interface CheckpointsTable {
     run_id: string;
     diff_id: string;
     workspace_fingerprint: string;
+    worktree_id: string | null;
     top_level_tab: string;
     mode_key: string;
     summary: string;
     created_at: string;
     updated_at: string;
+}
+
+export interface WorktreesTable {
+    id: string;
+    profile_id: string;
+    workspace_fingerprint: string;
+    branch: string;
+    base_branch: string;
+    absolute_path: string;
+    path_key: string;
+    label: string;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    last_used_at: string;
 }
 
 export interface ModeDefinitionsTable {
@@ -524,6 +545,7 @@ export interface DatabaseSchema {
     thread_tags: ThreadTagsTable;
     diffs: DiffsTable;
     checkpoints: CheckpointsTable;
+    worktrees: WorktreesTable;
     mode_definitions: ModeDefinitionsTable;
     rulesets: RulesetsTable;
     skillfiles: SkillfilesTable;

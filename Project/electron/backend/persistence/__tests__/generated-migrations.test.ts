@@ -14,6 +14,7 @@ describe('generated migrations', () => {
             '006_session_attached_skills.sql',
             '007_run_command_shell_approvals.sql',
             '008_diff_checkpoints.sql',
+            '009_managed_worktrees.sql',
         ]);
     });
 });

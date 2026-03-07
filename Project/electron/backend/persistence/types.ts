@@ -1,5 +1,6 @@
 import type {
     EntityId,
+    ExecutionEnvironmentMode,
     ExecutionPreset,
     KiloDynamicSort,
     KiloRoutingMode,
@@ -23,6 +24,7 @@ import type {
     SkillfileDefinition,
     TopLevelTab,
     ToolCapability,
+    WorktreeRecord as RuntimeWorktreeRecord,
     WorkspaceRootRecord as RuntimeWorkspaceRootRecord,
 } from '@/app/backend/runtime/contracts';
 
@@ -32,6 +34,7 @@ export interface SessionSummaryRecord {
     conversationId: string;
     threadId: string;
     kind: 'local' | 'worktree' | 'cloud';
+    worktreeId?: EntityId<'wt'>;
     runStatus: RunStatus;
     turnCount: number;
     createdAt: string;
@@ -281,6 +284,10 @@ export interface ThreadRecord {
     topLevelTab: 'chat' | 'agent' | 'orchestrator';
     parentThreadId?: string;
     rootThreadId: string;
+    executionEnvironmentMode: ExecutionEnvironmentMode;
+    executionBranch?: string;
+    baseBranch?: string;
+    worktreeId?: EntityId<'wt'>;
     lastAssistantAt?: string;
     createdAt: string;
     updatedAt: string;
@@ -355,12 +362,15 @@ export interface CheckpointRecord {
     runId: EntityId<'run'>;
     diffId: string;
     workspaceFingerprint: string;
+    worktreeId?: EntityId<'wt'>;
     topLevelTab: TopLevelTab;
     modeKey: string;
     summary: string;
     createdAt: string;
     updatedAt: string;
 }
+
+export type WorktreeRecord = RuntimeWorktreeRecord;
 
 export interface RunRecord {
     id: EntityId<'run'>;
@@ -596,6 +606,7 @@ export interface RuntimeSnapshotV1 {
     mcpServers: McpServerRecord[];
     conversations: ConversationRecord[];
     workspaceRoots: WorkspaceRootRecord[];
+    worktrees: WorktreeRecord[];
     threads: ThreadRecord[];
     tags: TagRecord[];
     threadTags: ThreadTagRecord[];

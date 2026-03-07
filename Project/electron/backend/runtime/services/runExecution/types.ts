@@ -6,6 +6,7 @@ import type {
     RuntimeRunOptions,
     RunStatus,
     TopLevelTab,
+    ResolvedWorkspaceContext,
 } from '@/app/backend/runtime/contracts';
 import type { RunExecutionErrorCode } from '@/app/backend/runtime/services/runExecution/errors';
 
@@ -16,6 +17,7 @@ export interface StartRunInput {
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint?: string;
+    worktreeId?: EntityId<'wt'>;
     requestId?: string;
     correlationId?: string;
     runtimeOptions: RuntimeRunOptions;
@@ -79,6 +81,7 @@ export interface PreparedRunStart {
     initialTransport: RunTransportResolution;
     runContext?: RunContext;
     kiloRouting?: ResolvedKiloRouting;
+    workspaceContext?: ResolvedWorkspaceContext;
 }
 
 export type StartRunResult =

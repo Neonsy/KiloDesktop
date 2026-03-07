@@ -115,6 +115,7 @@ export function useConversationShellEditFlow(input: UseConversationShellEditFlow
                     ...(input.selectedThread?.workspaceFingerprint
                         ? { workspaceFingerprint: input.selectedThread.workspaceFingerprint }
                         : {}),
+                    ...(input.selectedThread?.worktreeId ? { worktreeId: input.selectedThread.worktreeId } : {}),
                 })
                     .then(async (result) => {
                         if (!result.edited) {

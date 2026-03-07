@@ -20,6 +20,7 @@ import {
     tagStore,
     threadStore,
     toolStore,
+    worktreeStore,
     workspaceRootStore,
 } from '@/app/backend/persistence/stores';
 import { toProfileStoreException } from '@/app/backend/persistence/stores/profileStoreErrors';
@@ -79,6 +80,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             lastSequence,
             conversations,
             workspaceRoots,
+            worktrees,
             threads,
             tags,
             threadTags,
@@ -121,6 +123,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             loadSlice('runtime-last-sequence', () => runtimeEventStore.getLastSequence()),
             loadSlice('conversations', () => conversationStore.listBuckets(profileId)),
             loadSlice('workspace-roots', () => workspaceRootStore.listByProfile(profileId)),
+            loadSlice('worktrees', () => worktreeStore.listByProfile(profileId)),
             loadSlice('threads', () =>
                 threadStore.list({
                     profileId,
@@ -164,6 +167,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             mcpServers,
             conversations,
             workspaceRoots,
+            worktrees,
             threads,
             tags,
             threadTags,

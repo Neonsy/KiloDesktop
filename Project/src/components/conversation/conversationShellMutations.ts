@@ -16,5 +16,9 @@ export function useConversationShellMutations() {
         orchestratorAbortMutation: trpc.orchestrator.abort.useMutation(),
         setEditPreferenceMutation: trpc.conversation.setEditPreference.useMutation(),
         resolvePermissionMutation: trpc.permission.resolve.useMutation(),
+        configureThreadWorktreeMutation: trpc.worktree.configureThread.useMutation(),
+        refreshWorktreeMutation: trpc.worktree.refresh.useMutation(),
+        removeWorktreeMutation: trpc.worktree.remove.useMutation(),
+        removeOrphanedWorktreesMutation: trpc.worktree.removeOrphaned.useMutation(),
     };
 }

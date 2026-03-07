@@ -1,5 +1,6 @@
 import {
     createParser,
+    readEntityId,
     readObject,
     readOptionalString,
     readProfileId,
@@ -13,10 +14,12 @@ import type {
 export function parseRegistryRefreshInput(input: unknown): RegistryRefreshInput {
     const source = readObject(input, 'input');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const worktreeId = source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
 
     return {
         profileId: readProfileId(source),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
     };
 }
 
@@ -27,12 +30,14 @@ export function parseRegistryListResolvedInput(input: unknown): RegistryListReso
 export function parseRegistrySearchSkillsInput(input: unknown): RegistrySearchSkillsInput {
     const source = readObject(input, 'input');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const worktreeId = source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
     const query = readOptionalString(source.query, 'query');
 
     return {
         profileId: readProfileId(source),
         ...(query ? { query } : {}),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
     };
 }
 

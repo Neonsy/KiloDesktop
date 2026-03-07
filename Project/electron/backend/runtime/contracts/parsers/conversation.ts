@@ -3,6 +3,7 @@ import {
     conversationScopes,
     conversationThreadGroupViews,
     conversationThreadSorts,
+    executionEnvironmentModes,
     threadTitleGenerationModes,
     topLevelTabs,
 } from '@/app/backend/runtime/contracts/enums';
@@ -26,6 +27,7 @@ import type {
     ConversationListTagsInput,
     ConversationListThreadsInput,
     ConversationRenameThreadInput,
+    ConversationSetThreadExecutionEnvironmentInput,
     ConversationSetEditPreferenceInput,
     ConversationSetThreadTitlePreferenceInput,
     ConversationSetThreadTagsInput,
@@ -70,6 +72,14 @@ export function parseConversationCreateThreadInput(input: unknown): Conversation
         source.topLevelTab !== undefined ? readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs) : undefined;
     const scope = readEnumValue(source.scope, 'scope', conversationScopes);
     const workspacePath = readOptionalString(source.workspacePath, 'workspacePath');
+    const executionEnvironmentMode =
+        source.executionEnvironmentMode !== undefined
+            ? readEnumValue(source.executionEnvironmentMode, 'executionEnvironmentMode', executionEnvironmentModes)
+            : undefined;
+    const executionBranch = readOptionalString(source.executionBranch, 'executionBranch');
+    const baseBranch = readOptionalString(source.baseBranch, 'baseBranch');
+    const worktreeId =
+        source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
 
     if (scope === 'workspace' && !workspacePath) {
         throw new Error('Invalid "workspacePath": required when scope is "workspace".');
@@ -78,12 +88,25 @@ export function parseConversationCreateThreadInput(input: unknown): Conversation
     if (scope !== 'workspace' && workspacePath) {
         throw new Error('Invalid "workspacePath": allowed only when scope is "workspace".');
     }
+    if (scope !== 'workspace' && (executionEnvironmentMode || executionBranch || baseBranch || worktreeId)) {
+        throw new Error('Execution environment fields are allowed only when scope is "workspace".');
+    }
+    if (executionEnvironmentMode === 'worktree' && !worktreeId) {
+        throw new Error('Invalid "worktreeId": required when executionEnvironmentMode is "worktree".');
+    }
+    if (worktreeId && executionEnvironmentMode !== 'worktree') {
+        throw new Error('Invalid "worktreeId": allowed only when executionEnvironmentMode is "worktree".');
+    }
 
     return {
         profileId: readProfileId(source),
         ...(topLevelTab ? { topLevelTab } : {}),
         scope,
         ...(workspacePath ? { workspacePath } : {}),
+        ...(executionEnvironmentMode ? { executionEnvironmentMode } : {}),
+        ...(executionBranch ? { executionBranch } : {}),
+        ...(baseBranch ? { baseBranch } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
         title: readString(source.title, 'title'),
     };
 }
@@ -95,6 +118,33 @@ export function parseConversationRenameThreadInput(input: unknown): Conversation
         profileId: readProfileId(source),
         threadId: readEntityId(source.threadId, 'threadId', 'thr'),
         title: readString(source.title, 'title'),
+    };
+}
+
+export function parseConversationSetThreadExecutionEnvironmentInput(
+    input: unknown
+): ConversationSetThreadExecutionEnvironmentInput {
+    const source = readObject(input, 'input');
+    const mode = readEnumValue(source.mode, 'mode', executionEnvironmentModes);
+    const executionBranch = readOptionalString(source.executionBranch, 'executionBranch');
+    const baseBranch = readOptionalString(source.baseBranch, 'baseBranch');
+    const worktreeId =
+        source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
+
+    if (mode === 'worktree' && !worktreeId) {
+        throw new Error('Invalid "worktreeId": required when mode is "worktree".');
+    }
+    if (mode !== 'worktree' && worktreeId) {
+        throw new Error('Invalid "worktreeId": allowed only when mode is "worktree".');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        threadId: readEntityId(source.threadId, 'threadId', 'thr'),
+        mode,
+        ...(executionBranch ? { executionBranch } : {}),
+        ...(baseBranch ? { baseBranch } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
     };
 }
 
@@ -166,6 +216,9 @@ export const conversationListBucketsInputSchema = createParser(parseConversation
 export const conversationListThreadsInputSchema = createParser(parseConversationListThreadsInput);
 export const conversationCreateThreadInputSchema = createParser(parseConversationCreateThreadInput);
 export const conversationRenameThreadInputSchema = createParser(parseConversationRenameThreadInput);
+export const conversationSetThreadExecutionEnvironmentInputSchema = createParser(
+    parseConversationSetThreadExecutionEnvironmentInput
+);
 export const conversationListTagsInputSchema = createParser(parseConversationListTagsInput);
 export const conversationUpsertTagInputSchema = createParser(parseConversationUpsertTagInput);
 export const conversationSetThreadTagsInputSchema = createParser(parseConversationSetThreadTagsInput);

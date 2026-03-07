@@ -57,6 +57,8 @@ export function parseSessionStartRunInput(input: unknown): SessionStartRunInput 
     const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
     const modelId = readOptionalString(source.modelId, 'modelId');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const worktreeId =
+        source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
     const runtimeOptions = parseRuntimeRunOptions(source.runtimeOptions);
 
     return {
@@ -66,6 +68,7 @@ export function parseSessionStartRunInput(input: unknown): SessionStartRunInput 
         topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
         modeKey: readString(source.modeKey, 'modeKey'),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
         runtimeOptions,
         ...(providerId ? { providerId } : {}),
         ...(modelId ? { modelId } : {}),
@@ -110,6 +113,8 @@ export function parseSessionEditInput(input: unknown): SessionEditInput {
     const providerId = source.providerId !== undefined ? readProviderId(source.providerId, 'providerId') : undefined;
     const modelId = readOptionalString(source.modelId, 'modelId');
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const worktreeId =
+        source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
     const runtimeOptions =
         source.runtimeOptions !== undefined ? parseRuntimeRunOptions(source.runtimeOptions) : undefined;
     const modeKey = readOptionalString(source.modeKey, 'modeKey');
@@ -126,6 +131,7 @@ export function parseSessionEditInput(input: unknown): SessionEditInput {
         ...(modeKey ? { modeKey } : {}),
         ...(autoStartRun !== undefined ? { autoStartRun } : {}),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
         ...(runtimeOptions ? { runtimeOptions } : {}),
         ...(providerId ? { providerId } : {}),
         ...(modelId ? { modelId } : {}),

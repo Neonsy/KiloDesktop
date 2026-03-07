@@ -1,4 +1,4 @@
-import { permissionStore, workspaceRootStore } from '@/app/backend/persistence/stores';
+import { permissionStore } from '@/app/backend/persistence/stores';
 import type { ToolInvokeInput } from '@/app/backend/runtime/contracts';
 import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { resolveEffectivePermissionPolicy } from '@/app/backend/runtime/services/permissions/policyResolver';
@@ -14,6 +14,7 @@ import { errorToolResult, okToolResult } from '@/app/backend/runtime/services/to
 import { buildShellApprovalContext } from '@/app/backend/runtime/services/toolExecution/shellApproval';
 import { isIgnoredWorkspacePath, isPathInsideWorkspace, resolveWorkspaceToolPath } from '@/app/backend/runtime/services/toolExecution/safety';
 import type { ToolExecutionResult } from '@/app/backend/runtime/services/toolExecution/types';
+import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 import { appLog } from '@/app/main/logging';
 
 function toolLogContext(input: ToolInvokeInput, toolId: string, source?: string) {
@@ -203,8 +204,12 @@ export class ToolExecutionService {
                 });
             }
 
-            const workspaceRoot = await workspaceRootStore.getByFingerprint(input.profileId, input.workspaceFingerprint);
-            if (!workspaceRoot) {
+            const workspaceContext = await workspaceContextService.resolveExplicit({
+                profileId: input.profileId,
+                ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+            });
+            if (workspaceContext.kind === 'detached') {
                 const policy = {
                     effective: 'deny',
                     source: 'workspace_unresolved',
@@ -228,19 +233,19 @@ export class ToolExecutionService {
                 });
             }
 
-            workspaceRootPath = workspaceRoot.absolutePath;
-            workspaceLabel = workspaceRoot.label;
+            workspaceRootPath = workspaceContext.absolutePath;
+            workspaceLabel = workspaceContext.label;
 
             if (definition.tool.id === 'read_file' || definition.tool.id === 'list_files') {
                 const requestedPath = typeof args['path'] === 'string' ? args['path'] : undefined;
                 const resolvedPath = resolveWorkspaceToolPath(
                     requestedPath
                         ? {
-                              workspaceRootPath: workspaceRoot.absolutePath,
+                              workspaceRootPath,
                               targetPath: requestedPath,
                           }
                         : {
-                              workspaceRootPath: workspaceRoot.absolutePath,
+                              workspaceRootPath,
                           }
                 );
 
@@ -254,7 +259,7 @@ export class ToolExecutionService {
                         defaultPolicy: boundaryDefaultPolicy(executionPreset),
                         summary: {
                             title: 'Outside Workspace Access',
-                            detail: `${definition.tool.label} wants to access a path outside ${workspaceRoot.label}.`,
+                            detail: `${definition.tool.label} wants to access a path outside ${workspaceLabel ?? 'the active workspace'}.`,
                         },
                         denyMessage: `Tool "${definition.tool.id}" cannot access paths outside the registered workspace root in the current safety preset.`,
                         askMessage: `Tool "${definition.tool.id}" needs approval to access a path outside the registered workspace root.`,
@@ -325,7 +330,7 @@ export class ToolExecutionService {
                         defaultPolicy: boundaryDefaultPolicy(executionPreset),
                         summary: {
                             title: 'Ignored Path Access',
-                            detail: `${definition.tool.label} wants to access an ignored path inside ${workspaceRoot.label}.`,
+                            detail: `${definition.tool.label} wants to access an ignored path inside ${workspaceLabel ?? 'the active workspace'}.`,
                         },
                         denyMessage: `Tool "${definition.tool.id}" cannot access ignored paths in the current safety preset.`,
                         askMessage: `Tool "${definition.tool.id}" needs approval to access an ignored path.`,

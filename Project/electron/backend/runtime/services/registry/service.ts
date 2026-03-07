@@ -576,6 +576,7 @@ async function buildDiscoveredAssets(input: {
 export async function listResolvedRegistry(input: {
     profileId: string;
     workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
 }): Promise<RegistryListResolvedResult> {
     const [paths, allModes, allRulesets, allSkillfiles] = await Promise.all([
         resolveRegistryPaths(input),
@@ -645,6 +646,7 @@ export async function searchResolvedSkillfiles(input: {
     profileId: string;
     query?: string;
     workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
 }): Promise<SkillfileDefinitionRecord[]> {
     const resolved = await listResolvedRegistry(input);
     const query = input.query?.trim().toLowerCase();
@@ -666,6 +668,7 @@ export async function resolveSkillfilesByAssetKeys(input: {
     profileId: string;
     assetKeys: string[];
     workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
 }): Promise<{ skillfiles: SkillfileDefinitionRecord[]; missingAssetKeys: string[] }> {
     const uniqueAssetKeys = Array.from(
         new Set(input.assetKeys.map((assetKey) => assetKey.trim()).filter((assetKey) => assetKey.length > 0))
@@ -702,6 +705,7 @@ export async function resolveSkillfilesByAssetKeys(input: {
 export async function refreshRegistry(input: {
     profileId: string;
     workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
 }): Promise<RegistryRefreshResult> {
     const paths = await resolveRegistryPaths(input);
     const globalAssets = await buildDiscoveredAssets({

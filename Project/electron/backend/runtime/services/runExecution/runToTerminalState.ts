@@ -26,6 +26,7 @@ export async function runToTerminalState(input: {
     kiloRouting?: ResolvedKiloRouting;
     contextMessages?: RunContextMessage[];
     workspaceFingerprint?: string;
+    worktreeId?: EntityId<'wt'>;
     assistantMessageId: string;
     signal: AbortSignal;
 }): Promise<void> {
@@ -40,6 +41,7 @@ export async function runToTerminalState(input: {
                     topLevelTab: input.topLevelTab,
                     modeKey: input.modeKey,
                     ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                    ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
                 });
                 if (!artifactResult) {
                     return;

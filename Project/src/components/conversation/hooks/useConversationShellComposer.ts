@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shellPromptSubmit';
 
 import type {
+    EntityId,
     PlanStartInput,
     RuntimeProviderId,
     RuntimeRunOptions,
@@ -23,6 +24,7 @@ interface UseConversationShellComposerInput {
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint: string | undefined;
+    worktreeId?: EntityId<'wt'>;
     resolvedRunTarget:
         | {
               providerId: RuntimeProviderId;
@@ -67,6 +69,7 @@ export function useConversationShellComposer(input: UseConversationShellComposer
                 topLevelTab: input.topLevelTab,
                 modeKey: input.modeKey,
                 workspaceFingerprint: input.workspaceFingerprint,
+                ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
                 resolvedRunTarget: input.resolvedRunTarget,
                 runtimeOptions: input.runtimeOptions,
                 providerById: input.providerById,

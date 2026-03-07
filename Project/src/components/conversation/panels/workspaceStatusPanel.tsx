@@ -13,6 +13,19 @@ interface WorkspaceStatusPanelProps {
               kind: 'workspace';
               label: string;
               absolutePath: string;
+              executionEnvironmentMode: 'local' | 'new_worktree';
+              executionBranch?: string;
+              baseBranch?: string;
+          }
+        | {
+              kind: 'worktree';
+              label: string;
+              absolutePath: string;
+              branch: string;
+              baseBranch: string;
+              baseWorkspaceLabel: string;
+              baseWorkspacePath: string;
+              worktreeId: string;
           };
     provider:
         | {
@@ -89,11 +102,21 @@ export function WorkspaceStatusPanel({
             />
             <StatusCard
                 label='Scope'
-                value={workspaceScope.kind === 'workspace' ? workspaceScope.label : 'Detached'}
+                value={
+                    workspaceScope.kind === 'detached'
+                        ? 'Detached'
+                        : workspaceScope.kind === 'worktree'
+                          ? workspaceScope.branch
+                          : workspaceScope.label
+                }
                 detail={
-                    workspaceScope.kind === 'workspace'
-                        ? `${executionPreset} preset · ${workspaceScope.absolutePath}`
-                        : `${executionPreset} preset · detached chat has no file authority`
+                    workspaceScope.kind === 'detached'
+                        ? `${executionPreset} preset · detached chat has no file authority`
+                        : workspaceScope.kind === 'worktree'
+                          ? `${executionPreset} preset · managed worktree · ${workspaceScope.absolutePath}`
+                          : workspaceScope.executionEnvironmentMode === 'new_worktree'
+                            ? `${executionPreset} preset · queued managed worktree from ${workspaceScope.absolutePath}`
+                            : `${executionPreset} preset · local workspace · ${workspaceScope.absolutePath}`
                 }
             />
             <StatusCard

@@ -3,6 +3,7 @@ import type {
     ConversationScope,
     ConversationThreadGroupView,
     ConversationThreadSort,
+    ExecutionEnvironmentMode,
     ThreadTitleGenerationMode,
     TopLevelTab,
 } from '@/app/backend/runtime/contracts/enums';
@@ -25,11 +26,23 @@ export interface ConversationCreateThreadInput extends ProfileInput {
     scope: ConversationScope;
     workspacePath?: string;
     title: string;
+    executionEnvironmentMode?: ExecutionEnvironmentMode;
+    executionBranch?: string;
+    baseBranch?: string;
+    worktreeId?: EntityId<'wt'>;
 }
 
 export interface ConversationRenameThreadInput extends ProfileInput {
     threadId: EntityId<'thr'>;
     title: string;
+}
+
+export interface ConversationSetThreadExecutionEnvironmentInput extends ProfileInput {
+    threadId: EntityId<'thr'>;
+    mode: ExecutionEnvironmentMode;
+    executionBranch?: string;
+    baseBranch?: string;
+    worktreeId?: EntityId<'wt'>;
 }
 
 export type ConversationListTagsInput = ProfileInput;

@@ -1,6 +1,6 @@
-import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
+import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import type { ThreadListRecord, ThreadRecord } from '@/app/backend/persistence/types';
-import { topLevelTabs } from '@/app/backend/runtime/contracts';
+import { executionEnvironmentModes, topLevelTabs } from '@/app/backend/runtime/contracts';
 
 export interface ThreadRow {
     id: string;
@@ -10,6 +10,10 @@ export interface ThreadRow {
     top_level_tab: string;
     parent_thread_id: string | null;
     root_thread_id: string;
+    execution_environment_mode: string;
+    execution_branch: string | null;
+    base_branch: string | null;
+    worktree_id: string | null;
     last_assistant_at: string | null;
     created_at: string;
     updated_at: string;
@@ -31,6 +35,14 @@ export function mapThreadRecord(row: ThreadRow): ThreadRecord {
         topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
         ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
         rootThreadId: row.root_thread_id,
+        executionEnvironmentMode: parseEnumValue(
+            row.execution_environment_mode,
+            'threads.execution_environment_mode',
+            executionEnvironmentModes
+        ),
+        ...(row.execution_branch ? { executionBranch: row.execution_branch } : {}),
+        ...(row.base_branch ? { baseBranch: row.base_branch } : {}),
+        ...(row.worktree_id ? { worktreeId: parseEntityId(row.worktree_id, 'threads.worktree_id', 'wt') } : {}),
         ...(row.last_assistant_at ? { lastAssistantAt: row.last_assistant_at } : {}),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -46,6 +58,14 @@ export function mapThreadListRecord(row: ThreadListRow): ThreadListRecord {
         topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
         ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
         rootThreadId: row.root_thread_id,
+        executionEnvironmentMode: parseEnumValue(
+            row.execution_environment_mode,
+            'threads.execution_environment_mode',
+            executionEnvironmentModes
+        ),
+        ...(row.execution_branch ? { executionBranch: row.execution_branch } : {}),
+        ...(row.base_branch ? { baseBranch: row.base_branch } : {}),
+        ...(row.worktree_id ? { worktreeId: parseEntityId(row.worktree_id, 'threads.worktree_id', 'wt') } : {}),
         ...(row.last_assistant_at ? { lastAssistantAt: row.last_assistant_at } : {}),
         createdAt: row.created_at,
         updatedAt: row.updated_at,

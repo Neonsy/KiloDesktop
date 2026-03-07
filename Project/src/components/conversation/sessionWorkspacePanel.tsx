@@ -32,6 +32,19 @@ interface SessionWorkspacePanelProps {
               kind: 'workspace';
               label: string;
               absolutePath: string;
+              executionEnvironmentMode: 'local' | 'new_worktree';
+              executionBranch?: string;
+              baseBranch?: string;
+          }
+        | {
+              kind: 'worktree';
+              label: string;
+              absolutePath: string;
+              branch: string;
+              baseBranch: string;
+              baseWorkspaceLabel: string;
+              baseWorkspacePath: string;
+              worktreeId: string;
           };
     pendingPermissions: PermissionRecord[];
     permissionWorkspaces?: Record<
@@ -76,6 +89,7 @@ interface SessionWorkspacePanelProps {
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
     modePanel?: ReactNode;
+    executionEnvironmentPanel?: ReactNode;
     attachedSkillsPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
     onSelectSession: (sessionId: string) => void;
@@ -122,6 +136,7 @@ export function SessionWorkspacePanel({
     modelOptions,
     runErrorMessage,
     modePanel,
+    executionEnvironmentPanel,
     attachedSkillsPanel,
     diffCheckpointPanel,
     onSelectSession,
@@ -163,7 +178,9 @@ export function SessionWorkspacePanel({
                             }}>
                             <p className='text-sm font-medium'>{session.id}</p>
                             <p className='text-muted-foreground text-xs'>
-                                {session.kind} · {session.runStatus} · turns {session.turnCount}
+                                {session.kind === 'worktree' ? 'managed worktree' : session.kind === 'local' ? 'local workspace' : session.kind}
+                                {' · '}
+                                {session.runStatus} · turns {session.turnCount}
                             </p>
                         </button>
                     ))}
@@ -193,6 +210,8 @@ export function SessionWorkspacePanel({
                 </div>
 
                 {modePanel}
+
+                {executionEnvironmentPanel}
 
                 <WorkspaceStatusPanel
                     run={runs.find((run) => run.id === selectedRunId) ?? runs.at(-1)}

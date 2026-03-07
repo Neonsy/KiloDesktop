@@ -7,6 +7,12 @@ export type ConversationScope = (typeof conversationScopes)[number];
 export const sessionKinds = ['local', 'worktree', 'cloud'] as const;
 export type SessionKind = (typeof sessionKinds)[number];
 
+export const executionEnvironmentModes = ['local', 'new_worktree', 'worktree'] as const;
+export type ExecutionEnvironmentMode = (typeof executionEnvironmentModes)[number];
+
+export const worktreeStatuses = ['pending', 'ready', 'missing', 'broken', 'removed'] as const;
+export type WorktreeStatus = (typeof worktreeStatuses)[number];
+
 export const conversationThreadSorts = ['latest', 'alphabetical'] as const;
 export type ConversationThreadSort = (typeof conversationThreadSorts)[number];
 
