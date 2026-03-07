@@ -34,6 +34,19 @@ interface ConversationShellWorkspaceSectionProps {
               kind: 'workspace';
               label: string;
               absolutePath: string;
+              executionEnvironmentMode: 'local' | 'new_worktree';
+              executionBranch?: string;
+              baseBranch?: string;
+          }
+        | {
+              kind: 'worktree';
+              label: string;
+              absolutePath: string;
+              branch: string;
+              baseBranch: string;
+              baseWorkspaceLabel: string;
+              baseWorkspacePath: string;
+              worktreeId: string;
           };
     pendingPermissions: PermissionRecord[];
     permissionWorkspaces?: Record<
@@ -78,6 +91,7 @@ interface ConversationShellWorkspaceSectionProps {
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
     modePanel: ReactNode;
+    executionEnvironmentPanel?: ReactNode;
     attachedSkillsPanel?: ReactNode;
     diffCheckpointPanel?: ReactNode;
     onSelectSession: (sessionId: string) => void;
@@ -128,6 +142,7 @@ export function ConversationShellWorkspaceSection({
     modelOptions,
     runErrorMessage,
     modePanel,
+    executionEnvironmentPanel,
     attachedSkillsPanel,
     diffCheckpointPanel,
     onSelectSession,
@@ -180,6 +195,7 @@ export function ConversationShellWorkspaceSection({
                 providerOptions={providerOptions}
                 modelOptions={modelOptions}
                 runErrorMessage={runErrorMessage}
+                {...(executionEnvironmentPanel ? { executionEnvironmentPanel } : {})}
                 onSelectSession={onSelectSession}
                 onSelectRun={onSelectRun}
                 onProviderChange={onProviderChange}

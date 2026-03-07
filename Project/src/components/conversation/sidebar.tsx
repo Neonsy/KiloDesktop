@@ -174,9 +174,13 @@ export function ConversationSidebar({
                             onGroupViewChange(event.target.value === 'branch' ? 'branch' : 'workspace');
                         }}>
                         <option value='workspace'>Workspace View</option>
-                        <option value='branch'>Branch View</option>
+                        <option value='branch'>Conversation Branches</option>
                     </select>
                 </div>
+                <p className='text-muted-foreground text-[11px]'>
+                    “Conversation Branches” shows message lineage only. Execution isolation for agent/orchestrator lives
+                    in the workspace panel as local workspace vs managed worktree.
+                </p>
 
                 {scopeFilter === 'workspace' || workspaceFilter ? (
                     <select
@@ -324,8 +328,8 @@ export function ConversationSidebar({
                                             </div>
                                             <p className='text-muted-foreground mt-0.5 text-xs'>
                                                 {thread.anchorKind === 'workspace'
-                                                    ? `workspace · ${thread.anchorId ?? 'unknown'}`
-                                                    : 'playground'}
+                                                    ? `${thread.topLevelTab === 'chat' ? 'workspace conversation branch' : thread.worktreeId ? 'managed worktree execution' : thread.executionEnvironmentMode === 'new_worktree' ? 'queued worktree execution' : 'local workspace execution'} · ${thread.anchorId ?? 'unknown'}`
+                                                    : 'playground conversation branch'}
                                             </p>
                                             {tagIds.length > 0 ? (
                                                 <div className='mt-1 flex flex-wrap gap-1'>

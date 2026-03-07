@@ -1,0 +1,267 @@
+import { useEffect, useState } from 'react';
+
+import { Button } from '@/web/components/ui/button';
+
+import type { ThreadListRecord, WorktreeRecord } from '@/app/backend/persistence/types';
+import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+
+interface ExecutionEnvironmentPanelProps {
+    topLevelTab: TopLevelTab;
+    selectedThread: ThreadListRecord | undefined;
+    workspaceScope:
+        | {
+              kind: 'detached';
+          }
+        | {
+              kind: 'workspace';
+              label: string;
+              absolutePath: string;
+              executionEnvironmentMode: 'local' | 'new_worktree';
+              executionBranch?: string;
+              baseBranch?: string;
+          }
+        | {
+              kind: 'worktree';
+              label: string;
+              absolutePath: string;
+              branch: string;
+              baseBranch: string;
+              baseWorkspaceLabel: string;
+              baseWorkspacePath: string;
+              worktreeId: string;
+          };
+    worktrees: WorktreeRecord[];
+    busy: boolean;
+    onConfigureThread: (input: {
+        mode: 'local' | 'new_worktree' | 'worktree';
+        executionBranch?: string;
+        baseBranch?: string;
+        worktreeId?: string;
+    }) => void;
+    onRefreshWorktree: (worktreeId: string) => void;
+    onRemoveWorktree: (worktreeId: string) => void;
+    onRemoveOrphaned: () => void;
+}
+
+type EnvironmentDraft = 'local' | 'new_worktree' | 'worktree';
+
+export function ExecutionEnvironmentPanel({
+    topLevelTab,
+    selectedThread,
+    workspaceScope,
+    worktrees,
+    busy,
+    onConfigureThread,
+    onRefreshWorktree,
+    onRemoveWorktree,
+    onRemoveOrphaned,
+}: ExecutionEnvironmentPanelProps) {
+    const [draftMode, setDraftMode] = useState<EnvironmentDraft>('local');
+    const [branch, setBranch] = useState('');
+    const [baseBranch, setBaseBranch] = useState('');
+    const [selectedWorktreeId, setSelectedWorktreeId] = useState('');
+
+    useEffect(() => {
+        if (workspaceScope.kind === 'worktree') {
+            setDraftMode('worktree');
+            setBranch(workspaceScope.branch);
+            setBaseBranch(workspaceScope.baseBranch);
+            setSelectedWorktreeId(workspaceScope.worktreeId);
+            return;
+        }
+
+        if (workspaceScope.kind === 'workspace') {
+            setDraftMode(workspaceScope.executionEnvironmentMode);
+            setBranch(workspaceScope.executionBranch ?? '');
+            setBaseBranch(workspaceScope.baseBranch ?? '');
+            setSelectedWorktreeId('');
+            return;
+        }
+
+        setDraftMode('local');
+        setBranch('');
+        setBaseBranch('');
+        setSelectedWorktreeId('');
+    }, [workspaceScope]);
+
+    if (!selectedThread) {
+        return null;
+    }
+
+    if (topLevelTab === 'chat') {
+        return (
+            <section className='border-border bg-card mb-3 rounded-2xl border p-3'>
+                <p className='text-sm font-semibold'>Conversation Branching</p>
+                <p className='text-muted-foreground mt-1 text-xs'>
+                    Chat uses read-only conversation branches only. Selecting “Conversation Branches” in the sidebar
+                    changes message lineage, not the filesystem. Chat never creates a managed worktree.
+                </p>
+            </section>
+        );
+    }
+
+    if (workspaceScope.kind === 'detached') {
+        return (
+            <section className='border-border bg-card mb-3 rounded-2xl border p-3'>
+                <p className='text-sm font-semibold'>Execution Environment</p>
+                <p className='text-muted-foreground mt-1 text-xs'>
+                    Detached threads have no filesystem authority. Use a workspace thread to choose between the local
+                    workspace and a managed worktree environment.
+                </p>
+            </section>
+        );
+    }
+
+    return (
+        <section className='border-border bg-card mb-3 rounded-2xl border p-3'>
+            <div className='flex flex-wrap items-start justify-between gap-3'>
+                <div>
+                    <p className='text-sm font-semibold'>Execution Environment</p>
+                    <p className='text-muted-foreground mt-1 text-xs'>
+                        Agent and orchestrator threads can run in the local workspace or a managed worktree. This is
+                        separate from chat-style conversation branching.
+                    </p>
+                </div>
+                <div className='text-muted-foreground text-right text-xs [font-variant-numeric:tabular-nums]'>
+                    <p>{worktrees.length} managed</p>
+                    <p>{workspaceScope.kind === 'worktree' ? workspaceScope.branch : 'local workspace'}</p>
+                </div>
+            </div>
+
+            <div className='mt-3 grid gap-2 md:grid-cols-3'>
+                <Button
+                    type='button'
+                    variant={draftMode === 'local' ? 'secondary' : 'outline'}
+                    disabled={busy}
+                    onClick={() => {
+                        setDraftMode('local');
+                    }}>
+                    Local Workspace
+                </Button>
+                <Button
+                    type='button'
+                    variant={draftMode === 'new_worktree' ? 'secondary' : 'outline'}
+                    disabled={busy}
+                    onClick={() => {
+                        setDraftMode('new_worktree');
+                    }}>
+                    New Worktree
+                </Button>
+                <Button
+                    type='button'
+                    variant={draftMode === 'worktree' ? 'secondary' : 'outline'}
+                    disabled={busy || worktrees.length === 0}
+                    onClick={() => {
+                        setDraftMode('worktree');
+                    }}>
+                    Existing Worktree
+                </Button>
+            </div>
+
+            {draftMode === 'new_worktree' ? (
+                <div className='mt-3 grid gap-2 md:grid-cols-2'>
+                    <input
+                        value={branch}
+                        onChange={(event) => {
+                            setBranch(event.target.value);
+                        }}
+                        className='border-border bg-background h-11 rounded-xl border px-3 text-sm'
+                        placeholder='feature/my-branch'
+                    />
+                    <input
+                        value={baseBranch}
+                        onChange={(event) => {
+                            setBaseBranch(event.target.value);
+                        }}
+                        className='border-border bg-background h-11 rounded-xl border px-3 text-sm'
+                        placeholder='base branch (optional)'
+                    />
+                </div>
+            ) : null}
+
+            {draftMode === 'worktree' ? (
+                <select
+                    value={selectedWorktreeId}
+                    onChange={(event) => {
+                        setSelectedWorktreeId(event.target.value);
+                    }}
+                    className='border-border bg-background mt-3 h-11 w-full rounded-xl border px-3 text-sm'>
+                    <option value=''>Select managed worktree</option>
+                    {worktrees.map((worktree) => (
+                        <option key={worktree.id} value={worktree.id}>
+                            {worktree.branch} · {worktree.label} · {worktree.status}
+                        </option>
+                    ))}
+                </select>
+            ) : null}
+
+            <div className='mt-3 flex flex-wrap gap-2'>
+                <Button
+                    type='button'
+                    disabled={
+                        busy ||
+                        (draftMode === 'new_worktree' && branch.trim().length === 0) ||
+                        (draftMode === 'worktree' && selectedWorktreeId.trim().length === 0)
+                    }
+                    onClick={() => {
+                        onConfigureThread({
+                            mode: draftMode,
+                            ...(draftMode === 'new_worktree' && branch.trim().length > 0
+                                ? { executionBranch: branch.trim() }
+                                : {}),
+                            ...(draftMode === 'new_worktree' && baseBranch.trim().length > 0
+                                ? { baseBranch: baseBranch.trim() }
+                                : {}),
+                            ...(draftMode === 'worktree' ? { worktreeId: selectedWorktreeId } : {}),
+                        });
+                    }}>
+                    {draftMode === 'local'
+                        ? 'Use Local Workspace'
+                        : draftMode === 'new_worktree'
+                          ? 'Queue Managed Worktree'
+                          : 'Attach Managed Worktree'}
+                </Button>
+                {workspaceScope.kind === 'worktree' ? (
+                    <>
+                        <Button
+                            type='button'
+                            variant='outline'
+                            disabled={busy}
+                            onClick={() => {
+                                onRefreshWorktree(workspaceScope.worktreeId);
+                            }}>
+                            Refresh Status
+                        </Button>
+                        <Button
+                            type='button'
+                            variant='outline'
+                            disabled={busy}
+                            onClick={() => {
+                                onRemoveWorktree(workspaceScope.worktreeId);
+                            }}>
+                            Remove Worktree
+                        </Button>
+                    </>
+                ) : null}
+                <Button type='button' variant='outline' disabled={busy || worktrees.length === 0} onClick={onRemoveOrphaned}>
+                    Cleanup Orphaned
+                </Button>
+            </div>
+
+            <div className='text-muted-foreground mt-3 text-xs'>
+                {workspaceScope.kind === 'worktree' ? (
+                    <p>
+                        Running in managed worktree <span className='font-medium text-foreground'>{workspaceScope.branch}</span>
+                        {' '}from {workspaceScope.baseWorkspaceLabel}. Filesystem operations, diffs, checkpoints, and shell
+                        commands use {workspaceScope.absolutePath}.
+                    </p>
+                ) : (
+                    <p>
+                        Running in the local workspace at {workspaceScope.absolutePath}. If you queue a new worktree, it
+                        will be created lazily on the first run that needs a real execution environment.
+                    </p>
+                )}
+            </div>
+        </section>
+    );
+}

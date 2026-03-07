@@ -1,7 +1,8 @@
-import { checkpointStore, diffStore, runStore, threadStore, workspaceRootStore } from '@/app/backend/persistence/stores';
+import { checkpointStore, diffStore, runStore, threadStore } from '@/app/backend/persistence/stores';
 import type { CheckpointRecord, DiffRecord } from '@/app/backend/persistence/types';
 import type { CheckpointRollbackInput, CheckpointRollbackResult, TopLevelTab } from '@/app/backend/runtime/contracts';
 import { captureGitWorkspaceArtifact, rollbackWorkspaceToArtifact } from '@/app/backend/runtime/services/checkpoint/gitWorkspace';
+import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 
 function isMutatingCheckpointMode(topLevelTab: TopLevelTab, modeKey: string): boolean {
     return (topLevelTab === 'agent' && modeKey === 'code') || topLevelTab === 'orchestrator';
@@ -26,6 +27,7 @@ export async function ensureCheckpointForRun(input: {
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint?: string;
+    worktreeId?: CheckpointRecord['worktreeId'];
 }): Promise<{ diff: DiffRecord; checkpoint?: CheckpointRecord } | null> {
     if (!isMutatingCheckpointMode(input.topLevelTab, input.modeKey) || !input.workspaceFingerprint) {
         return null;
@@ -41,13 +43,18 @@ export async function ensureCheckpointForRun(input: {
         };
     }
 
-    const workspaceRoot = await workspaceRootStore.getByFingerprint(input.profileId, input.workspaceFingerprint);
-    const artifact = workspaceRoot
-        ? await captureGitWorkspaceArtifact({
-              workspaceRootPath: workspaceRoot.absolutePath,
-              workspaceLabel: workspaceRoot.label,
-          })
-        : {
+    const workspaceContext = await workspaceContextService.resolveExplicit({
+        profileId: input.profileId,
+        workspaceFingerprint: input.workspaceFingerprint,
+        ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+    });
+    const artifact =
+        workspaceContext.kind === 'workspace' || workspaceContext.kind === 'worktree'
+            ? await captureGitWorkspaceArtifact({
+                  workspaceRootPath: workspaceContext.absolutePath,
+                  workspaceLabel: workspaceContext.label,
+              })
+            : {
               kind: 'unsupported' as const,
               workspaceRootPath: 'Unresolved workspace root',
               workspaceLabel: input.workspaceFingerprint,
@@ -78,6 +85,7 @@ export async function ensureCheckpointForRun(input: {
         runId: input.runId,
         diffId: diff.id,
         workspaceFingerprint: input.workspaceFingerprint,
+        ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
         summary: summarizeDiff(diff),
@@ -125,6 +133,7 @@ export async function createCheckpoint(input: {
         topLevelTab: sessionThread.thread.topLevelTab,
         modeKey: sessionThread.thread.topLevelTab === 'agent' ? 'code' : 'orchestrate',
         ...(sessionThread.workspaceFingerprint ? { workspaceFingerprint: sessionThread.workspaceFingerprint } : {}),
+        ...(sessionThread.sessionWorktreeId ? { worktreeId: sessionThread.sessionWorktreeId } : {}),
     });
     if (!result) {
         return {
@@ -157,8 +166,12 @@ export async function rollbackCheckpoint(input: CheckpointRollbackInput): Promis
         };
     }
 
-    const workspaceRoot = await workspaceRootStore.getByFingerprint(input.profileId, checkpoint.workspaceFingerprint);
-    if (!workspaceRoot) {
+    const workspaceContext = await workspaceContextService.resolveExplicit({
+        profileId: input.profileId,
+        workspaceFingerprint: checkpoint.workspaceFingerprint,
+        ...(checkpoint.worktreeId ? { worktreeId: checkpoint.worktreeId } : {}),
+    });
+    if (workspaceContext.kind === 'detached') {
         return {
             rolledBack: false,
             reason: 'workspace_unresolved',
@@ -176,7 +189,7 @@ export async function rollbackCheckpoint(input: CheckpointRollbackInput): Promis
     }
 
     const rollback = await rollbackWorkspaceToArtifact({
-        workspaceRootPath: workspaceRoot.absolutePath,
+        workspaceRootPath: workspaceContext.absolutePath,
         artifact: diff.artifact,
     });
     if (rollback.isErr()) {

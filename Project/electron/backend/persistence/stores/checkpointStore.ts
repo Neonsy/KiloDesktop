@@ -11,6 +11,7 @@ function mapCheckpointRecord(row: {
     run_id: string;
     diff_id: string;
     workspace_fingerprint: string;
+    worktree_id: string | null;
     top_level_tab: string;
     mode_key: string;
     summary: string;
@@ -24,6 +25,7 @@ function mapCheckpointRecord(row: {
         runId: parseEntityId(row.run_id, 'checkpoints.run_id', 'run'),
         diffId: row.diff_id,
         workspaceFingerprint: row.workspace_fingerprint,
+        ...(row.worktree_id ? { worktreeId: parseEntityId(row.worktree_id, 'checkpoints.worktree_id', 'wt') } : {}),
         topLevelTab: parseEnumValue(row.top_level_tab, 'checkpoints.top_level_tab', topLevelTabs),
         modeKey: row.mode_key,
         summary: row.summary,
@@ -39,6 +41,7 @@ const CHECKPOINT_COLUMNS = [
     'run_id',
     'diff_id',
     'workspace_fingerprint',
+    'worktree_id',
     'top_level_tab',
     'mode_key',
     'summary',
@@ -53,6 +56,7 @@ export class CheckpointStore {
         runId: CheckpointRecord['runId'];
         diffId: string;
         workspaceFingerprint: string;
+        worktreeId?: CheckpointRecord['worktreeId'];
         topLevelTab: CheckpointRecord['topLevelTab'];
         modeKey: string;
         summary: string;
@@ -73,6 +77,7 @@ export class CheckpointStore {
                 run_id: input.runId,
                 diff_id: input.diffId,
                 workspace_fingerprint: input.workspaceFingerprint,
+                worktree_id: input.worktreeId ?? null,
                 top_level_tab: input.topLevelTab,
                 mode_key: input.modeKey,
                 summary: input.summary,

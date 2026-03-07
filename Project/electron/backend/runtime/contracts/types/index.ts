@@ -11,3 +11,4 @@ export * from '@/app/backend/runtime/contracts/types/plan';
 export * from '@/app/backend/runtime/contracts/types/orchestrator';
 export * from '@/app/backend/runtime/contracts/types/runtime';
 export * from '@/app/backend/runtime/contracts/types/registry';
+export * from '@/app/backend/runtime/contracts/types/worktree';

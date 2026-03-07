@@ -9,6 +9,7 @@ interface AttachedSkillsPanelProps {
     profileId: string;
     sessionId: EntityId<'sess'>;
     workspaceFingerprint?: string;
+    worktreeId?: EntityId<'wt'>;
     attachedSkills: SkillfileDefinition[];
     missingAssetKeys: string[];
 }
@@ -26,6 +27,7 @@ export function AttachedSkillsPanel({
     profileId,
     sessionId,
     workspaceFingerprint,
+    worktreeId,
     attachedSkills,
     missingAssetKeys,
 }: AttachedSkillsPanelProps) {
@@ -38,6 +40,7 @@ export function AttachedSkillsPanel({
             profileId,
             ...(deferredQuery.length > 0 ? { query: deferredQuery } : {}),
             ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+            ...(worktreeId ? { worktreeId } : {}),
         },
         {
             refetchOnWindowFocus: false,

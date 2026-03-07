@@ -7,6 +7,7 @@ import { persistRunStart } from '@/app/backend/runtime/services/runExecution/per
 import { prepareRunStart } from '@/app/backend/runtime/services/runExecution/prepareRunStart';
 import { runToTerminalState } from '@/app/backend/runtime/services/runExecution/runToTerminalState';
 import { moveRunToAbortedState } from '@/app/backend/runtime/services/runExecution/terminalState';
+import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 import type { StartRunInput, StartRunResult } from '@/app/backend/runtime/services/runExecution/types';
 import { appLog } from '@/app/main/logging';
 
@@ -100,7 +101,23 @@ export class RunExecutionService {
             return toRejectedStartResult(error);
         }
 
-        const preparedResult = await prepareRunStart(input);
+        const workspaceContext = await workspaceContextService.resolveForSession({
+            profileId: input.profileId,
+            sessionId: input.sessionId,
+            topLevelTab: input.topLevelTab,
+            allowLazyWorktreeCreation: input.topLevelTab !== 'chat',
+        });
+        if (!workspaceContext) {
+            return {
+                accepted: false,
+                reason: 'not_found',
+            };
+        }
+
+        const preparedResult = await prepareRunStart({
+            ...input,
+            ...(workspaceContext.kind === 'worktree' ? { worktreeId: workspaceContext.worktree.id } : {}),
+        });
         if (preparedResult.isErr()) {
             appLog.warn({
                 tag: 'run-execution',
@@ -121,6 +138,7 @@ export class RunExecutionService {
         }
 
         const prepared = preparedResult.value;
+        prepared.workspaceContext = workspaceContext;
         const persisted = await persistRunStart({
             input,
             prepared,
@@ -156,6 +174,7 @@ export class RunExecutionService {
             ...(prepared.kiloRouting ? { kiloRouting: prepared.kiloRouting } : {}),
             ...(prepared.runContext ? { contextMessages: prepared.runContext.messages } : {}),
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+            ...(workspaceContext.kind === 'worktree' ? { worktreeId: workspaceContext.worktree.id } : {}),
             assistantMessageId: persisted.assistantMessageId,
             signal: controller.signal,
         }).finally(() => {

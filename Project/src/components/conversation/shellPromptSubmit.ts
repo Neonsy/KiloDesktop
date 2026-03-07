@@ -7,6 +7,7 @@ import {
 
 import type { RuntimeRunOptions } from '@/app/backend/runtime/contracts';
 import type {
+    EntityId,
     PlanStartInput,
     SessionStartRunInput,
     RuntimeProviderId,
@@ -28,6 +29,7 @@ interface SubmitPromptInput {
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint: string | undefined;
+    worktreeId?: EntityId<'wt'>;
     resolvedRunTarget: RunTargetSelection | undefined;
     runtimeOptions: RuntimeRunOptions;
     providerById: Map<RuntimeProviderId, ProviderAuthView>;
@@ -81,17 +83,18 @@ export async function submitPrompt(input: SubmitPromptInput): Promise<void> {
     }
 
     try {
-        await input.startRun({
-            profileId: input.profileId,
-            sessionId: input.selectedSessionId,
-            prompt: input.prompt.trim(),
-            topLevelTab: input.topLevelTab,
-            modeKey: input.modeKey,
-            providerId: input.resolvedRunTarget.providerId,
-            modelId: input.resolvedRunTarget.modelId,
-            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-            runtimeOptions: input.runtimeOptions,
-        });
+            await input.startRun({
+                profileId: input.profileId,
+                sessionId: input.selectedSessionId,
+                prompt: input.prompt.trim(),
+                topLevelTab: input.topLevelTab,
+                modeKey: input.modeKey,
+                providerId: input.resolvedRunTarget.providerId,
+                modelId: input.resolvedRunTarget.modelId,
+                ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
+                ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+                runtimeOptions: input.runtimeOptions,
+            });
         input.onPromptCleared();
         input.onRuntimeRefetch();
     } catch (error: unknown) {

@@ -9,6 +9,7 @@ import type {
 } from '@/app/backend/runtime/contracts/enums';
 import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
+import type { WorktreeRecord } from '@/app/backend/runtime/contracts/types/worktree';
 
 export interface StreamEventEnvelope {
     id: EntityId<'evt'>;
@@ -52,6 +53,7 @@ export interface RuntimeShellBootstrap {
     threadTags: ThreadTagRecord[];
     executionPreset: ExecutionPreset;
     workspaceRoots: WorkspaceRootRecord[];
+    worktrees: WorktreeRecord[];
     defaults: {
         providerId: string;
         modelId: string;

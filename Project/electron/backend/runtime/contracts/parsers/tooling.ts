@@ -1,6 +1,7 @@
 import { topLevelTabs } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
+    readEntityId,
     readEnumValue,
     readObject,
     readOptionalString,
@@ -13,6 +14,8 @@ export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
     const source = readObject(input, 'input');
     const args = source.args;
     const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
+    const worktreeId =
+        source.worktreeId !== undefined ? readEntityId(source.worktreeId, 'worktreeId', 'wt') : undefined;
 
     return {
         profileId: readProfileId(source),
@@ -20,6 +23,7 @@ export function parseToolInvokeInput(input: unknown): ToolInvokeInput {
         topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
         modeKey: readString(source.modeKey, 'modeKey'),
         ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
+        ...(worktreeId ? { worktreeId } : {}),
         ...(args !== undefined ? { args: readObject(args, 'args') } : {}),
     };
 }

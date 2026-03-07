@@ -4,8 +4,8 @@ import path from 'node:path';
 
 import type { RegistryScope, RegistrySourceKind } from '@/app/backend/runtime/contracts';
 import { getPersistence } from '@/app/backend/persistence/db';
-import { workspaceRootStore } from '@/app/backend/persistence/stores';
 import type { RegistryPaths } from '@/app/backend/runtime/services/registry/types';
+import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
 
 interface ParsedFrontmatter {
     attributes: Record<string, unknown>;
@@ -153,6 +153,7 @@ async function ensureDirectory(pathToEnsure: string): Promise<void> {
 export async function resolveRegistryPaths(input: {
     profileId: string;
     workspaceFingerprint?: string;
+    worktreeId?: `wt_${string}`;
 }): Promise<RegistryPaths> {
     const { dbPath } = getPersistence();
     const runtimeRoot =
@@ -167,10 +168,14 @@ export async function resolveRegistryPaths(input: {
         };
     }
 
-    const workspaceRoot = await workspaceRootStore.getByFingerprint(input.profileId, input.workspaceFingerprint);
+    const workspaceRoot = await workspaceContextService.resolveExplicit({
+        profileId: input.profileId,
+        workspaceFingerprint: input.workspaceFingerprint,
+        ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
+    });
     return {
         globalAssetsRoot,
-        ...(workspaceRoot
+        ...(workspaceRoot.kind === 'workspace' || workspaceRoot.kind === 'worktree'
             ? {
                   workspaceAssetsRoot: path.join(workspaceRoot.absolutePath, '.neonconductor'),
               }

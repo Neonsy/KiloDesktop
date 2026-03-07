@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
-import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
+import { parseEntityId, parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
 import { mapThreadListRecord, mapThreadRecord } from '@/app/backend/persistence/stores/threadStore.mapper';
 import {
     compareAnchor,
@@ -20,7 +20,7 @@ import { parseThreadTitle } from '@/app/backend/persistence/stores/threadStore.v
 import { nowIso } from '@/app/backend/persistence/stores/utils';
 import type { ThreadListRecord, ThreadRecord } from '@/app/backend/persistence/types';
 import { topLevelTabs } from '@/app/backend/runtime/contracts';
-import type { TopLevelTab } from '@/app/backend/runtime/contracts';
+import type { EntityId, ExecutionEnvironmentMode, TopLevelTab } from '@/app/backend/runtime/contracts';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 type ThreadGroupView = 'workspace' | 'branch';
@@ -37,6 +37,10 @@ export class ThreadStore {
         topLevelTab: TopLevelTab;
         parentThreadId?: string;
         rootThreadId?: string;
+        executionEnvironmentMode?: ExecutionEnvironmentMode;
+        executionBranch?: string;
+        baseBranch?: string;
+        worktreeId?: EntityId<'wt'>;
     }): Promise<OperationalResult<ThreadRecord>> {
         const title = parseThreadTitle(input.title);
         if (title.isErr()) {
@@ -67,6 +71,10 @@ export class ThreadStore {
 
         let resolvedParentThreadId: string | undefined;
         let resolvedRootThreadId: string | undefined;
+        let inheritedExecutionEnvironmentMode = input.executionEnvironmentMode;
+        let inheritedExecutionBranch = input.executionBranch;
+        let inheritedBaseBranch = input.baseBranch;
+        let inheritedWorktreeId = input.worktreeId;
 
         if (input.parentThreadId) {
             const parent = await db
@@ -90,6 +98,15 @@ export class ThreadStore {
 
             resolvedParentThreadId = parent.id;
             resolvedRootThreadId = parent.root_thread_id;
+            if (inheritedExecutionEnvironmentMode === undefined) {
+                const parentThread = await this.getById(input.profileId, parent.id);
+                if (parentThread) {
+                    inheritedExecutionEnvironmentMode = parentThread.executionEnvironmentMode;
+                    inheritedExecutionBranch = parentThread.executionBranch;
+                    inheritedBaseBranch = parentThread.baseBranch;
+                    inheritedWorktreeId = parentThread.worktreeId;
+                }
+            }
         }
 
         if (input.rootThreadId) {
@@ -126,6 +143,10 @@ export class ThreadStore {
                 top_level_tab: input.topLevelTab,
                 parent_thread_id: resolvedParentThreadId ?? null,
                 root_thread_id: resolvedRootThreadId ?? threadId,
+                execution_environment_mode: inheritedExecutionEnvironmentMode ?? 'local',
+                execution_branch: inheritedExecutionBranch ?? null,
+                base_branch: inheritedBaseBranch ?? null,
+                worktree_id: inheritedWorktreeId ?? null,
                 last_assistant_at: null,
                 created_at: now,
                 updated_at: now,
@@ -177,6 +198,7 @@ export class ThreadStore {
         sessionId: string
     ): Promise<null | {
         thread: ThreadRecord;
+        sessionWorktreeId?: EntityId<'wt'>;
         scope: 'detached' | 'workspace';
         workspaceFingerprint?: string;
     }> {
@@ -186,6 +208,7 @@ export class ThreadStore {
             .innerJoin('threads', 'threads.id', 'sessions.thread_id')
             .innerJoin('conversations', 'conversations.id', 'threads.conversation_id')
             .select(SESSION_THREAD_WITH_CONVERSATION_COLUMNS)
+            .select(['sessions.worktree_id as session_worktree_id'])
             .where('sessions.id', '=', sessionId)
             .where('sessions.profile_id', '=', profileId)
             .executeTakeFirst();
@@ -197,8 +220,54 @@ export class ThreadStore {
         return {
             thread: mapThreadRecord(row),
             scope: row.scope === 'workspace' ? 'workspace' : 'detached',
+            ...(row.session_worktree_id
+                ? { sessionWorktreeId: parseEntityId(row.session_worktree_id, 'sessions.worktree_id', 'wt') }
+                : {}),
             ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
         };
+    }
+
+    async setExecutionEnvironment(input: {
+        profileId: string;
+        threadId: string;
+        mode: ExecutionEnvironmentMode;
+        executionBranch?: string;
+        baseBranch?: string;
+        worktreeId?: EntityId<'wt'>;
+    }): Promise<ThreadRecord | null> {
+        const { db } = getPersistence();
+        const updated = await db
+            .updateTable('threads')
+            .set({
+                execution_environment_mode: input.mode,
+                execution_branch: input.executionBranch ?? null,
+                base_branch: input.baseBranch ?? null,
+                worktree_id: input.worktreeId ?? null,
+                updated_at: nowIso(),
+            })
+            .where('id', '=', input.threadId)
+            .where('profile_id', '=', input.profileId)
+            .returning(THREAD_COLUMNS)
+            .executeTakeFirst();
+
+        return updated ? mapThreadRecord(updated) : null;
+    }
+
+    async bindWorktree(input: {
+        profileId: string;
+        threadId: string;
+        worktreeId: EntityId<'wt'>;
+        branch: string;
+        baseBranch: string;
+    }): Promise<ThreadRecord | null> {
+        return this.setExecutionEnvironment({
+            profileId: input.profileId,
+            threadId: input.threadId,
+            mode: 'worktree',
+            executionBranch: input.branch,
+            baseBranch: input.baseBranch,
+            worktreeId: input.worktreeId,
+        });
     }
 
     async list(input: {
@@ -227,6 +296,10 @@ export class ThreadStore {
                 'threads.top_level_tab as top_level_tab',
                 'threads.parent_thread_id as parent_thread_id',
                 'threads.root_thread_id as root_thread_id',
+                'threads.execution_environment_mode as execution_environment_mode',
+                'threads.execution_branch as execution_branch',
+                'threads.base_branch as base_branch',
+                'threads.worktree_id as worktree_id',
                 'threads.last_assistant_at as last_assistant_at',
                 'threads.created_at as created_at',
                 'threads.updated_at as updated_at',
@@ -244,6 +317,10 @@ export class ThreadStore {
                 'threads.top_level_tab',
                 'threads.parent_thread_id',
                 'threads.root_thread_id',
+                'threads.execution_environment_mode',
+                'threads.execution_branch',
+                'threads.base_branch',
+                'threads.worktree_id',
                 'threads.last_assistant_at',
                 'threads.created_at',
                 'threads.updated_at',

@@ -17,6 +17,7 @@ import { useSessionRunSelection } from '@/web/components/conversation/hooks/useS
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
 import { AttachedSkillsPanel } from '@/web/components/conversation/panels/attachedSkillsPanel';
 import { DiffCheckpointPanel } from '@/web/components/conversation/panels/diffCheckpointPanel';
+import { ExecutionEnvironmentPanel } from '@/web/components/conversation/panels/executionEnvironmentPanel';
 import { MessageEditDialog } from '@/web/components/conversation/panels/messageEditDialog';
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { DEFAULT_RUN_OPTIONS, isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
@@ -116,6 +117,9 @@ export function ConversationShell({
             ...(selectedThread?.workspaceFingerprint
                 ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
                 : {}),
+            ...(selectedThread?.worktreeId
+                ? { worktreeId: selectedThread.worktreeId }
+                : {}),
         },
         {
             enabled: topLevelTab === 'agent',
@@ -138,6 +142,12 @@ export function ConversationShell({
         onSelectedWorkspaceFingerprintChange?.(selectedThread?.workspaceFingerprint);
     }, [onSelectedWorkspaceFingerprintChange, selectedThread?.workspaceFingerprint]);
 
+    const visibleManagedWorktrees = selectedThread?.workspaceFingerprint
+        ? (queries.shellBootstrapQuery.data?.worktrees ?? []).filter(
+              (worktree) => worktree.workspaceFingerprint === selectedThread.workspaceFingerprint
+          )
+        : [];
+
     const sessionRunSelection = useSessionRunSelection({
         allSessions: queries.sessionsQuery.data?.sessions ?? [],
         allRuns: queries.runsQuery.data?.runs ?? [],
@@ -159,6 +169,21 @@ export function ConversationShell({
             uiState.setSelectedRunId(runId);
         },
     });
+    const selectedSession = selectedSessionId
+        ? sessionRunSelection.sessions.find((session) => session.id === selectedSessionId)
+        : undefined;
+    const selectedManagedWorktree =
+        selectedThread?.workspaceFingerprint &&
+        (selectedSession?.worktreeId ?? selectedThread.worktreeId)
+            ? queries.shellBootstrapQuery.data?.worktrees.find(
+                  (worktree) => worktree.id === (selectedSession?.worktreeId ?? selectedThread.worktreeId)
+              )
+            : undefined;
+    const selectedThreadWorktreeId = isEntityId(selectedThread?.worktreeId, 'wt') ? selectedThread.worktreeId : undefined;
+    const selectedSessionWorktreeId = isEntityId(selectedSession?.worktreeId, 'wt')
+        ? selectedSession.worktreeId
+        : undefined;
+    const effectiveSelectedWorktreeId = selectedSessionWorktreeId ?? selectedThreadWorktreeId;
 
     const runTargetState = useConversationShellRunTarget({
         providers: queries.shellBootstrapQuery.data?.providers ?? [],
@@ -174,6 +199,7 @@ export function ConversationShell({
         topLevelTab,
         modeKey,
         workspaceFingerprint: selectedThread?.workspaceFingerprint,
+        ...(effectiveSelectedWorktreeId ? { worktreeId: effectiveSelectedWorktreeId } : {}),
         resolvedRunTarget: runTargetState.resolvedRunTarget,
         providerById: runTargetState.providerById,
         runtimeOptions: DEFAULT_RUN_OPTIONS,
@@ -305,16 +331,44 @@ export function ConversationShell({
                 executionPreset={queries.shellBootstrapQuery.data?.executionPreset ?? 'standard'}
                 workspaceScope={
                     selectedThread?.workspaceFingerprint
-                        ? selectedWorkspaceRoot
+                        ? selectedManagedWorktree
+                            ? {
+                                  kind: 'worktree' as const,
+                                  label: selectedManagedWorktree.label,
+                                  absolutePath: selectedManagedWorktree.absolutePath,
+                                  branch: selectedManagedWorktree.branch,
+                                  baseBranch: selectedManagedWorktree.baseBranch,
+                                  baseWorkspaceLabel: selectedWorkspaceRoot?.label ?? selectedThread.workspaceFingerprint,
+                                  baseWorkspacePath:
+                                      selectedWorkspaceRoot?.absolutePath ?? 'Unresolved workspace root',
+                                  worktreeId: selectedManagedWorktree.id,
+                              }
+                            : selectedWorkspaceRoot
                             ? {
                                   kind: 'workspace',
                                   label: selectedWorkspaceRoot.label,
                                   absolutePath: selectedWorkspaceRoot.absolutePath,
+                                  executionEnvironmentMode:
+                                      selectedThread.executionEnvironmentMode === 'worktree'
+                                          ? 'local'
+                                          : selectedThread.executionEnvironmentMode,
+                                  ...(selectedThread.executionBranch
+                                      ? { executionBranch: selectedThread.executionBranch }
+                                      : {}),
+                                  ...(selectedThread.baseBranch ? { baseBranch: selectedThread.baseBranch } : {}),
                               }
                             : {
                                   kind: 'workspace',
                                   label: selectedThread.workspaceFingerprint,
                                   absolutePath: 'Unresolved workspace root',
+                                  executionEnvironmentMode:
+                                      selectedThread.executionEnvironmentMode === 'worktree'
+                                          ? 'local'
+                                          : selectedThread.executionEnvironmentMode,
+                                  ...(selectedThread.executionBranch
+                                      ? { executionBranch: selectedThread.executionBranch }
+                                      : {}),
+                                  ...(selectedThread.baseBranch ? { baseBranch: selectedThread.baseBranch } : {}),
                               }
                         : {
                               kind: 'detached',
@@ -412,6 +466,117 @@ export function ConversationShell({
                             : {})}
                     />
                 }
+                executionEnvironmentPanel={
+                    <ExecutionEnvironmentPanel
+                        topLevelTab={topLevelTab}
+                        selectedThread={selectedThread}
+                        workspaceScope={
+                            selectedThread?.workspaceFingerprint
+                                ? selectedManagedWorktree
+                                    ? {
+                                          kind: 'worktree' as const,
+                                          label: selectedManagedWorktree.label,
+                                          absolutePath: selectedManagedWorktree.absolutePath,
+                                          branch: selectedManagedWorktree.branch,
+                                          baseBranch: selectedManagedWorktree.baseBranch,
+                                          baseWorkspaceLabel:
+                                              selectedWorkspaceRoot?.label ?? selectedThread.workspaceFingerprint,
+                                          baseWorkspacePath:
+                                              selectedWorkspaceRoot?.absolutePath ?? 'Unresolved workspace root',
+                                          worktreeId: selectedManagedWorktree.id,
+                                      }
+                                    : {
+                                          kind: 'workspace' as const,
+                                          label: selectedWorkspaceRoot?.label ?? selectedThread.workspaceFingerprint,
+                                          absolutePath:
+                                              selectedWorkspaceRoot?.absolutePath ?? 'Unresolved workspace root',
+                                          executionEnvironmentMode:
+                                              selectedThread.executionEnvironmentMode === 'worktree'
+                                                  ? 'local'
+                                                  : selectedThread.executionEnvironmentMode,
+                                          ...(selectedThread.executionBranch
+                                              ? { executionBranch: selectedThread.executionBranch }
+                                              : {}),
+                                          ...(selectedThread.baseBranch
+                                              ? { baseBranch: selectedThread.baseBranch }
+                                              : {}),
+                                      }
+                                : {
+                                      kind: 'detached' as const,
+                                  }
+                        }
+                        worktrees={visibleManagedWorktrees}
+                        busy={
+                            mutations.configureThreadWorktreeMutation.isPending ||
+                            mutations.refreshWorktreeMutation.isPending ||
+                            mutations.removeWorktreeMutation.isPending ||
+                            mutations.removeOrphanedWorktreesMutation.isPending
+                        }
+                        onConfigureThread={(executionInput) => {
+                            if (!selectedThread || !isEntityId(selectedThread.id, 'thr')) {
+                                return;
+                            }
+                            if (
+                                executionInput.mode === 'worktree' &&
+                                !isEntityId(executionInput.worktreeId, 'wt')
+                            ) {
+                                return;
+                            }
+                            const selectedWorktreeId =
+                                executionInput.mode === 'worktree' && isEntityId(executionInput.worktreeId, 'wt')
+                                    ? executionInput.worktreeId
+                                    : undefined;
+
+                            void mutations.configureThreadWorktreeMutation
+                                .mutateAsync({
+                                    profileId,
+                                    threadId: selectedThread.id,
+                                    mode: executionInput.mode,
+                                    ...(executionInput.executionBranch
+                                        ? { executionBranch: executionInput.executionBranch }
+                                        : {}),
+                                    ...(executionInput.baseBranch ? { baseBranch: executionInput.baseBranch } : {}),
+                                    ...(selectedWorktreeId ? { worktreeId: selectedWorktreeId } : {}),
+                                })
+                                .then(() => {
+                                    void Promise.all([
+                                        queries.listThreadsQuery.refetch(),
+                                        queries.shellBootstrapQuery.refetch(),
+                                        queries.sessionsQuery.refetch(),
+                                    ]);
+                                });
+                        }}
+                        onRefreshWorktree={(worktreeId) => {
+                            if (!isEntityId(worktreeId, 'wt')) {
+                                return;
+                            }
+                            void mutations.refreshWorktreeMutation
+                                .mutateAsync({ profileId, worktreeId })
+                                .then(() => queries.shellBootstrapQuery.refetch());
+                        }}
+                        onRemoveWorktree={(worktreeId) => {
+                            if (!isEntityId(worktreeId, 'wt')) {
+                                return;
+                            }
+                            void mutations.removeWorktreeMutation
+                                .mutateAsync({ profileId, worktreeId, removeFiles: true })
+                                .then(() => {
+                                    void Promise.all([
+                                        queries.shellBootstrapQuery.refetch(),
+                                        queries.listThreadsQuery.refetch(),
+                                        queries.sessionsQuery.refetch(),
+                                    ]);
+                                });
+                        }}
+                        onRemoveOrphaned={() => {
+                            void mutations.removeOrphanedWorktreesMutation
+                                .mutateAsync({ profileId, ...(selectedThread?.workspaceFingerprint ? { workspaceFingerprint: selectedThread.workspaceFingerprint } : {}) })
+                                .then(() => {
+                                    void queries.shellBootstrapQuery.refetch();
+                                });
+                        }}
+                    />
+                }
                 attachedSkillsPanel={
                     topLevelTab === 'agent' && isEntityId(selectedSessionId, 'sess') ? (
                         <AttachedSkillsPanel
@@ -419,6 +584,9 @@ export function ConversationShell({
                             sessionId={selectedSessionId}
                             {...(selectedThread?.workspaceFingerprint
                                 ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
+                                : {})}
+                            {...(effectiveSelectedWorktreeId
+                                ? { worktreeId: effectiveSelectedWorktreeId }
                                 : {})}
                             attachedSkills={attachedSkills}
                             missingAssetKeys={missingAttachedSkillKeys}

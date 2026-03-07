@@ -33,6 +33,7 @@ function mapSessionSummary(row: SessionRow, turnCount: number): SessionSummaryRe
         conversationId: row.conversation_id,
         threadId: row.thread_id,
         kind: parseEnumValue(row.kind, 'sessions.kind', sessionKinds),
+        ...(row.worktree_id ? { worktreeId: parseEntityId(row.worktree_id, 'sessions.worktree_id', 'wt') } : {}),
         runStatus: parseRunStatus(row.run_status),
         turnCount,
         createdAt: row.created_at,
@@ -136,7 +137,7 @@ export class SessionStore {
         const now = nowIso();
         const thread = await db
             .selectFrom('threads')
-            .select(['id', 'conversation_id'])
+            .select(['id', 'conversation_id', 'worktree_id', 'execution_environment_mode'])
             .where('id', '=', threadId)
             .where('profile_id', '=', profileId)
             .executeTakeFirst();
@@ -144,6 +145,12 @@ export class SessionStore {
             return { created: false, reason: 'thread_not_found' };
         }
 
+        const resolvedKind =
+            kind === 'cloud'
+                ? kind
+                : thread.worktree_id || thread.execution_environment_mode === 'worktree'
+                  ? 'worktree'
+                  : 'local';
         const inserted = await db
             .insertInto('sessions')
             .values({
@@ -151,7 +158,8 @@ export class SessionStore {
                 profile_id: profileId,
                 conversation_id: thread.conversation_id,
                 thread_id: thread.id,
-                kind,
+                kind: resolvedKind,
+                worktree_id: thread.worktree_id,
                 run_status: 'idle',
                 pending_completion_run_id: null,
                 created_at: now,
@@ -278,6 +286,32 @@ export class SessionStore {
         if (threadId) {
             await threadStore.touchByThread(profileId, threadId);
         }
+    }
+
+    async setWorktreeBinding(input: {
+        profileId: string;
+        sessionId: EntityId<'sess'>;
+        worktreeId?: EntityId<'wt'>;
+    }): Promise<SessionSummaryRecord | null> {
+        const { db } = getPersistence();
+        const updated = await db
+            .updateTable('sessions')
+            .set({
+                worktree_id: input.worktreeId ?? null,
+                kind: input.worktreeId ? 'worktree' : 'local',
+                updated_at: nowIso(),
+            })
+            .where('id', '=', input.sessionId)
+            .where('profile_id', '=', input.profileId)
+            .returningAll()
+            .executeTakeFirst();
+
+        if (!updated) {
+            return null;
+        }
+
+        const summary = await this.getSessionSummaryRow(input.profileId, updated.id);
+        return summary ? mapSessionSummary(summary, summary.turn_count ?? 0) : null;
     }
 
     async ensureRunnableSession(
