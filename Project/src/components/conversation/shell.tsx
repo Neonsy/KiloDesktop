@@ -1,4 +1,4 @@
-import { useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 
 import { useConversationShellMutations } from '@/web/components/conversation/conversationShellMutations';
 import { buildConversationShellPlanOrchestrator } from '@/web/components/conversation/conversationShellPlanOrchestrator';
@@ -19,6 +19,7 @@ import { MessageEditDialog } from '@/web/components/conversation/panels/messageE
 import { ModeExecutionPanel } from '@/web/components/conversation/panels/modeExecutionPanel';
 import { DEFAULT_RUN_OPTIONS, isProviderId } from '@/web/components/conversation/shellHelpers';
 import { useRuntimeEventStreamStore } from '@/web/lib/runtime/eventStream';
+import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 
@@ -27,9 +28,16 @@ interface ConversationShellProps {
     topLevelTab: TopLevelTab;
     modeKey: string;
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
+    onSelectedWorkspaceFingerprintChange?: (workspaceFingerprint: string | undefined) => void;
 }
 
-export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelTabChange }: ConversationShellProps) {
+export function ConversationShell({
+    profileId,
+    topLevelTab,
+    modeKey,
+    onTopLevelTabChange,
+    onSelectedWorkspaceFingerprintChange,
+}: ConversationShellProps) {
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
     const uiState = useConversationUiState(profileId);
 
@@ -100,8 +108,24 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
               (workspaceRoot) => workspaceRoot.fingerprint === selectedThread.workspaceFingerprint
           )
         : undefined;
+    const registryResolvedQuery = trpc.registry.listResolved.useQuery(
+        {
+            profileId,
+            ...(selectedThread?.workspaceFingerprint
+                ? { workspaceFingerprint: selectedThread.workspaceFingerprint }
+                : {}),
+        },
+        {
+            enabled: topLevelTab === 'agent',
+            refetchOnWindowFocus: false,
+        }
+    );
     const pendingPermissions =
         queries.pendingPermissionsQuery.data?.requests.filter((request) => request.profileId === profileId) ?? [];
+
+    useEffect(() => {
+        onSelectedWorkspaceFingerprintChange?.(selectedThread?.workspaceFingerprint);
+    }, [onSelectedWorkspaceFingerprintChange, selectedThread?.workspaceFingerprint]);
 
     const sessionRunSelection = useSessionRunSelection({
         allSessions: queries.sessionsQuery.data?.sessions ?? [],
@@ -297,6 +321,17 @@ export function ConversationShell({ profileId, topLevelTab, modeKey, onTopLevelT
                     : {})}
                 {...(selectedModelLabel ? { selectedModelLabel } : {})}
                 {...(selectedUsageSummary ? { selectedUsageSummary } : {})}
+                {...(topLevelTab === 'agent' && registryResolvedQuery.data
+                    ? {
+                          registrySummary: {
+                              modes: registryResolvedQuery.data.resolved.modes.filter(
+                                  (resolvedMode) => resolvedMode.topLevelTab === 'agent'
+                              ).length,
+                              rulesets: registryResolvedQuery.data.resolved.rulesets.length,
+                              skillfiles: registryResolvedQuery.data.resolved.skillfiles.length,
+                          },
+                      }
+                    : {})}
                 providerOptions={runTargetState.providerOptions}
                 modelOptions={runTargetState.modelOptions}
                 runErrorMessage={composer.runSubmitError}

@@ -1,43 +1,35 @@
-import { modeStore } from '@/app/backend/persistence/stores';
-import { agentModes, orchestratorModes } from '@/app/backend/runtime/contracts';
 import type { ModeDefinition, TopLevelTab } from '@/app/backend/runtime/contracts';
 import {
     errRunExecution,
     okRunExecution,
     type RunExecutionResult,
 } from '@/app/backend/runtime/services/runExecution/errors';
+import { resolveModesForTab } from '@/app/backend/runtime/services/registry/service';
 
 interface ResolveModeExecutionInput {
     profileId: string;
     topLevelTab: TopLevelTab;
     modeKey: string;
+    workspaceFingerprint?: string;
 }
 
 export interface ResolvedModeExecution {
     mode: ModeDefinition;
 }
 
-function isAllowedModeForTab(topLevelTab: TopLevelTab, modeKey: string): boolean {
-    if (topLevelTab === 'chat') {
-        return modeKey === 'chat';
-    }
-
-    if (topLevelTab === 'agent') {
-        return (agentModes as readonly string[]).includes(modeKey);
-    }
-
-    return (orchestratorModes as readonly string[]).includes(modeKey);
-}
-
 export async function resolveModeExecution(
     input: ResolveModeExecutionInput
 ): Promise<RunExecutionResult<ResolvedModeExecution>> {
-    if (!isAllowedModeForTab(input.topLevelTab, input.modeKey)) {
-        return errRunExecution('invalid_mode', `Mode "${input.modeKey}" is invalid for tab "${input.topLevelTab}".`);
-    }
+    const modes = await resolveModesForTab(input);
+    const mode = modes.find((candidate) => candidate.modeKey === input.modeKey);
+    if (!mode) {
+        if (input.topLevelTab !== 'agent') {
+            return errRunExecution(
+                'invalid_mode',
+                `Mode "${input.modeKey}" is invalid for tab "${input.topLevelTab}".`
+            );
+        }
 
-    const mode = await modeStore.getByProfileTabMode(input.profileId, input.topLevelTab, input.modeKey);
-    if (!mode || !mode.enabled) {
         return errRunExecution(
             'mode_not_available',
             `Mode "${input.modeKey}" is not available for tab "${input.topLevelTab}".`

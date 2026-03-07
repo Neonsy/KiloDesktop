@@ -1,10 +1,11 @@
-import { modeStore, settingsStore } from '@/app/backend/persistence/stores';
+import { settingsStore } from '@/app/backend/persistence/stores';
 import {
     modeGetActiveInputSchema,
     modeListInputSchema,
     modeSetActiveInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { resolveActiveMode, toActiveModeKey } from '@/app/backend/runtime/services/mode/activeMode';
+import { resolveModesForTab } from '@/app/backend/runtime/services/registry/service';
 import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
@@ -12,8 +13,9 @@ import { throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
 
 export const modeRouter = router({
     list: publicProcedure.input(modeListInputSchema).query(async ({ input }) => {
-        const modes = await modeStore.listByProfileAndTab(input.profileId, input.topLevelTab);
-        return { modes: modes.filter((mode) => mode.enabled) };
+        return {
+            modes: await resolveModesForTab(input),
+        };
     }),
     getActive: publicProcedure.input(modeGetActiveInputSchema).query(async ({ input }) => {
         const result = await resolveActiveMode(input);
@@ -28,8 +30,9 @@ export const modeRouter = router({
         };
     }),
     setActive: publicProcedure.input(modeSetActiveInputSchema).mutation(async ({ input }) => {
-        const mode = await modeStore.getByProfileTabMode(input.profileId, input.topLevelTab, input.modeKey);
-        if (!mode || !mode.enabled) {
+        const modes = await resolveModesForTab(input);
+        const mode = modes.find((candidate) => candidate.modeKey === input.modeKey);
+        if (!mode) {
             return {
                 updated: false as const,
                 reason: 'mode_not_found' as const,

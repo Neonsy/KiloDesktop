@@ -11,5 +11,6 @@ export * from '@/app/backend/runtime/contracts/parsers/plan';
 export * from '@/app/backend/runtime/contracts/parsers/orchestrator';
 export * from '@/app/backend/runtime/contracts/parsers/tooling';
 export * from '@/app/backend/runtime/contracts/parsers/runtime';
+export * from '@/app/backend/runtime/contracts/parsers/registry';
 
 export const unknownInputSchema = arktype('unknown');

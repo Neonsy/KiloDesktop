@@ -51,6 +51,13 @@ interface SessionWorkspacePanelProps {
         | undefined;
     selectedModelLabel?: string;
     selectedUsageSummary?: ProviderUsageSummary;
+    registrySummary?:
+        | {
+              modes: number;
+              rulesets: number;
+              skillfiles: number;
+          }
+        | undefined;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
@@ -91,6 +98,7 @@ export function SessionWorkspacePanel({
     selectedProviderStatus,
     selectedModelLabel,
     selectedUsageSummary,
+    registrySummary,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -173,6 +181,7 @@ export function SessionWorkspacePanel({
                     modelLabel={selectedModelLabel}
                     usageSummary={selectedUsageSummary}
                     routingBadge={routingBadge}
+                    registrySummary={registrySummary}
                 />
 
                 <PendingPermissionsPanel

@@ -68,6 +68,10 @@ function createUtilsMock(calls: InvalidationCall[]) {
             list: createInvalidateLeaf(calls, 'mode.list'),
             getActive: createInvalidateLeaf(calls, 'mode.getActive'),
         },
+        registry: {
+            listResolved: createInvalidateLeaf(calls, 'registry.listResolved'),
+            searchSkills: createInvalidateLeaf(calls, 'registry.searchSkills'),
+        },
         permission: {
             listPending: createInvalidateLeaf(calls, 'permission.listPending'),
         },
@@ -291,5 +295,6 @@ describe('invalidateQueriesForRuntimeEvent', () => {
         expect(calls.some((call) => call.key === 'session.listMessages')).toBe(true);
         expect(calls.some((call) => call.key === 'provider.listModels')).toBe(true);
         expect(calls.some((call) => call.key === 'mode.list')).toBe(true);
+        expect(calls.some((call) => call.key === 'registry.listResolved')).toBe(true);
     });
 });

@@ -1,8 +1,14 @@
 import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/rowParsers';
-import { isJsonRecord, parseJsonValue } from '@/app/backend/persistence/stores/utils';
+import { isJsonRecord, isJsonString, isJsonUnknownArray, parseJsonValue } from '@/app/backend/persistence/stores/utils';
 import type { ModeDefinitionRecord } from '@/app/backend/persistence/types';
-import { topLevelTabs, type ModeExecutionPolicy, type TopLevelTab } from '@/app/backend/runtime/contracts';
+import {
+    registryScopes,
+    registrySourceKinds,
+    topLevelTabs,
+    type ModeExecutionPolicy,
+    type TopLevelTab,
+} from '@/app/backend/runtime/contracts';
 
 function parseExecutionPolicy(value: string): ModeExecutionPolicy {
     const parsed = parseJsonValue(value, {}, isJsonRecord);
@@ -15,29 +21,51 @@ function parseExecutionPolicy(value: string): ModeExecutionPolicy {
     };
 }
 
+function parseTags(value: string): string[] | undefined {
+    const parsed = parseJsonValue(value, [], isJsonUnknownArray).filter(isJsonString);
+    return parsed.length > 0 ? parsed : undefined;
+}
+
 function mapModeDefinition(row: {
     id: string;
     profile_id: string;
     top_level_tab: string;
     mode_key: string;
     label: string;
+    asset_key: string;
     prompt_json: string;
     execution_policy_json: string;
     source: string;
+    source_kind: string;
+    scope: string;
+    workspace_fingerprint: string | null;
+    origin_path: string | null;
+    description: string | null;
+    tags_json: string;
     enabled: 0 | 1;
+    precedence: number;
     created_at: string;
     updated_at: string;
 }): ModeDefinitionRecord {
+    const tags = parseTags(row.tags_json);
     return {
         id: row.id,
         profileId: row.profile_id,
         topLevelTab: parseEnumValue(row.top_level_tab, 'mode_definitions.top_level_tab', topLevelTabs),
         modeKey: row.mode_key,
         label: row.label,
+        assetKey: row.asset_key,
         prompt: parseJsonValue(row.prompt_json, {}, isJsonRecord),
         executionPolicy: parseExecutionPolicy(row.execution_policy_json),
         source: row.source,
+        sourceKind: parseEnumValue(row.source_kind, 'mode_definitions.source_kind', registrySourceKinds),
+        scope: parseEnumValue(row.scope, 'mode_definitions.scope', registryScopes),
+        ...(row.workspace_fingerprint ? { workspaceFingerprint: row.workspace_fingerprint } : {}),
+        ...(row.origin_path ? { originPath: row.origin_path } : {}),
+        ...(row.description ? { description: row.description } : {}),
+        ...(tags ? { tags } : {}),
         enabled: row.enabled === 1,
+        precedence: row.precedence,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
     };
@@ -58,10 +86,18 @@ export class ModeStore {
                 'top_level_tab',
                 'mode_key',
                 'label',
+                'asset_key',
                 'prompt_json',
                 'execution_policy_json',
                 'source',
+                'source_kind',
+                'scope',
+                'workspace_fingerprint',
+                'origin_path',
+                'description',
+                'tags_json',
                 'enabled',
+                'precedence',
                 'created_at',
                 'updated_at',
             ])
@@ -88,15 +124,24 @@ export class ModeStore {
                 'top_level_tab',
                 'mode_key',
                 'label',
+                'asset_key',
                 'prompt_json',
                 'execution_policy_json',
                 'source',
+                'source_kind',
+                'scope',
+                'workspace_fingerprint',
+                'origin_path',
+                'description',
+                'tags_json',
                 'enabled',
+                'precedence',
                 'created_at',
                 'updated_at',
             ])
             .where('profile_id', '=', profileId)
             .orderBy('top_level_tab', 'asc')
+            .orderBy('precedence', 'desc')
             .orderBy('mode_key', 'asc')
             .execute();
 

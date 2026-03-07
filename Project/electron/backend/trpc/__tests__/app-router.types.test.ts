@@ -39,7 +39,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         topLevelTab?: 'chat' | 'agent' | 'orchestrator';
         scope: 'detached' | 'workspace';
-        workspaceFingerprint?: string;
+        workspacePath?: string;
         title: string;
     }>();
     expectTypeOf<Inputs['conversation']['getEditPreference']>().toExtend<{
@@ -100,6 +100,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Inputs['mode']['list']>().toExtend<{
         profileId: string;
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
+        workspaceFingerprint?: string;
     }>();
 
     expectTypeOf<Inputs['mode']['getActive']>().toExtend<{
@@ -366,6 +367,19 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     expectTypeOf<Inputs['runtime']['getShellBootstrap']>().toExtend<{
         profileId: string;
     }>();
+    expectTypeOf<Inputs['registry']['refresh']>().toExtend<{
+        profileId: string;
+        workspaceFingerprint?: string;
+    }>();
+    expectTypeOf<Inputs['registry']['listResolved']>().toExtend<{
+        profileId: string;
+        workspaceFingerprint?: string;
+    }>();
+    expectTypeOf<Inputs['registry']['searchSkills']>().toExtend<{
+        profileId: string;
+        query?: string;
+        workspaceFingerprint?: string;
+    }>();
 
     expectTypeOf<Outputs['runtime']['getDiagnosticSnapshot']>().toExtend<{
         generatedAt: string;
@@ -390,6 +404,30 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             providerId: string;
             modelId: string;
         };
+    }>();
+    expectTypeOf<Outputs['registry']['listResolved']>().toExtend<{
+        paths: {
+            globalAssetsRoot: string;
+            workspaceAssetsRoot?: string;
+        };
+        resolved: {
+            modes: Array<{
+                modeKey: string;
+                scope: 'system' | 'global' | 'workspace' | 'session';
+            }>;
+            rulesets: Array<{
+                assetKey: string;
+            }>;
+            skillfiles: Array<{
+                assetKey: string;
+            }>;
+        };
+    }>();
+    expectTypeOf<Outputs['registry']['searchSkills']>().toExtend<{
+        skillfiles: Array<{
+            name: string;
+            tags?: string[];
+        }>;
     }>();
 
     expect(true).toBe(true);

@@ -651,4 +651,84 @@ CREATE UNIQUE INDEX idx_workspace_roots_profile_path_key ON workspace_roots(prof
 CREATE INDEX idx_workspace_roots_profile_updated_at ON workspace_roots(profile_id, updated_at DESC);
 `,
     },
+    {
+        name: '004_registry_metadata.sql',
+        sql: `
+ALTER TABLE mode_definitions ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE mode_definitions ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'system_seed';
+ALTER TABLE mode_definitions ADD COLUMN scope TEXT NOT NULL DEFAULT 'system';
+ALTER TABLE mode_definitions ADD COLUMN workspace_fingerprint TEXT NULL;
+ALTER TABLE mode_definitions ADD COLUMN origin_path TEXT NULL;
+ALTER TABLE mode_definitions ADD COLUMN description TEXT NULL;
+ALTER TABLE mode_definitions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE mode_definitions ADD COLUMN precedence INTEGER NOT NULL DEFAULT 0;
+
+UPDATE mode_definitions
+SET asset_key = mode_key
+WHERE asset_key = '';
+
+ALTER TABLE rulesets ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE rulesets ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
+ALTER TABLE rulesets ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
+ALTER TABLE rulesets ADD COLUMN origin_path TEXT NULL;
+ALTER TABLE rulesets ADD COLUMN description TEXT NULL;
+ALTER TABLE rulesets ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+
+UPDATE rulesets
+SET
+    asset_key = lower(replace(name, ' ', '_')),
+    scope = CASE
+        WHEN workspace_fingerprint IS NULL THEN 'global'
+        ELSE 'workspace'
+    END,
+    source_kind = CASE
+        WHEN source = 'system' THEN 'system_seed'
+        WHEN workspace_fingerprint IS NULL THEN 'global_file'
+        ELSE 'workspace_file'
+    END
+WHERE asset_key = '';
+
+ALTER TABLE skillfiles ADD COLUMN asset_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE skillfiles ADD COLUMN scope TEXT NOT NULL DEFAULT 'workspace';
+ALTER TABLE skillfiles ADD COLUMN source_kind TEXT NOT NULL DEFAULT 'session_override';
+ALTER TABLE skillfiles ADD COLUMN origin_path TEXT NULL;
+ALTER TABLE skillfiles ADD COLUMN description TEXT NULL;
+ALTER TABLE skillfiles ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+
+UPDATE skillfiles
+SET
+    asset_key = lower(replace(name, ' ', '_')),
+    scope = CASE
+        WHEN workspace_fingerprint IS NULL THEN 'global'
+        ELSE 'workspace'
+    END,
+    source_kind = CASE
+        WHEN source = 'system' THEN 'system_seed'
+        WHEN workspace_fingerprint IS NULL THEN 'global_file'
+        ELSE 'workspace_file'
+    END
+WHERE asset_key = '';
+
+CREATE INDEX idx_mode_definitions_profile_tab_scope ON mode_definitions(profile_id, top_level_tab, scope, workspace_fingerprint);
+CREATE INDEX idx_rulesets_profile_scope ON rulesets(profile_id, scope, workspace_fingerprint);
+CREATE INDEX idx_skillfiles_profile_scope ON skillfiles(profile_id, scope, workspace_fingerprint);
+`,
+    },
+    {
+        name: '005_registry_precedence_indexes.sql',
+        sql: `
+DROP INDEX IF EXISTS idx_mode_definitions_profile_tab_mode;
+DROP INDEX IF EXISTS idx_rulesets_profile_scope_name;
+DROP INDEX IF EXISTS idx_skillfiles_profile_scope_name;
+
+CREATE UNIQUE INDEX idx_mode_definitions_profile_registry_asset
+    ON mode_definitions(profile_id, top_level_tab, scope, ifnull(workspace_fingerprint, ''), asset_key);
+
+CREATE UNIQUE INDEX idx_rulesets_profile_registry_asset
+    ON rulesets(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);
+
+CREATE UNIQUE INDEX idx_skillfiles_profile_registry_asset
+    ON skillfiles(profile_id, scope, ifnull(workspace_fingerprint, ''), asset_key);
+`,
+    },
 ];

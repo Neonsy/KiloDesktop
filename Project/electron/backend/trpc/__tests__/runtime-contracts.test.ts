@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -854,6 +854,234 @@ describe('runtime contracts', () => {
                 runtimeOptions: defaultRuntimeOptions,
             } as unknown as Parameters<typeof caller.session.startRun>[0])
         ).rejects.toThrow('modeKey');
+    });
+
+    it('refreshes file-backed registry assets with precedence, search, and pruning', async () => {
+        const caller = createCaller();
+        const workspaceFingerprint = 'wsf_registry_contracts';
+
+        const globalRegistry = await caller.registry.listResolved({ profileId });
+        const globalAssetsRoot = globalRegistry.paths.globalAssetsRoot;
+        rmSync(globalAssetsRoot, { recursive: true, force: true });
+        mkdirSync(path.join(globalAssetsRoot, 'modes'), { recursive: true });
+        mkdirSync(path.join(globalAssetsRoot, 'rules'), { recursive: true });
+        mkdirSync(path.join(globalAssetsRoot, 'skills'), { recursive: true });
+
+        writeFileSync(
+            path.join(globalAssetsRoot, 'modes', 'review.md'),
+            `---
+modeKey: review
+label: Global Review
+description: Global registry mode
+tags:
+  - review
+  - global
+---
+# Review Mode
+
+- Review the active workspace carefully.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(globalAssetsRoot, 'rules', 'coding-rules.md'),
+            `---
+key: coding_rules
+name: Global Rules
+tags:
+  - baseline
+---
+# Global Rules
+
+- Keep the runtime deterministic.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(globalAssetsRoot, 'skills', 'repo-search.md'),
+            `---
+key: repo_search
+name: Repo Search
+description: Search the repository efficiently.
+tags:
+  - search
+  - repo
+---
+# Repo Search
+
+- Use ripgrep first.
+`,
+            'utf8'
+        );
+
+        await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Registry workspace thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+
+        const workspaceRoots = await caller.runtime.listWorkspaceRoots({ profileId });
+        const workspaceRoot = workspaceRoots.workspaceRoots.find((root) => root.fingerprint === workspaceFingerprint);
+        if (!workspaceRoot) {
+            throw new Error('Expected workspace root for registry contracts test.');
+        }
+
+        const workspaceAssetsRoot = path.join(workspaceRoot.absolutePath, '.neonconductor');
+        mkdirSync(path.join(workspaceAssetsRoot, 'modes'), { recursive: true });
+        mkdirSync(path.join(workspaceAssetsRoot, 'rules'), { recursive: true });
+        mkdirSync(path.join(workspaceAssetsRoot, 'skills'), { recursive: true });
+
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'modes', 'review.md'),
+            `---
+modeKey: review
+label: Workspace Review
+description: Workspace override
+precedence: 5
+tags:
+  - review
+  - workspace
+---
+# Workspace Review
+
+- Prefer workspace-specific constraints.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'modes', 'orchestrator.md'),
+            `---
+topLevelTab: orchestrator
+modeKey: workspace-orchestrator
+label: Invalid Workspace Orchestrator
+---
+# Invalid
+
+- This should never load.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'rules', 'coding-rules.md'),
+            `---
+key: coding_rules
+name: Workspace Rules
+precedence: 5
+tags:
+  - workspace
+---
+# Workspace Rules
+
+- Follow the local workspace constraints first.
+`,
+            'utf8'
+        );
+        writeFileSync(
+            path.join(workspaceAssetsRoot, 'skills', 'repo-search.md'),
+            `---
+key: repo_search
+name: Workspace Search
+precedence: 5
+tags:
+  - search
+  - workspace
+---
+# Workspace Search
+
+- Prefer workspace context when searching.
+`,
+            'utf8'
+        );
+
+        const globalRefresh = await caller.registry.refresh({ profileId });
+        expect(globalRefresh.refreshed.global.modes).toBe(1);
+        expect(globalRefresh.refreshed.global.rulesets).toBe(1);
+        expect(globalRefresh.refreshed.global.skillfiles).toBe(1);
+
+        const workspaceRefresh = await caller.registry.refresh({
+            profileId,
+            workspaceFingerprint,
+        });
+        expect(workspaceRefresh.refreshed.workspace?.modes).toBe(1);
+        expect(workspaceRefresh.refreshed.workspace?.rulesets).toBe(1);
+        expect(workspaceRefresh.refreshed.workspace?.skillfiles).toBe(1);
+
+        const resolvedGlobal = await caller.registry.listResolved({ profileId });
+        expect(
+            resolvedGlobal.resolved.modes.find((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'review')
+                ?.label
+        ).toBe('Global Review');
+        expect(resolvedGlobal.resolved.skillfiles.some((skillfile) => skillfile.name === 'Workspace Search')).toBe(
+            false
+        );
+
+        const resolvedWorkspace = await caller.registry.listResolved({
+            profileId,
+            workspaceFingerprint,
+        });
+        expect(
+            resolvedWorkspace.resolved.modes.find((mode) => mode.topLevelTab === 'agent' && mode.modeKey === 'review')
+                ?.label
+        ).toBe('Workspace Review');
+        expect(resolvedWorkspace.resolved.modes.some((mode) => mode.modeKey === 'workspace-orchestrator')).toBe(false);
+        expect(resolvedWorkspace.resolved.rulesets.find((ruleset) => ruleset.assetKey === 'coding_rules')?.name).toBe(
+            'Workspace Rules'
+        );
+        expect(
+            resolvedWorkspace.resolved.skillfiles.find((skillfile) => skillfile.assetKey === 'repo_search')?.name
+        ).toBe('Workspace Search');
+
+        const searchedSkills = await caller.registry.searchSkills({
+            profileId,
+            workspaceFingerprint,
+            query: 'workspace',
+        });
+        expect(searchedSkills.skillfiles.map((skillfile) => skillfile.name)).toContain('Workspace Search');
+
+        const workspaceModes = await caller.mode.list({
+            profileId,
+            topLevelTab: 'agent',
+            workspaceFingerprint,
+        });
+        expect(workspaceModes.modes.some((mode) => mode.modeKey === 'review' && mode.label === 'Workspace Review')).toBe(
+            true
+        );
+
+        const activated = await caller.mode.setActive({
+            profileId,
+            topLevelTab: 'agent',
+            workspaceFingerprint,
+            modeKey: 'review',
+        });
+        expect(activated.updated).toBe(true);
+        if (!activated.updated) {
+            throw new Error('Expected custom workspace mode activation to succeed.');
+        }
+
+        const activeMode = await caller.mode.getActive({
+            profileId,
+            topLevelTab: 'agent',
+            workspaceFingerprint,
+        });
+        expect(activeMode.activeMode.modeKey).toBe('review');
+        expect(activeMode.activeMode.label).toBe('Workspace Review');
+
+        rmSync(path.join(workspaceAssetsRoot, 'skills', 'repo-search.md'));
+        const prunedRefresh = await caller.registry.refresh({
+            profileId,
+            workspaceFingerprint,
+        });
+        expect(prunedRefresh.refreshed.workspace?.skillfiles).toBe(0);
+
+        const prunedResolved = await caller.registry.listResolved({
+            profileId,
+            workspaceFingerprint,
+        });
+        expect(
+            prunedResolved.resolved.skillfiles.find((skillfile) => skillfile.assetKey === 'repo_search')?.name
+        ).toBe('Repo Search');
     });
 
     it('supports agent planning lifecycle with explicit approve then implement transition', async () => {

@@ -11,9 +11,11 @@ import type { ModeGetActiveInput, ModeListInput, ModeSetActiveInput } from '@/ap
 
 export function parseModeListInput(input: unknown): ModeListInput {
     const source = readObject(input, 'input');
+    const workspaceFingerprint = readOptionalString(source.workspaceFingerprint, 'workspaceFingerprint');
     return {
         profileId: readProfileId(source),
         topLevelTab: readEnumValue(source.topLevelTab, 'topLevelTab', topLevelTabs),
+        ...(workspaceFingerprint ? { workspaceFingerprint } : {}),
     };
 }
 

@@ -10,7 +10,23 @@ async function copyModeDefinitions(
 ): Promise<void> {
     const modes = await tx
         .selectFrom('mode_definitions')
-        .select(['top_level_tab', 'mode_key', 'label', 'prompt_json', 'execution_policy_json', 'source', 'enabled'])
+        .select([
+            'top_level_tab',
+            'mode_key',
+            'label',
+            'asset_key',
+            'prompt_json',
+            'execution_policy_json',
+            'source',
+            'source_kind',
+            'scope',
+            'workspace_fingerprint',
+            'origin_path',
+            'description',
+            'tags_json',
+            'enabled',
+            'precedence',
+        ])
         .where('profile_id', '=', sourceProfileId)
         .orderBy('top_level_tab', 'asc')
         .orderBy('mode_key', 'asc')
@@ -29,10 +45,18 @@ async function copyModeDefinitions(
                 top_level_tab: mode.top_level_tab,
                 mode_key: mode.mode_key,
                 label: mode.label,
+                asset_key: mode.asset_key,
                 prompt_json: mode.prompt_json,
                 execution_policy_json: mode.execution_policy_json,
                 source: mode.source,
+                source_kind: mode.source_kind,
+                scope: mode.scope,
+                workspace_fingerprint: mode.workspace_fingerprint,
+                origin_path: mode.origin_path,
+                description: mode.description,
+                tags_json: mode.tags_json,
                 enabled: mode.enabled,
+                precedence: mode.precedence,
                 created_at: timestamp,
                 updated_at: timestamp,
             }))
@@ -48,7 +72,20 @@ async function copyRulesets(
 ): Promise<void> {
     const rows = await tx
         .selectFrom('rulesets')
-        .select(['workspace_fingerprint', 'name', 'body_markdown', 'source', 'enabled', 'precedence'])
+        .select([
+            'asset_key',
+            'scope',
+            'workspace_fingerprint',
+            'name',
+            'body_markdown',
+            'source',
+            'source_kind',
+            'origin_path',
+            'description',
+            'tags_json',
+            'enabled',
+            'precedence',
+        ])
         .where('profile_id', '=', sourceProfileId)
         .execute();
 
@@ -62,10 +99,16 @@ async function copyRulesets(
             rows.map((row) => ({
                 id: `ruleset_${randomUUID()}`,
                 profile_id: targetProfileId,
+                asset_key: row.asset_key,
+                scope: row.scope,
                 workspace_fingerprint: row.workspace_fingerprint,
                 name: row.name,
                 body_markdown: row.body_markdown,
                 source: row.source,
+                source_kind: row.source_kind,
+                origin_path: row.origin_path,
+                description: row.description,
+                tags_json: row.tags_json,
                 enabled: row.enabled,
                 precedence: row.precedence,
                 created_at: timestamp,
@@ -83,7 +126,20 @@ async function copySkillfiles(
 ): Promise<void> {
     const rows = await tx
         .selectFrom('skillfiles')
-        .select(['workspace_fingerprint', 'name', 'body_markdown', 'source', 'enabled', 'precedence'])
+        .select([
+            'asset_key',
+            'scope',
+            'workspace_fingerprint',
+            'name',
+            'body_markdown',
+            'source',
+            'source_kind',
+            'origin_path',
+            'description',
+            'tags_json',
+            'enabled',
+            'precedence',
+        ])
         .where('profile_id', '=', sourceProfileId)
         .execute();
 
@@ -97,10 +153,16 @@ async function copySkillfiles(
             rows.map((row) => ({
                 id: `skillfile_${randomUUID()}`,
                 profile_id: targetProfileId,
+                asset_key: row.asset_key,
+                scope: row.scope,
                 workspace_fingerprint: row.workspace_fingerprint,
                 name: row.name,
                 body_markdown: row.body_markdown,
                 source: row.source,
+                source_kind: row.source_kind,
+                origin_path: row.origin_path,
+                description: row.description,
+                tags_json: row.tags_json,
                 enabled: row.enabled,
                 precedence: row.precedence,
                 created_at: timestamp,

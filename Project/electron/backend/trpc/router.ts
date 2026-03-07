@@ -12,6 +12,7 @@ import { permissionRouter } from '@/app/backend/trpc/routers/permission';
 import { planRouter } from '@/app/backend/trpc/routers/plan';
 import { profileRouter } from '@/app/backend/trpc/routers/profile';
 import { providerRouter } from '@/app/backend/trpc/routers/provider';
+import { registryRouter } from '@/app/backend/trpc/routers/registry';
 import { runtimeRouter } from '@/app/backend/trpc/routers/runtime';
 import { sessionRouter } from '@/app/backend/trpc/routers/session';
 import { systemRouter } from '@/app/backend/trpc/routers/system';
@@ -23,6 +24,7 @@ export const appRouter = router({
     conversation: conversationRouter,
     session: sessionRouter,
     provider: providerRouter,
+    registry: registryRouter,
     permission: permissionRouter,
     tool: toolRouter,
     mcp: mcpRouter,
