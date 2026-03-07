@@ -9,6 +9,8 @@ describe('generated migrations', () => {
             '001_runtime_baseline_v4.sql',
             '002_kilo_account_balance.sql',
             '003_runtime_safety_foundation.sql',
+            '004_registry_metadata.sql',
+            '005_registry_precedence_indexes.sql',
         ]);
     });
 });

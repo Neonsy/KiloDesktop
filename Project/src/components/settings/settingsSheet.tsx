@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
 import { useState } from 'react';
 
+import { RegistrySettingsView } from '@/web/components/settings/registrySettingsView';
 import { ProfileSettingsView } from '@/web/components/settings/profileSettingsView';
 import { ProviderSettingsView } from '@/web/components/settings/providerSettingsView';
 import { usePrivacyMode } from '@/web/lib/privacy/privacyContext';
@@ -12,11 +13,12 @@ interface SettingsSheetProps {
     onProfileActivated: (profileId: string) => void;
 }
 
-type SettingsSection = 'providers' | 'profiles';
+type SettingsSection = 'providers' | 'profiles' | 'agents';
 
 const SECTION_LABELS: Record<SettingsSection, string> = {
     providers: 'Providers',
     profiles: 'Profiles',
+    agents: 'Agents',
 };
 
 export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: SettingsSheetProps) {
@@ -77,6 +79,7 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
                         {activeSection === 'profiles' ? (
                             <ProfileSettingsView activeProfileId={profileId} onProfileActivated={onProfileActivated} />
                         ) : null}
+                        {activeSection === 'agents' ? <RegistrySettingsView profileId={profileId} /> : null}
                     </div>
                 </div>
             </section>

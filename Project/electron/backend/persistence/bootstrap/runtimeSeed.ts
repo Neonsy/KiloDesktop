@@ -230,8 +230,28 @@ export function seedRuntimeData(sqlite: BetterSqliteDatabase, defaultProfileId: 
     const insertModeDefinition = sqlite.prepare(
         `
             INSERT OR IGNORE INTO mode_definitions
-                (id, profile_id, top_level_tab, mode_key, label, prompt_json, execution_policy_json, source, enabled, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (
+                    id,
+                    profile_id,
+                    top_level_tab,
+                    mode_key,
+                    label,
+                    asset_key,
+                    prompt_json,
+                    execution_policy_json,
+                    source,
+                    source_kind,
+                    scope,
+                    workspace_fingerprint,
+                    origin_path,
+                    description,
+                    tags_json,
+                    enabled,
+                    precedence,
+                    created_at,
+                    updated_at
+                )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertKiloAccountSnapshot = sqlite.prepare(
@@ -301,10 +321,18 @@ export function seedRuntimeData(sqlite: BetterSqliteDatabase, defaultProfileId: 
             mode.topLevelTab,
             mode.modeKey,
             mode.label,
+            mode.modeKey,
             JSON.stringify(mode.prompt),
             JSON.stringify(mode.executionPolicy),
             'system',
+            'system_seed',
+            'system',
+            null,
+            null,
+            null,
+            '[]',
             1,
+            0,
             now,
             now
         );

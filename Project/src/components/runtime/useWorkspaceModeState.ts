@@ -7,11 +7,13 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 export function useWorkspaceModeState(input: {
     resolvedProfileId: string | undefined;
     topLevelTab: TopLevelTab;
+    workspaceFingerprint?: string;
 }) {
     const modeListQuery = trpc.mode.list.useQuery(
         {
             profileId: input.resolvedProfileId ?? MISSING_PROFILE_ID,
             topLevelTab: input.topLevelTab,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         },
         {
             enabled: Boolean(input.resolvedProfileId),
@@ -22,6 +24,7 @@ export function useWorkspaceModeState(input: {
         {
             profileId: input.resolvedProfileId ?? MISSING_PROFILE_ID,
             topLevelTab: input.topLevelTab,
+            ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         },
         {
             enabled: Boolean(input.resolvedProfileId),
@@ -50,6 +53,7 @@ export function useWorkspaceModeState(input: {
                 profileId: input.resolvedProfileId,
                 topLevelTab: input.topLevelTab,
                 modeKey,
+                ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             });
         },
     };

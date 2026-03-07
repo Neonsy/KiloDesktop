@@ -24,6 +24,13 @@ interface WorkspaceStatusPanelProps {
     modelLabel: string | undefined;
     usageSummary: ProviderUsageSummary | undefined;
     routingBadge: string | undefined;
+    registrySummary?:
+        | {
+              modes: number;
+              rulesets: number;
+              skillfiles: number;
+          }
+        | undefined;
 }
 
 function formatMicrounits(value: number | undefined): string {
@@ -60,9 +67,11 @@ export function WorkspaceStatusPanel({
     modelLabel,
     usageSummary,
     routingBadge,
+    registrySummary,
 }: WorkspaceStatusPanelProps) {
     return (
-        <section className='mb-3 grid gap-2 md:grid-cols-2 xl:grid-cols-4'>
+        <section
+            className={`mb-3 grid gap-2 md:grid-cols-2 ${registrySummary ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
             <StatusCard
                 label='Run'
                 value={run ? run.status : 'idle'}
@@ -100,6 +109,13 @@ export function WorkspaceStatusPanel({
                 value={modelLabel ?? 'Unresolved'}
                 detail={run?.modelId ?? 'Composer target model'}
             />
+            {registrySummary ? (
+                <StatusCard
+                    label='Registry'
+                    value={`${formatInteger(registrySummary.skillfiles)} skills`}
+                    detail={`${formatInteger(registrySummary.modes)} modes · ${formatInteger(registrySummary.rulesets)} rules`}
+                />
+            ) : null}
         </section>
     );
 }

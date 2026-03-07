@@ -17,6 +17,7 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         profileId: input.profileId,
         topLevelTab: input.topLevelTab,
         modeKey: input.modeKey,
+        ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
     });
     if (resolvedModeResult.isErr()) {
         return errRunExecution(resolvedModeResult.error.code, resolvedModeResult.error.message);

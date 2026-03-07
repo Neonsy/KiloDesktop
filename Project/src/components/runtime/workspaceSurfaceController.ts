@@ -8,6 +8,7 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 export function useWorkspaceSurfaceController() {
     const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>('chat');
     const [showSettings, setShowSettings] = useState(false);
+    const [currentWorkspaceFingerprint, setCurrentWorkspaceFingerprint] = useState<string | undefined>(undefined);
 
     const profileState = useWorkspaceProfileState({
         setTopLevelTab,
@@ -15,6 +16,7 @@ export function useWorkspaceSurfaceController() {
     const modeState = useWorkspaceModeState({
         resolvedProfileId: profileState.resolvedProfileId,
         topLevelTab,
+        ...(currentWorkspaceFingerprint ? { workspaceFingerprint: currentWorkspaceFingerprint } : {}),
     });
 
     return {
@@ -24,6 +26,8 @@ export function useWorkspaceSurfaceController() {
         setTopLevelTab,
         showSettings,
         setShowSettings,
+        currentWorkspaceFingerprint,
+        setCurrentWorkspaceFingerprint,
         modes: modeState.modes,
         activeModeKey: modeState.activeModeKey,
         profileSetActiveMutation: profileState.profileSetActiveMutation,

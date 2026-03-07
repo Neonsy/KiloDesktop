@@ -34,6 +34,7 @@ export function WorkspaceSurface() {
                         topLevelTab={controller.topLevelTab}
                         modeKey={controller.activeModeKey}
                         onTopLevelTabChange={controller.setTopLevelTab}
+                        onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
                     />
                 ) : (
                     <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>

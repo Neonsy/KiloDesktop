@@ -224,10 +224,18 @@ export interface ModeDefinitionsTable {
     top_level_tab: string;
     mode_key: string;
     label: string;
+    asset_key: string;
     prompt_json: string;
     execution_policy_json: string;
     source: string;
+    source_kind: string;
+    scope: string;
+    workspace_fingerprint: string | null;
+    origin_path: string | null;
+    description: string | null;
+    tags_json: string;
     enabled: 0 | 1;
+    precedence: number;
     created_at: string;
     updated_at: string;
 }
@@ -235,10 +243,16 @@ export interface ModeDefinitionsTable {
 export interface RulesetsTable {
     id: string;
     profile_id: string;
+    asset_key: string;
+    scope: string;
     workspace_fingerprint: string | null;
     name: string;
     body_markdown: string;
     source: string;
+    source_kind: string;
+    origin_path: string | null;
+    description: string | null;
+    tags_json: string;
     enabled: 0 | 1;
     precedence: number;
     created_at: string;
@@ -248,10 +262,16 @@ export interface RulesetsTable {
 export interface SkillfilesTable {
     id: string;
     profile_id: string;
+    asset_key: string;
+    scope: string;
     workspace_fingerprint: string | null;
     name: string;
     body_markdown: string;
     source: string;
+    source_kind: string;
+    origin_path: string | null;
+    description: string | null;
+    tags_json: string;
     enabled: 0 | 1;
     precedence: number;
     created_at: string;

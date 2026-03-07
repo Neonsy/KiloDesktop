@@ -118,3 +118,9 @@ export type PlanItemStatus = (typeof planItemStatuses)[number];
 
 export const orchestratorRunStatuses = ['running', 'completed', 'aborted', 'failed'] as const;
 export type OrchestratorRunStatus = (typeof orchestratorRunStatuses)[number];
+
+export const registryScopes = ['system', 'global', 'workspace', 'session'] as const;
+export type RegistryScope = (typeof registryScopes)[number];
+
+export const registrySourceKinds = ['system_seed', 'global_file', 'workspace_file', 'session_override'] as const;
+export type RegistrySourceKind = (typeof registrySourceKinds)[number];
