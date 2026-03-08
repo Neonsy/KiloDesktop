@@ -366,13 +366,12 @@ export interface KiloOrgSnapshotsTable {
     updated_at: string;
 }
 
-export interface SecretReferencesTable {
+export interface ProviderSecretsTable {
     id: string;
     profile_id: string;
     provider_id: string;
-    secret_key_ref: string;
     secret_kind: string;
-    status: string;
+    secret_value: string;
     updated_at: string;
 }
 
@@ -553,7 +552,7 @@ export interface DatabaseSchema {
     marketplace_assets: MarketplaceAssetsTable;
     kilo_account_snapshots: KiloAccountSnapshotsTable;
     kilo_org_snapshots: KiloOrgSnapshotsTable;
-    secret_references: SecretReferencesTable;
+    provider_secrets: ProviderSecretsTable;
     provider_auth_states: ProviderAuthStatesTable;
     provider_auth_flows: ProviderAuthFlowsTable;
     provider_model_catalog: ProviderModelCatalogTable;

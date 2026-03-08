@@ -2,7 +2,7 @@ import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 import { persistAuthenticatedState } from '@/app/backend/providers/auth/authStateService';
 import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import { refreshOpenAIToken } from '@/app/backend/providers/auth/openaiOAuthClient';
-import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
+import { readProviderSecretValue } from '@/app/backend/providers/auth/providerSecrets';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export async function runRefreshOperation(input: {
@@ -21,7 +21,7 @@ export async function runRefreshOperation(input: {
     }
 
     const refreshPromise = (async (): Promise<AuthExecutionResult<ProviderAuthStateRecord>> => {
-        const refreshToken = await readSecretValue(input.profileId, input.providerId, 'refresh_token');
+        const refreshToken = await readProviderSecretValue(input.profileId, input.providerId, 'refresh_token');
         if (!refreshToken) {
             return errAuthExecution('refresh_token_missing', 'No refresh token configured for provider.');
         }

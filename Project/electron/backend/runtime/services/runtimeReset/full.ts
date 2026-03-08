@@ -1,5 +1,4 @@
 import type { RuntimeResetCounts } from '@/app/backend/runtime/contracts';
-import { listAllSecretKeyRefs } from '@/app/backend/runtime/services/runtimeReset/secrets';
 import type {
     PlannedRuntimeResetOperation,
     RuntimeResetDatabase,
@@ -28,7 +27,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         marketplaceAssets,
         kiloAccountSnapshots,
         kiloOrgSnapshots,
-        secretReferences,
+        providerSecrets,
         providerAuthStates,
         providerAuthFlows,
         providerCatalogModels,
@@ -68,7 +67,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
             .select((eb) => eb.fn.count<number>('profile_id').as('count'))
             .executeTakeFirst(),
         db.selectFrom('kilo_org_snapshots').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
-        db.selectFrom('secret_references').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
+        db.selectFrom('provider_secrets').select((eb) => eb.fn.count<number>('id').as('count')).executeTakeFirst(),
         db
             .selectFrom('provider_auth_states')
             .select((eb) => eb.fn.count<number>('provider_id').as('count'))
@@ -116,7 +115,7 @@ async function resolveFullCounts(db: RuntimeResetDatabase): Promise<RuntimeReset
         marketplaceAssets: marketplaceAssets?.count ?? 0,
         kiloAccountSnapshots: kiloAccountSnapshots?.count ?? 0,
         kiloOrgSnapshots: kiloOrgSnapshots?.count ?? 0,
-        secretReferences: secretReferences?.count ?? 0,
+        providerSecrets: providerSecrets?.count ?? 0,
         providerAuthStates: providerAuthStates?.count ?? 0,
         providerAuthFlows: providerAuthFlows?.count ?? 0,
         providerCatalogModels: providerCatalogModels?.count ?? 0,
@@ -141,7 +140,7 @@ async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
     await db.deleteFrom('skillfiles').execute();
     await db.deleteFrom('kilo_account_snapshots').execute();
     await db.deleteFrom('kilo_org_snapshots').execute();
-    await db.deleteFrom('secret_references').execute();
+    await db.deleteFrom('provider_secrets').execute();
     await db.deleteFrom('provider_auth_states').execute();
     await db.deleteFrom('provider_auth_flows').execute();
     await db.deleteFrom('provider_model_catalog').execute();
@@ -159,11 +158,10 @@ async function applyFullReset(db: RuntimeResetDatabase): Promise<void> {
 }
 
 export async function planFullReset(db: RuntimeResetDatabase): Promise<PlannedRuntimeResetOperation> {
-    const [counts, secretKeyRefs] = await Promise.all([resolveFullCounts(db), listAllSecretKeyRefs(db)]);
+    const counts = await resolveFullCounts(db);
 
     return {
         counts,
-        secretKeyRefs,
         reseedRuntimeData: true,
         apply: async (applyDb) => {
             await applyFullReset(applyDb);

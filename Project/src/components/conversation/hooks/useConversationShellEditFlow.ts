@@ -2,9 +2,9 @@ import { useState } from 'react';
 
 import type { ConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
-import { createPendingMessageEdit } from '@/web/components/conversation/pendingMessageEdit';
+import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shell/editFlow';
+import { createPendingMessageEdit } from '@/web/components/conversation/shell/pendingMessageEdit';
 import { DEFAULT_RUN_OPTIONS, isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
-import { toEditFailureMessage, type PendingMessageEdit } from '@/web/components/conversation/shellEditFlow';
 import { trpc } from '@/web/trpc/client';
 
 import type { ThreadListRecord } from '@/app/backend/persistence/types';

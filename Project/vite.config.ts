@@ -6,6 +6,8 @@ import { defineConfig } from 'vite';
 import electron from 'vite-plugin-electron/simple';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
+import { resolveElectronChildEnv } from './electron/main/runtime/electronChildEnv';
+
 // https://vite.dev/config/
 export default defineConfig({
     plugins: [
@@ -25,6 +27,11 @@ export default defineConfig({
         electron({
             main: {
                 entry: 'electron/main/index.ts',
+                onstart({ startup }) {
+                    void startup(['.', '--no-sandbox'], {
+                        env: resolveElectronChildEnv(),
+                    });
+                },
                 vite: {
                     plugins: [tsconfigPaths()],
                 },

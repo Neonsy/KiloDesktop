@@ -1,16 +1,17 @@
 import {
     accountSnapshotStore,
+    providerSecretStore,
     providerAuthFlowStore,
     providerAuthStore,
     providerStore,
-    secretReferenceStore,
 } from '@/app/backend/persistence/stores';
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
-import { persistSecretRef } from '@/app/backend/providers/auth/secretRefs';
+import { writeProviderSecretValue } from '@/app/backend/providers/auth/providerSecrets';
 import type { FlowAuthMethod } from '@/app/backend/providers/auth/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { buildProviderSecretKey, providerSecretKinds } from '@/app/backend/secrets/providerSecretKeys';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
 function nowIso(): string {
@@ -67,7 +68,7 @@ export async function setApiKey(
         return errAuthExecution('invalid_payload', 'Invalid "apiKey": expected non-empty string.');
     }
 
-    await persistSecretRef({
+    await writeProviderSecretValue({
         profileId,
         providerId,
         secretKind: 'api_key',
@@ -92,9 +93,13 @@ export async function clearAuth(
         return errAuthExecution(providerCheck.error.code, providerCheck.error.message);
     }
 
-    const refs = await secretReferenceStore.listByProfileAndProvider(profileId, providerId);
-    await Promise.allSettled(refs.map((ref) => getSecretStore().delete(ref.secretKeyRef)));
-    await secretReferenceStore.deleteByProfileAndProvider(profileId, providerId);
+    const existingProviderSecrets = await providerSecretStore.listByProfileAndProvider(profileId, providerId);
+    const store = getSecretStore();
+    await Promise.allSettled(
+        providerSecretKinds.map((secretKind) =>
+            store.delete(buildProviderSecretKey(profileId, providerId, secretKind))
+        )
+    );
     await providerAuthFlowStore.cancelPendingByProvider(profileId, providerId);
 
     await providerAuthStore.upsert({
@@ -118,7 +123,7 @@ export async function clearAuth(
     }
 
     return okAuthExecution({
-        cleared: refs.length > 0,
+        cleared: existingProviderSecrets.length > 0,
         authState: await getAuthState(profileId, providerId),
     });
 }
@@ -133,14 +138,14 @@ export async function persistAuthenticatedState(input: {
     accountId?: string;
     organizationId?: string;
 }): Promise<ProviderAuthStateRecord> {
-    await persistSecretRef({
+    await writeProviderSecretValue({
         profileId: input.profileId,
         providerId: input.providerId,
         secretKind: 'access_token',
         value: input.accessToken,
     });
     if (input.refreshToken) {
-        await persistSecretRef({
+        await writeProviderSecretValue({
             profileId: input.profileId,
             providerId: input.providerId,
             secretKind: 'refresh_token',

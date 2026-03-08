@@ -15,6 +15,8 @@ describe('generated migrations', () => {
             '007_run_command_shell_approvals.sql',
             '008_diff_checkpoints.sql',
             '009_managed_worktrees.sql',
+            '010_provider_secrets.sql',
+            '011_drop_legacy_secret_references.sql',
         ]);
     });
 });

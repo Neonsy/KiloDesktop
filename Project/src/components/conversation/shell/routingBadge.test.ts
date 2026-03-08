@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatRoutingBadge } from '@/web/components/conversation/routingBadge';
+import { formatRoutingBadge } from '@/web/components/conversation/shell/routingBadge';
 
 describe('formatRoutingBadge', () => {
     it('formats pinned and dynamic routing labels for kilo models', () => {

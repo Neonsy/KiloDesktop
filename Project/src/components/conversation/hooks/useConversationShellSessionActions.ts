@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
     applySessionModelOverride,
     applySessionProviderOverride,
-} from '@/web/components/conversation/sessionTargetState';
+} from '@/web/components/conversation/shell/sessionTargetState';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { SessionCreateInput, RuntimeProviderId } from '@/app/backend/runtime/contracts';

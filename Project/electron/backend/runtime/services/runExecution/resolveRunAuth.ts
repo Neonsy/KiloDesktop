@@ -1,5 +1,5 @@
 import { providerAuthStore } from '@/app/backend/persistence/stores';
-import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
+import { readProviderSecretValue } from '@/app/backend/providers/auth/providerSecrets';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import {
     errRunExecution,
@@ -32,7 +32,7 @@ export async function resolveRunAuth(input: {
             );
         }
 
-        const apiKey = await readSecretValue(input.profileId, input.providerId, 'api_key');
+        const apiKey = await readProviderSecretValue(input.profileId, input.providerId, 'api_key');
         if (!apiKey) {
             return errRunExecution(
                 'provider_secret_missing',
@@ -55,7 +55,7 @@ export async function resolveRunAuth(input: {
             );
         }
 
-        const accessToken = await readSecretValue(input.profileId, input.providerId, 'access_token');
+        const accessToken = await readProviderSecretValue(input.profileId, input.providerId, 'access_token');
         if (!accessToken) {
             return errRunExecution(
                 'provider_secret_missing',

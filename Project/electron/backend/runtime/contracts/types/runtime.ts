@@ -103,7 +103,7 @@ export interface RuntimeResetCounts {
     marketplaceAssets: number;
     kiloAccountSnapshots: number;
     kiloOrgSnapshots: number;
-    secretReferences: number;
+    providerSecrets: number;
     providerAuthStates: number;
     providerAuthFlows: number;
     providerCatalogModels: number;
@@ -122,7 +122,7 @@ export interface RuntimeResetResult {
 }
 
 export interface RuntimeFactoryResetCleanupCounts {
-    secretKeys: number;
+    providerSecrets: number;
     managedWorktreeEntries: number;
     globalAssetEntries: number;
     logEntries: number;

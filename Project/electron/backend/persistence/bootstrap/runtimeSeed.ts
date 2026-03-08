@@ -1,4 +1,4 @@
-import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
+import type { DatabaseSync } from 'node:sqlite';
 
 const DEFAULT_PROVIDER_ID = 'kilo';
 const DEFAULT_MODEL_ID = 'kilo/auto';
@@ -154,7 +154,7 @@ const MODE_SEED = [
     },
 ] as const;
 
-export function seedRuntimeData(sqlite: BetterSqliteDatabase, defaultProfileId: string): void {
+export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string): void {
     const now = new Date().toISOString();
 
     const insertProfile = sqlite.prepare(

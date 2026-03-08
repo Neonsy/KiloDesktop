@@ -1,6 +1,6 @@
 import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
+import type { PendingMessageEdit } from '@/web/components/conversation/shell/editFlow';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
-import type { PendingMessageEdit } from '@/web/components/conversation/shellEditFlow';
 
 export function createPendingMessageEdit(
     entry: MessageTimelineEntry,

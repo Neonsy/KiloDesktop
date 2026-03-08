@@ -1,89 +1,72 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getDefaultProfileId, resetPersistenceForTests } from '@/app/backend/persistence/db';
 
 const originalNodeEnv = process.env['NODE_ENV'];
 const originalVitestFlag = process.env['VITEST'];
 
-afterEach(() => {
-    if (originalNodeEnv === undefined) {
-        delete process.env['NODE_ENV'];
-    } else {
-        process.env['NODE_ENV'] = originalNodeEnv;
-    }
-
-    if (originalVitestFlag === undefined) {
-        delete process.env['VITEST'];
-    } else {
-        process.env['VITEST'] = originalVitestFlag;
-    }
-
-    vi.resetModules();
-    vi.unmock('@/app/backend/secrets/keytarStore');
-});
-
 describe('secret store', () => {
+    beforeEach(() => {
+        resetPersistenceForTests();
+    });
+
+    afterEach(() => {
+        if (originalNodeEnv === undefined) {
+            delete process.env['NODE_ENV'];
+        } else {
+            process.env['NODE_ENV'] = originalNodeEnv;
+        }
+
+        if (originalVitestFlag === undefined) {
+            delete process.env['VITEST'];
+        } else {
+            process.env['VITEST'] = originalVitestFlag;
+        }
+
+        vi.resetModules();
+    });
+
     it('supports explicit in-memory injection for tests', async () => {
-        const secrets = await import('@/app/backend/secrets/store');
-        const injected = new secrets.InMemorySecretStore();
-        secrets.initializeSecretStore(injected);
+        const { InMemorySecretStore, getSecretStore, getSecretStoreInfo, initializeSecretStore } = await import(
+            '@/app/backend/secrets/store'
+        );
+        const injectedStore = new InMemorySecretStore();
+        initializeSecretStore(injectedStore);
 
-        const store = secrets.getSecretStore();
-        await store.set('provider/openai', 'token-value');
-        await expect(store.get('provider/openai')).resolves.toBe('token-value');
-        await store.delete('provider/openai');
-        await expect(store.get('provider/openai')).resolves.toBeNull();
+        const secretStore = getSecretStore();
+        await secretStore.set('provider/profile_test/openai/api_key', 'token-value');
+        await expect(secretStore.get('provider/profile_test/openai/api_key')).resolves.toBe('token-value');
+        await secretStore.delete('provider/profile_test/openai/api_key');
+        await expect(secretStore.get('provider/profile_test/openai/api_key')).resolves.toBeNull();
 
-        expect(secrets.getSecretStoreInfo()).toEqual({
+        expect(getSecretStoreInfo()).toEqual({
             backend: 'memory',
             available: true,
         });
     });
 
-    it('reports unavailable keytar backend with typed runtime errors', async () => {
+    it('uses database-backed provider secrets outside test runtime injection', async () => {
         process.env['NODE_ENV'] = 'production';
         delete process.env['VITEST'];
 
-        vi.doMock('@/app/backend/secrets/keytarStore', () => {
-            class SecretStoreUnavailableError extends Error {
-                constructor(reason: string) {
-                    super(`Secret store backend unavailable: ${reason}`);
-                    this.name = 'SecretStoreUnavailableError';
-                }
-            }
+        vi.resetModules();
+        const { providerSecretStore } = await import('@/app/backend/persistence/stores');
+        const { getSecretStore, getSecretStoreInfo, initializeSecretStore } = await import('@/app/backend/secrets/store');
+        const profileId = getDefaultProfileId();
+        initializeSecretStore();
 
-            return {
-                SecretStoreUnavailableError,
-                createKeytarSecretStore: () => ({
-                    store: {
-                        get() {
-                            return Promise.reject(new SecretStoreUnavailableError('keychain unavailable'));
-                        },
-                        set() {
-                            return Promise.reject(new SecretStoreUnavailableError('keychain unavailable'));
-                        },
-                        delete() {
-                            return Promise.reject(new SecretStoreUnavailableError('keychain unavailable'));
-                        },
-                    },
-                    info: {
-                        backend: 'keytar',
-                        available: false,
-                        reason: 'keychain unavailable',
-                    },
-                }),
-            };
+        expect(getSecretStoreInfo()).toEqual({
+            backend: 'database',
+            available: true,
         });
 
-        const secrets = await import('@/app/backend/secrets/store');
-        secrets.initializeSecretStore();
+        const secretStore = getSecretStore();
+        await secretStore.set(`provider/${profileId}/openai/api_key`, 'database-token');
 
-        expect(secrets.getSecretStoreInfo()).toEqual({
-            backend: 'keytar',
-            available: false,
-            reason: 'keychain unavailable',
-        });
+        await expect(secretStore.get(`provider/${profileId}/openai/api_key`)).resolves.toBe('database-token');
+        await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBe('database-token');
 
-        await expect(secrets.getSecretStore().get('provider/kilo')).rejects.toThrow(
-            'Secret store backend unavailable: keychain unavailable'
-        );
+        await secretStore.delete(`provider/${profileId}/openai/api_key`);
+        await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBeNull();
     });
 });

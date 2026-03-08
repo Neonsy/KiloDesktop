@@ -262,6 +262,12 @@ export default [
             'security/detect-non-literal-fs-filename': 'off',
         },
     },
+    {
+        files: ['vite.config.ts'],
+        rules: {
+            'no-restricted-imports': 'off',
+        },
+    },
 
     {
         files: validatedFsAuthorityGlobs,

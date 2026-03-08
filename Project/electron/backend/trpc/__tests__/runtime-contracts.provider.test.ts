@@ -171,7 +171,9 @@ describe('runtime contracts: provider and account flows', () => {
         expect(configured.state.authState).toBe('configured');
 
         const snapshotAfterSet = await caller.runtime.getDiagnosticSnapshot({ profileId });
-        expect(snapshotAfterSet.secretReferences.some((ref) => ref.providerId === 'openai')).toBe(true);
+        expect(snapshotAfterSet.providerSecrets.some((providerSecret) => providerSecret.providerId === 'openai')).toBe(
+            true
+        );
 
         const syncResult = await caller.provider.syncCatalog({
             profileId,
@@ -192,7 +194,9 @@ describe('runtime contracts: provider and account flows', () => {
         expect(cleared.authState.authState).toBe('logged_out');
 
         const snapshotAfterClear = await caller.runtime.getDiagnosticSnapshot({ profileId });
-        expect(snapshotAfterClear.secretReferences.some((ref) => ref.providerId === 'openai')).toBe(false);
+        expect(
+            snapshotAfterClear.providerSecrets.some((providerSecret) => providerSecret.providerId === 'openai')
+        ).toBe(false);
     });
 
 

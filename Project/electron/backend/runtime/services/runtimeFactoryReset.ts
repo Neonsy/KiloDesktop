@@ -14,7 +14,6 @@ import {
     type OperationalResult,
 } from '@/app/backend/runtime/services/common/operationalError';
 import { planFullReset } from '@/app/backend/runtime/services/runtimeReset/full';
-import { removeSecretsByReferences } from '@/app/backend/runtime/services/runtimeReset/secrets';
 import { removeManagedGitWorktree } from '@/app/backend/runtime/services/worktree/git';
 import { appLog, flushAppLogger } from '@/app/main/logging';
 
@@ -136,7 +135,7 @@ class RuntimeFactoryResetServiceImpl implements RuntimeFactoryResetService {
             const plan = await planFullReset(db);
 
             const cleanupCounts: RuntimeFactoryResetCleanupCounts = {
-                secretKeys: new Set(plan.secretKeyRefs).size,
+                providerSecrets: plan.counts.providerSecrets,
                 managedWorktreeEntries: await cleanupManagedWorktrees(managedWorktreesRoot),
                 globalAssetEntries: await removeDirectoryTree(globalAssetsRoot),
                 logEntries: 0,
@@ -146,7 +145,6 @@ class RuntimeFactoryResetServiceImpl implements RuntimeFactoryResetService {
             if (plan.reseedRuntimeData) {
                 reseedRuntimeData();
             }
-            await removeSecretsByReferences(plan.secretKeyRefs);
 
             await flushAppLogger();
             cleanupCounts.logEntries = await removeDirectoryTree(logsRoot);

@@ -143,12 +143,13 @@ export interface KiloModelProviderInfo {
     maxCompletionTokens?: number;
 }
 
-export interface SecretReference {
+export type ProviderSecretKind = 'api_key' | 'access_token' | 'refresh_token';
+
+export interface ProviderSecret {
     id: string;
     profileId: string;
     providerId: RuntimeProviderId;
-    secretKeyRef: string;
-    secretKind: string;
-    status: string;
+    secretKind: ProviderSecretKind;
+    storage: 'database';
     updatedAt: string;
 }

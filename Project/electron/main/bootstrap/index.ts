@@ -7,6 +7,7 @@ import { getSecretStoreInfo, initializeSecretStore } from '@/app/backend/secrets
 import type { Context } from '@/app/backend/trpc/context';
 import type { AppRouter } from '@/app/backend/trpc/router';
 import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/windowControls';
+import { handleStartupFailure } from '@/app/main/bootstrap/startupFailure';
 import { appLog, flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
@@ -35,61 +36,61 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         ...(devServerUrl ? { devServerUrl } : {}),
     };
 
-    void app.whenReady().then(() => {
-        initAppLogger({
-            isDev,
-            version: app.getVersion(),
-        });
-
-        const persistenceChannel = resolvePersistenceChannel();
-        const userDataPath = app.getPath('userData');
-        process.env['NEONCONDUCTOR_USER_DATA_PATH'] = userDataPath;
-        const persistenceDbPath = path.join(userDataPath, 'runtime', persistenceChannel, 'neonconductor.db');
-        appLog.info({
-            tag: 'runtime',
-            message: 'Persistence channel resolved.',
-            channel: persistenceChannel,
-            dbPath: persistenceDbPath,
-        });
-
-        initializePersistence({
-            dbPath: persistenceDbPath,
-        });
-        initializeSecretStore();
-        const secretStoreInfo = getSecretStoreInfo();
-        if (!secretStoreInfo.available) {
-            const reason = secretStoreInfo.reason ?? 'unknown reason';
-            appLog.warn({
-                tag: 'secrets',
-                message: `${secretStoreInfo.backend} backend unavailable: ${reason}`,
-                backend: secretStoreInfo.backend,
-                reason,
+    void app
+        .whenReady()
+        .then(() => {
+            initAppLogger({
+                isDev,
+                version: app.getVersion(),
             });
-        }
 
-        // Remove default menu bar (File, Edit, View, Help)
-        Menu.setApplicationMenu(null);
+            const persistenceChannel = resolvePersistenceChannel();
+            const userDataPath = app.getPath('userData');
+            process.env['NEONCONDUCTOR_USER_DATA_PATH'] = userDataPath;
+            process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'] = persistenceChannel;
+            const persistenceDbPath = path.join(userDataPath, 'runtime', persistenceChannel, 'neonconductor.db');
+            appLog.info({
+                tag: 'runtime',
+                message: 'Persistence channel resolved.',
+                channel: persistenceChannel,
+                dbPath: persistenceDbPath,
+            });
 
-        // Set up Content Security Policy via HTTP headers.
-        attachCspHeaders(runtimeCspOptions);
+            initializePersistence({
+                dbPath: persistenceDbPath,
+            });
+            initializeSecretStore();
+            const secretStoreInfo = getSecretStoreInfo();
+            appLog.info({
+                tag: 'secrets',
+                message: 'Provider secrets initialized.',
+                backend: secretStoreInfo.backend,
+            });
 
-        mainWindow = createMainWindow(runtimeWindowOptions);
-        registerWindowStateBridge(mainWindow);
+            // Remove default menu bar (File, Edit, View, Help)
+            Menu.setApplicationMenu(null);
 
-        // Wire up tRPC to handle IPC calls from the renderer
-        ipcHandler = createIPCHandler({
-            router: appRouter,
-            windows: [mainWindow],
-            createContext,
-        });
+            // Set up Content Security Policy via HTTP headers.
+            attachCspHeaders(runtimeCspOptions);
 
-        app.on('browser-window-created', (_event, window) => {
-            ipcHandler?.attachWindow(window);
-            registerWindowStateBridge(window);
-        });
+            mainWindow = createMainWindow(runtimeWindowOptions);
+            registerWindowStateBridge(mainWindow);
 
-        initAutoUpdater();
-    });
+            // Wire up tRPC to handle IPC calls from the renderer
+            ipcHandler = createIPCHandler({
+                router: appRouter,
+                windows: [mainWindow],
+                createContext,
+            });
+
+            app.on('browser-window-created', (_event, window) => {
+                ipcHandler?.attachWindow(window);
+                registerWindowStateBridge(window);
+            });
+
+            initAutoUpdater();
+        })
+        .catch((error: unknown) => handleStartupFailure(error));
 
     app.on('before-quit', () => {
         closePersistence();

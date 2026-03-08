@@ -9,12 +9,12 @@ import {
     modeStore,
     permissionStore,
     profileStore,
+    providerSecretStore,
     providerAuthFlowStore,
     rulesetStore,
     runStore,
     runUsageStore,
     runtimeEventStore,
-    secretReferenceStore,
     sessionStore,
     skillfileStore,
     tagStore,
@@ -94,7 +94,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
                 skillfiles,
                 marketplacePackages,
                 kiloAccountContext,
-                secretReferences,
+                providerSecrets,
             ] = await Promise.all([
                 profileStore.list(),
                 sessionStore.list(profileId),
@@ -133,7 +133,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
                 skillfileStore.listByProfile(profileId),
                 marketplaceStore.listPackages(),
                 accountSnapshotStore.getByProfile(profileId),
-                secretReferenceStore.listByProfile(profileId),
+                providerSecretStore.listByProfile(profileId),
             ]);
 
             const snapshot: RuntimeSnapshotV1 = {
@@ -169,7 +169,7 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
                 skillfiles,
                 marketplacePackages,
                 kiloAccountContext,
-                secretReferences,
+                providerSecrets,
                 defaults,
             };
 

@@ -2,7 +2,6 @@ import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { getPersistenceStoragePaths } from '@/app/backend/persistence/db';
-import { initializeSecretStore } from '@/app/backend/secrets/store';
 import {
     createCaller,
     createSessionInScope,
@@ -53,7 +52,7 @@ describe('runtime contracts: core flows', () => {
         );
         expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
         expect(snapshot.providerAuthStates.length).toBeGreaterThan(0);
-        expect(snapshot.secretReferences).toEqual([]);
+        expect(snapshot.providerSecrets).toEqual([]);
         expect(shellBootstrap.lastSequence).toBeGreaterThanOrEqual(0);
         expect(shellBootstrap.threadTags).toEqual([]);
         expect(shellBootstrap.providers.length).toBeGreaterThan(0);
@@ -124,7 +123,7 @@ describe('runtime contracts: core flows', () => {
         const duplicatedSnapshot = await caller.runtime.getDiagnosticSnapshot({
             profileId: duplicated.profile.id,
         });
-        expect(duplicatedSnapshot.secretReferences).toEqual([]);
+        expect(duplicatedSnapshot.providerSecrets).toEqual([]);
         const duplicatedOpenAiAuth = duplicatedSnapshot.providerAuthStates.find(
             (state) => state.providerId === 'openai'
         );
@@ -357,19 +356,11 @@ describe('runtime contracts: core flows', () => {
         sqlite
             .prepare(
                 `
-                    INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO provider_secrets (id, profile_id, provider_id, secret_kind, secret_value, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 `
             )
-            .run(
-                'secret_ref_profile_other',
-                otherProfileId,
-                'openai',
-                'provider/openai/other',
-                'api_key',
-                'active',
-                now
-            );
+            .run('provider_secret_profile_other', otherProfileId, 'openai', 'api_key', 'openai-other-key', now);
 
         const dryRun = await caller.runtime.reset({
             target: 'profile_settings',
@@ -397,10 +388,10 @@ describe('runtime contracts: core flows', () => {
             .get(otherProfileId) as { count: number };
         expect(otherProfileModeCount.count).toBe(1);
 
-        const otherProfileSecretRefCount = sqlite
-            .prepare('SELECT COUNT(*) AS count FROM secret_references WHERE profile_id = ?')
+        const otherProfileProviderSecretCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM provider_secrets WHERE profile_id = ?')
             .get(otherProfileId) as { count: number };
-        expect(otherProfileSecretRefCount.count).toBe(1);
+        expect(otherProfileProviderSecretCount.count).toBe(1);
     });
 
 
@@ -412,11 +403,11 @@ describe('runtime contracts: core flows', () => {
         sqlite
             .prepare(
                 `
-                    INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO provider_secrets (id, profile_id, provider_id, secret_kind, secret_value, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 `
             )
-            .run('secret_ref_profile_default', profileId, 'kilo', 'provider/kilo/default', 'api_key', 'active', now);
+            .run('provider_secret_profile_default', profileId, 'kilo', 'api_key', 'kilo-default-key', now);
 
         const dryRun = await caller.runtime.reset({
             target: 'full',
@@ -425,7 +416,7 @@ describe('runtime contracts: core flows', () => {
         });
         expect(dryRun.applied).toBe(false);
         expect(dryRun.counts.modeDefinitions).toBeGreaterThan(0);
-        expect(dryRun.counts.secretReferences).toBe(1);
+        expect(dryRun.counts.providerSecrets).toBe(1);
 
         const applied = await caller.runtime.reset({
             target: 'full',
@@ -437,7 +428,7 @@ describe('runtime contracts: core flows', () => {
         const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
         expect(snapshot.modeDefinitions.length).toBe(8);
         expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
-        expect(snapshot.secretReferences).toEqual([]);
+        expect(snapshot.providerSecrets).toEqual([]);
     });
 
     it('factory reset removes app-owned data and keeps workspace-local files', async () => {
@@ -446,16 +437,6 @@ describe('runtime contracts: core flows', () => {
         const userDataPath = path.join(tempRoot, 'userData');
         process.env['NEONCONDUCTOR_USER_DATA_PATH'] = userDataPath;
         resetPersistenceForTests(path.join(userDataPath, 'runtime', 'alpha', 'neonconductor.db'));
-
-        const deletedSecretKeys: string[] = [];
-        initializeSecretStore({
-            get: () => Promise.resolve(null),
-            set: () => Promise.resolve(),
-            delete: (key) => {
-                deletedSecretKeys.push(key);
-                return Promise.resolve();
-            },
-        });
 
         try {
             const caller = createCaller();
@@ -512,11 +493,11 @@ describe('runtime contracts: core flows', () => {
             sqlite
                 .prepare(
                     `
-                        INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO provider_secrets (id, profile_id, provider_id, secret_kind, secret_value, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
                     `
                 )
-                .run('secret_ref_factory_reset', profileId, 'kilo', 'provider/kilo/default', 'api_key', 'active', now);
+                .run('provider_secret_factory_reset', profileId, 'kilo', 'api_key', 'kilo-default-key', now);
             sqlite
                 .prepare(
                     `
@@ -562,7 +543,7 @@ describe('runtime contracts: core flows', () => {
             expect(result.counts.profiles).toBe(2);
             expect(result.counts.workspaceRoots).toBe(1);
             expect(result.counts.worktrees).toBe(1);
-            expect(result.cleanupCounts.secretKeys).toBe(1);
+            expect(result.cleanupCounts.providerSecrets).toBe(1);
             expect(result.cleanupCounts.globalAssetEntries).toBeGreaterThan(0);
             expect(result.cleanupCounts.logEntries).toBeGreaterThan(0);
             expect(result.cleanupCounts.managedWorktreeEntries).toBeGreaterThan(0);
@@ -572,7 +553,7 @@ describe('runtime contracts: core flows', () => {
             expect(snapshot.profiles[0]?.id).toBe(profileId);
             expect(snapshot.profiles[0]?.isActive).toBe(true);
             expect(snapshot.conversations).toEqual([]);
-            expect(snapshot.secretReferences).toEqual([]);
+            expect(snapshot.providerSecrets).toEqual([]);
 
             const remainingWorkspaceRoots = sqlite
                 .prepare('SELECT COUNT(*) AS count FROM workspace_roots')
@@ -585,7 +566,6 @@ describe('runtime contracts: core flows', () => {
             expect(remainingWorktrees.count).toBe(0);
             expect(remainingProfiles.count).toBe(1);
 
-            expect(deletedSecretKeys).toEqual(['provider/kilo/default']);
             expect(existsSync(storagePaths.globalAssetsRoot)).toBe(false);
             expect(existsSync(storagePaths.logsRoot)).toBe(false);
             expect(existsSync(storagePaths.managedWorktreesRoot)).toBe(false);
@@ -597,7 +577,6 @@ describe('runtime contracts: core flows', () => {
             } else {
                 process.env['NEONCONDUCTOR_USER_DATA_PATH'] = previousUserDataPath;
             }
-            initializeSecretStore();
         }
     }, 15000);
 });

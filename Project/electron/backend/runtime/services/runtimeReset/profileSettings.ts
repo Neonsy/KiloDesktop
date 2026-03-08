@@ -1,5 +1,4 @@
 import type { RuntimeResetCounts } from '@/app/backend/runtime/contracts';
-import { listSecretKeyRefsByProfile } from '@/app/backend/runtime/services/runtimeReset/secrets';
 import type {
     PlannedRuntimeResetOperation,
     RuntimeResetDatabase,
@@ -17,7 +16,7 @@ async function resolveProfileSettingsCounts(
         skillfiles,
         kiloAccountSnapshots,
         kiloOrgSnapshots,
-        secretReferences,
+        providerSecrets,
         providerAuthStates,
         providerAuthFlows,
         providerCatalogModels,
@@ -55,7 +54,7 @@ async function resolveProfileSettingsCounts(
             .where('profile_id', '=', profileId)
             .executeTakeFirst(),
         db
-            .selectFrom('secret_references')
+            .selectFrom('provider_secrets')
             .select((eb) => eb.fn.count<number>('id').as('count'))
             .where('profile_id', '=', profileId)
             .executeTakeFirst(),
@@ -94,7 +93,7 @@ async function resolveProfileSettingsCounts(
         skillfiles: skillfiles?.count ?? 0,
         kiloAccountSnapshots: kiloAccountSnapshots?.count ?? 0,
         kiloOrgSnapshots: kiloOrgSnapshots?.count ?? 0,
-        secretReferences: secretReferences?.count ?? 0,
+        providerSecrets: providerSecrets?.count ?? 0,
         providerAuthStates: providerAuthStates?.count ?? 0,
         providerAuthFlows: providerAuthFlows?.count ?? 0,
         providerCatalogModels: providerCatalogModels?.count ?? 0,
@@ -110,7 +109,7 @@ async function applyProfileSettingsDelete(db: RuntimeResetDatabase, profileId: s
     await db.deleteFrom('skillfiles').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('kilo_account_snapshots').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('kilo_org_snapshots').where('profile_id', '=', profileId).execute();
-    await db.deleteFrom('secret_references').where('profile_id', '=', profileId).execute();
+    await db.deleteFrom('provider_secrets').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('provider_auth_states').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('provider_auth_flows').where('profile_id', '=', profileId).execute();
     await db.deleteFrom('provider_model_catalog').where('profile_id', '=', profileId).execute();
@@ -123,14 +122,10 @@ export async function planProfileSettingsReset(
     db: RuntimeResetDatabase,
     profileId: string
 ): Promise<PlannedRuntimeResetOperation> {
-    const [counts, secretKeyRefs] = await Promise.all([
-        resolveProfileSettingsCounts(db, profileId),
-        listSecretKeyRefsByProfile(db, profileId),
-    ]);
+    const counts = await resolveProfileSettingsCounts(db, profileId);
 
     return {
         counts,
-        secretKeyRefs,
         reseedRuntimeData: false,
         apply: async (applyDb) => {
             await applyProfileSettingsDelete(applyDb, profileId);

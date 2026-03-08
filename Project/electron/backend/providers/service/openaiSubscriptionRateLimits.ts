@@ -4,7 +4,7 @@ import type {
     OpenAISubscriptionRateLimitWindow,
     OpenAISubscriptionRateLimitsSummary,
 } from '@/app/backend/persistence/types';
-import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
+import { readProviderSecretValue } from '@/app/backend/providers/auth/providerSecrets';
 import {
     errProviderService,
     okProviderService,
@@ -212,7 +212,7 @@ export async function getOpenAISubscriptionRateLimits(profileId: string): Promis
         });
     }
 
-    const accessToken = await readSecretValue(profileId, 'openai', 'access_token');
+    const accessToken = await readProviderSecretValue(profileId, 'openai', 'access_token');
     if (!accessToken) {
         return unavailable({
             profileId,

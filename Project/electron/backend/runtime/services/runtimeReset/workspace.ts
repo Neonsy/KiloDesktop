@@ -288,7 +288,6 @@ export async function planWorkspaceReset(
 
     return {
         counts: resolved.counts,
-        secretKeyRefs: [],
         reseedRuntimeData: false,
         apply: async (applyDb) => {
             await applyWorkspaceDelete(applyDb, resolved);

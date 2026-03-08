@@ -65,6 +65,13 @@ Expected promotion path: `dev` -> `prev` -> `main`.
 > [!NOTE]
 > The window resize dimension overlay in development is caused by open DevTools, not by app window/title bar logic.
 
+## Desktop Storage and Secret Migration in Development
+
+- The app database uses built-in `node:sqlite`, so normal desktop startup no longer depends on rebuilding a native SQLite addon.
+- Provider secrets are stored in the local app database and never exposed to renderer contracts.
+- No Electron-native rebuild is required for database or auth storage during normal dev startup.
+- `pnpm doctor:desktop` reports the current runtime root, log path, database path, and provider secret table state.
+
 ## Direct Access Contributor Rules
 
 If you are an invited contributor with direct repo access:

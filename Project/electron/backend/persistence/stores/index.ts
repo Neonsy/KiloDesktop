@@ -12,6 +12,7 @@ export { permissionStore } from '@/app/backend/persistence/stores/runtime/permis
 export { permissionPolicyOverrideStore } from '@/app/backend/persistence/stores/runtime/permissionPolicyOverrideStore';
 export { planStore } from '@/app/backend/persistence/stores/runtime/planStore';
 export { profileStore } from '@/app/backend/persistence/stores/profile/profileStore';
+export { providerSecretStore } from '@/app/backend/persistence/stores/profile/providerSecretStore';
 export { providerAuthStore } from '@/app/backend/persistence/stores/provider/providerAuthStore';
 export { providerAuthFlowStore } from '@/app/backend/persistence/stores/provider/providerAuthFlowStore';
 export { providerCatalogStore } from '@/app/backend/persistence/stores/provider/providerCatalogStore';
@@ -20,7 +21,6 @@ export { runStore } from '@/app/backend/persistence/stores/conversation/runs/run
 export { runUsageStore } from '@/app/backend/persistence/stores/conversation/runs/runUsageStore';
 export { rulesetStore } from '@/app/backend/persistence/stores/registry/rulesetStore';
 export { runtimeEventStore } from '@/app/backend/persistence/stores/runtime/runtimeEventStore';
-export { secretReferenceStore } from '@/app/backend/persistence/stores/profile/secretReferenceStore';
 export { sessionHistoryStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionHistoryStore';
 export { sessionAttachedSkillStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionAttachedSkillStore';
 export { sessionStore } from '@/app/backend/persistence/stores/conversation/sessions/sessionStore';

@@ -1,4 +1,4 @@
-import { formatRoutingBadge } from '@/web/components/conversation/routingBadge';
+import { formatRoutingBadge } from '@/web/components/conversation/shell/routingBadge';
 import { trpc } from '@/web/trpc/client';
 
 interface UseConversationShellRoutingBadgeInput {

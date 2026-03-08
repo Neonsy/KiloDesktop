@@ -8,7 +8,7 @@ import {
     mcpStore,
     modeStore,
     permissionStore,
-    secretReferenceStore,
+    providerSecretStore,
     skillfileStore,
     toolStore,
 } from '@/app/backend/persistence/__tests__/stores.shared';
@@ -68,12 +68,12 @@ describe('persistence stores: runtime domain', () => {
     it('seeds parity baseline stores', async () => {
         const profileId = getDefaultProfileId();
 
-        const [modes, skillfiles, account, marketplacePackages, secretReferences] = await Promise.all([
+        const [modes, skillfiles, account, marketplacePackages, providerSecrets] = await Promise.all([
             modeStore.listByProfile(profileId),
             skillfileStore.listByProfile(profileId),
             accountSnapshotStore.getByProfile(profileId),
             marketplaceStore.listPackages(),
-            secretReferenceStore.listByProfile(profileId),
+            providerSecretStore.listByProfile(profileId),
         ]);
 
         expect(modes.some((mode) => mode.topLevelTab === 'chat' && mode.modeKey === 'chat')).toBe(true);
@@ -82,7 +82,7 @@ describe('persistence stores: runtime domain', () => {
         expect(account.authState).toBe('logged_out');
         expect(account.profileId).toBe(profileId);
         expect(marketplacePackages).toEqual([]);
-        expect(secretReferences).toEqual([]);
+        expect(providerSecrets).toEqual([]);
     });
 
 });

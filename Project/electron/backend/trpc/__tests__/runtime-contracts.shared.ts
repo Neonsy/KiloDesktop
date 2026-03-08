@@ -6,6 +6,7 @@ import { afterEach, beforeEach, vi } from 'vitest';
 
 import { getDefaultProfileId, getPersistence, resetPersistenceForTests } from '@/app/backend/persistence/db';
 import type { EntityId } from '@/app/backend/runtime/contracts';
+import { initializeSecretStore } from '@/app/backend/secrets/store';
 import type { Context } from '@/app/backend/trpc/context';
 import { appRouter } from '@/app/backend/trpc/router';
 
@@ -146,6 +147,7 @@ export async function waitForOrchestratorStatus(
 export function registerRuntimeContractHooks() {
     beforeEach(() => {
         resetPersistenceForTests();
+        initializeSecretStore();
     });
 
     afterEach(() => {

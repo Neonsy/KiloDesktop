@@ -12,10 +12,10 @@ import {
     permissionStore,
     profileStore,
     providerCatalogStore,
+    providerSecretStore,
     providerStore,
     runStore,
     runUsageStore,
-    secretReferenceStore,
     sessionStore,
     skillfileStore,
     tagStore,
@@ -23,10 +23,12 @@ import {
     toolStore,
 } from '@/app/backend/persistence/stores';
 import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
+import { initializeSecretStore } from '@/app/backend/secrets/store';
 
 export function registerPersistenceStoreHooks() {
     beforeEach(() => {
         resetPersistenceForTests();
+        initializeSecretStore();
     });
 }
 
@@ -45,10 +47,10 @@ export {
     permissionStore,
     profileStore,
     providerCatalogStore,
+    providerSecretStore,
     providerStore,
     runStore,
     runUsageStore,
-    secretReferenceStore,
     sessionHistoryService,
     sessionStore,
     skillfileStore,

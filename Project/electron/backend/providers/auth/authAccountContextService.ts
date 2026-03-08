@@ -2,7 +2,7 @@ import { accountSnapshotStore, providerAuthStore } from '@/app/backend/persisten
 import { getAuthState } from '@/app/backend/providers/auth/authStateService';
 import { errAuthExecution, okAuthExecution, type AuthExecutionResult } from '@/app/backend/providers/auth/errors';
 import { syncKiloAccountContext } from '@/app/backend/providers/auth/kiloAccountSync';
-import { readSecretValue } from '@/app/backend/providers/auth/secretRefs';
+import { readProviderSecretValue } from '@/app/backend/providers/auth/providerSecrets';
 import type { ProviderAccountContextResult } from '@/app/backend/providers/auth/types';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
@@ -42,8 +42,8 @@ export async function setOrganization(
     });
 
     const accessToken =
-        (await readSecretValue(profileId, providerId, 'access_token')) ??
-        (await readSecretValue(profileId, providerId, 'api_key'));
+        (await readProviderSecretValue(profileId, providerId, 'access_token')) ??
+        (await readProviderSecretValue(profileId, providerId, 'api_key'));
     if (accessToken) {
         const syncResult = await syncKiloAccountContext({
             profileId,

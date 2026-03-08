@@ -8,7 +8,6 @@ import {
 } from '@/app/backend/runtime/services/common/operationalError';
 import { planFullReset } from '@/app/backend/runtime/services/runtimeReset/full';
 import { planProfileSettingsReset } from '@/app/backend/runtime/services/runtimeReset/profileSettings';
-import { removeSecretsByReferences } from '@/app/backend/runtime/services/runtimeReset/secrets';
 import type { PlannedRuntimeResetOperation } from '@/app/backend/runtime/services/runtimeReset/types';
 import { planWorkspaceReset } from '@/app/backend/runtime/services/runtimeReset/workspace';
 import { appLog } from '@/app/main/logging';
@@ -40,7 +39,6 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
                 if (plan.reseedRuntimeData) {
                     reseedRuntimeData();
                 }
-                await removeSecretsByReferences(plan.secretKeyRefs);
             }
 
             const result = {
@@ -58,7 +56,6 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
                 dryRun,
                 applied: result.applied,
                 durationMs: Date.now() - startedAt,
-                secretRefsRemoved: dryRun ? 0 : plan.secretKeyRefs.length,
                 counts: plan.counts,
             });
 

@@ -27,7 +27,7 @@ export const EMPTY_COUNTS: RuntimeResetCounts = {
     marketplaceAssets: 0,
     kiloAccountSnapshots: 0,
     kiloOrgSnapshots: 0,
-    secretReferences: 0,
+    providerSecrets: 0,
     providerAuthStates: 0,
     providerAuthFlows: 0,
     providerCatalogModels: 0,
@@ -40,7 +40,6 @@ export const EMPTY_COUNTS: RuntimeResetCounts = {
 
 export interface PlannedRuntimeResetOperation {
     counts: RuntimeResetCounts;
-    secretKeyRefs: string[];
     reseedRuntimeData: boolean;
     apply: (db: RuntimeResetDatabase) => Promise<void>;
 }

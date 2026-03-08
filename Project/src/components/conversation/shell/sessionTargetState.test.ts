@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
     applySessionModelOverride,
     applySessionProviderOverride,
-} from '@/web/components/conversation/sessionTargetState';
+} from '@/web/components/conversation/shell/sessionTargetState';
 
 describe('sessionTargetState', () => {
     it('keeps provider/model overrides isolated per session', () => {

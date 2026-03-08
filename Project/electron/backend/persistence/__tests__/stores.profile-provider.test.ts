@@ -8,10 +8,10 @@ import {
     getPersistence,
     profileStore,
     providerCatalogStore,
+    providerSecretStore,
     providerStore,
     runStore,
     runUsageStore,
-    secretReferenceStore,
     sessionStore,
     threadStore,
 } from '@/app/backend/persistence/__tests__/stores.shared';
@@ -264,12 +264,11 @@ describe('persistence stores: profile and provider domain', () => {
         const renamed = await profileStore.rename(created.id, 'Workspace Profile Renamed');
         expect(renamed?.name).toBe('Workspace Profile Renamed');
 
-        await secretReferenceStore.upsert({
+        await providerSecretStore.upsertValue({
             profileId,
             providerId: 'openai',
             secretKind: 'api_key',
-            secretKeyRef: 'secret://openai/source',
-            status: 'configured',
+            secretValue: 'openai-profile-source-key',
         });
 
         const duplicatedResult = await profileStore.duplicate(profileId, 'Profile Duplicate');
@@ -283,7 +282,7 @@ describe('persistence stores: profile and provider domain', () => {
             throw new Error('Expected profile duplication to succeed.');
         }
 
-        const duplicatedSecrets = await secretReferenceStore.listByProfile(duplicated.id);
+        const duplicatedSecrets = await providerSecretStore.listByProfile(duplicated.id);
         expect(duplicatedSecrets).toEqual([]);
 
         const activatedResult = await profileStore.setActive(duplicated.id);

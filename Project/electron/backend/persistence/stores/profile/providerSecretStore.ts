@@ -3,133 +3,118 @@ import { randomUUID } from 'node:crypto';
 import { getPersistence } from '@/app/backend/persistence/db';
 import { parseEnumValue } from '@/app/backend/persistence/stores/shared/rowParsers';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
-import type { SecretReferenceRecord } from '@/app/backend/persistence/types';
+import type { ProviderSecretKindRecord, ProviderSecretRecord } from '@/app/backend/persistence/types';
 import { providerIds } from '@/app/backend/runtime/contracts';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { providerSecretKinds } from '@/app/backend/secrets/providerSecretKeys';
 
-function mapSecretReference(row: {
+function mapProviderSecret(row: {
     id: string;
     profile_id: string;
     provider_id: string;
-    secret_key_ref: string;
     secret_kind: string;
-    status: string;
     updated_at: string;
-}): SecretReferenceRecord {
+}): ProviderSecretRecord {
     return {
         id: row.id,
         profileId: row.profile_id,
-        providerId: parseEnumValue(row.provider_id, 'secret_references.provider_id', providerIds),
-        secretKeyRef: row.secret_key_ref,
-        secretKind: row.secret_kind,
-        status: row.status,
+        providerId: parseEnumValue(row.provider_id, 'provider_secrets.provider_id', providerIds),
+        secretKind: parseEnumValue(row.secret_kind, 'provider_secrets.secret_kind', providerSecretKinds),
+        storage: 'database',
         updatedAt: row.updated_at,
     };
 }
 
-export class SecretReferenceStore {
-    async listByProfile(profileId: string): Promise<SecretReferenceRecord[]> {
+export class ProviderSecretStore {
+    async listByProfile(profileId: string): Promise<ProviderSecretRecord[]> {
         const { db } = getPersistence();
         const rows = await db
-            .selectFrom('secret_references')
-            .select(['id', 'profile_id', 'provider_id', 'secret_key_ref', 'secret_kind', 'status', 'updated_at'])
+            .selectFrom('provider_secrets')
+            .select(['id', 'profile_id', 'provider_id', 'secret_kind', 'updated_at'])
             .where('profile_id', '=', profileId)
             .orderBy('provider_id', 'asc')
             .orderBy('secret_kind', 'asc')
             .execute();
 
-        return rows.map(mapSecretReference);
+        return rows.map(mapProviderSecret);
     }
 
-    async listAll(): Promise<SecretReferenceRecord[]> {
+    async listByProfileAndProvider(
+        profileId: string,
+        providerId: RuntimeProviderId
+    ): Promise<ProviderSecretRecord[]> {
         const { db } = getPersistence();
         const rows = await db
-            .selectFrom('secret_references')
-            .select(['id', 'profile_id', 'provider_id', 'secret_key_ref', 'secret_kind', 'status', 'updated_at'])
-            .orderBy('profile_id', 'asc')
-            .orderBy('provider_id', 'asc')
-            .orderBy('secret_kind', 'asc')
-            .execute();
-
-        return rows.map(mapSecretReference);
-    }
-
-    async listByProfileAndProvider(profileId: string, providerId: RuntimeProviderId): Promise<SecretReferenceRecord[]> {
-        const { db } = getPersistence();
-        const rows = await db
-            .selectFrom('secret_references')
-            .select(['id', 'profile_id', 'provider_id', 'secret_key_ref', 'secret_kind', 'status', 'updated_at'])
+            .selectFrom('provider_secrets')
+            .select(['id', 'profile_id', 'provider_id', 'secret_kind', 'updated_at'])
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
             .orderBy('secret_kind', 'asc')
             .execute();
 
-        return rows.map(mapSecretReference);
+        return rows.map(mapProviderSecret);
     }
 
-    async getByProfileProviderAndKind(
+    async getValue(
         profileId: string,
         providerId: RuntimeProviderId,
-        secretKind: string
-    ): Promise<SecretReferenceRecord | null> {
+        secretKind: ProviderSecretKindRecord
+    ): Promise<string | null> {
         const { db } = getPersistence();
         const row = await db
-            .selectFrom('secret_references')
-            .select(['id', 'profile_id', 'provider_id', 'secret_key_ref', 'secret_kind', 'status', 'updated_at'])
+            .selectFrom('provider_secrets')
+            .select('secret_value')
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
             .where('secret_kind', '=', secretKind)
             .executeTakeFirst();
 
-        return row ? mapSecretReference(row) : null;
+        return row?.secret_value ?? null;
     }
 
-    async upsert(input: {
+    async upsertValue(input: {
         profileId: string;
         providerId: RuntimeProviderId;
-        secretKind: string;
-        secretKeyRef: string;
-        status: string;
-    }): Promise<SecretReferenceRecord> {
+        secretKind: ProviderSecretKindRecord;
+        secretValue: string;
+    }): Promise<ProviderSecretRecord> {
         const { db } = getPersistence();
         const updatedAt = nowIso();
-        const id = `secret_ref_${randomUUID()}`;
+        const id = `provider_secret_${randomUUID()}`;
 
         await db
-            .insertInto('secret_references')
+            .insertInto('provider_secrets')
             .values({
                 id,
                 profile_id: input.profileId,
                 provider_id: input.providerId,
-                secret_key_ref: input.secretKeyRef,
                 secret_kind: input.secretKind,
-                status: input.status,
+                secret_value: input.secretValue,
                 updated_at: updatedAt,
             })
             .onConflict((oc) =>
                 oc.columns(['profile_id', 'provider_id', 'secret_kind']).doUpdateSet({
-                    secret_key_ref: input.secretKeyRef,
-                    status: input.status,
+                    secret_value: input.secretValue,
                     updated_at: updatedAt,
                 })
             )
             .execute();
 
         const row = await db
-            .selectFrom('secret_references')
-            .select(['id', 'profile_id', 'provider_id', 'secret_key_ref', 'secret_kind', 'status', 'updated_at'])
+            .selectFrom('provider_secrets')
+            .select(['id', 'profile_id', 'provider_id', 'secret_kind', 'updated_at'])
             .where('profile_id', '=', input.profileId)
             .where('provider_id', '=', input.providerId)
             .where('secret_kind', '=', input.secretKind)
             .executeTakeFirstOrThrow();
 
-        return mapSecretReference(row);
+        return mapProviderSecret(row);
     }
 
     async deleteByProfileAndProvider(profileId: string, providerId: RuntimeProviderId): Promise<number> {
         const { db } = getPersistence();
         const rows = await db
-            .deleteFrom('secret_references')
+            .deleteFrom('provider_secrets')
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
             .returning('id')
@@ -141,11 +126,11 @@ export class SecretReferenceStore {
     async deleteByProfileProviderAndKind(
         profileId: string,
         providerId: RuntimeProviderId,
-        secretKind: string
+        secretKind: ProviderSecretKindRecord
     ): Promise<number> {
         const { db } = getPersistence();
         const rows = await db
-            .deleteFrom('secret_references')
+            .deleteFrom('provider_secrets')
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
             .where('secret_kind', '=', secretKind)
@@ -154,6 +139,12 @@ export class SecretReferenceStore {
 
         return rows.length;
     }
+
+    async deleteAll(): Promise<number> {
+        const { db } = getPersistence();
+        const rows = await db.deleteFrom('provider_secrets').returning('id').execute();
+        return rows.length;
+    }
 }
 
-export const secretReferenceStore = new SecretReferenceStore();
+export const providerSecretStore = new ProviderSecretStore();

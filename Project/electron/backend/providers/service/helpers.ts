@@ -1,4 +1,4 @@
-import { providerStore, secretReferenceStore } from '@/app/backend/persistence/stores';
+import { providerStore } from '@/app/backend/persistence/stores';
 import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 import { toSupportedProviderIdResult } from '@/app/backend/providers/registry';
 import {
@@ -7,6 +7,7 @@ import {
     type ProviderServiceResult,
 } from '@/app/backend/providers/service/errors';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { buildProviderSecretKey } from '@/app/backend/secrets/providerSecretKeys';
 import { getSecretStore } from '@/app/backend/secrets/store';
 
 export function defaultAuthState(profileId: string, providerId: RuntimeProviderId): ProviderAuthStateRecord {
@@ -41,11 +42,6 @@ export async function resolveSecret(
     providerId: RuntimeProviderId,
     secretKind: 'api_key' | 'access_token'
 ): Promise<string | undefined> {
-    const ref = await secretReferenceStore.getByProfileProviderAndKind(profileId, providerId, secretKind);
-    if (!ref) {
-        return undefined;
-    }
-
-    const value = await getSecretStore().get(ref.secretKeyRef);
+    const value = await getSecretStore().get(buildProviderSecretKey(profileId, providerId, secretKind));
     return value ?? undefined;
 }

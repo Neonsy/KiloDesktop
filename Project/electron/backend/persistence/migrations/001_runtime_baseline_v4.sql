@@ -365,16 +365,6 @@ CREATE TABLE runtime_events (
     created_at TEXT NOT NULL
 );
 
-CREATE TABLE secret_references (
-    id TEXT PRIMARY KEY,
-    profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-    provider_id TEXT NOT NULL,
-    secret_key_ref TEXT NOT NULL,
-    secret_kind TEXT NOT NULL,
-    status TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
 CREATE TABLE "sessions" (
     id TEXT PRIMARY KEY,
     profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
@@ -530,9 +520,6 @@ CREATE INDEX idx_runs_session_id_created_at
     ON runs(session_id, created_at DESC);
 
 CREATE INDEX idx_runtime_events_sequence ON runtime_events(sequence);
-
-CREATE UNIQUE INDEX idx_secret_references_profile_provider_kind
-    ON secret_references(profile_id, provider_id, secret_kind);
 
 CREATE INDEX idx_sessions_profile_conversation_updated_at
     ON "sessions"(profile_id, conversation_id, updated_at DESC);

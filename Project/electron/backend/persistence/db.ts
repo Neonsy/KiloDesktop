@@ -1,11 +1,12 @@
-import BetterSqlite3 from 'better-sqlite3';
 import { Kysely, SqliteDialect } from 'kysely';
 import { mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { seedRuntimeData } from '@/app/backend/persistence/bootstrap/runtimeSeed';
 import { runtimeSqlMigrations } from '@/app/backend/persistence/generatedMigrations';
+import { createNodeSqliteDatabase } from '@/app/backend/persistence/nodeSqliteDialect';
 import {
     markPersistenceBaselineApplied,
     resetPersistenceBaseline,
@@ -15,10 +16,8 @@ import type { DatabaseSchema } from '@/app/backend/persistence/schema';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { appLog } from '@/app/main/logging';
 
-import type { Database as BetterSqliteDatabase } from 'better-sqlite3';
-
 export interface PersistenceContext {
-    sqlite: BetterSqliteDatabase;
+    sqlite: DatabaseSync;
     db: Kysely<DatabaseSchema>;
     dbPath: string;
 }
@@ -146,7 +145,7 @@ function ensureParentDirectory(dbPath: string): void {
     mkdirSync(directory, { recursive: true });
 }
 
-function applySqlMigrations(sqlite: BetterSqliteDatabase): void {
+function applySqlMigrations(sqlite: DatabaseSync): void {
     sqlite.exec(`
         CREATE TABLE IF NOT EXISTS schema_migrations (
             name TEXT PRIMARY KEY,
@@ -165,12 +164,15 @@ function applySqlMigrations(sqlite: BetterSqliteDatabase): void {
 
         const appliedAt = new Date().toISOString();
 
-        const runMigration = sqlite.transaction(() => {
+        sqlite.exec('BEGIN');
+        try {
             sqlite.exec(migration.sql);
             recordAppliedStatement.run(migration.name, appliedAt);
-        });
-
-        runMigration();
+            sqlite.exec('COMMIT');
+        } catch (error) {
+            sqlite.exec('ROLLBACK');
+            throw error;
+        }
     }
 }
 
@@ -196,17 +198,19 @@ export function getPersistenceStoragePaths(): PersistenceStoragePaths {
 function createPersistenceContext(dbPath: string): PersistenceContext {
     ensureParentDirectory(dbPath);
 
-    const sqlite = new BetterSqlite3(dbPath);
-    sqlite.pragma('foreign_keys = ON');
-    sqlite.pragma('journal_mode = WAL');
-    sqlite.pragma('busy_timeout = 5000');
+    const sqlite = new DatabaseSync(dbPath, {
+        enableForeignKeyConstraints: true,
+        timeout: 5000,
+    });
+    sqlite.exec('PRAGMA journal_mode = WAL');
+    sqlite.exec('PRAGMA busy_timeout = 5000');
 
     applySqlMigrations(sqlite);
     seedRuntimeData(sqlite, DEFAULT_PROFILE_ID);
 
     const db = new Kysely<DatabaseSchema>({
         dialect: new SqliteDialect({
-            database: sqlite,
+            database: createNodeSqliteDatabase(sqlite),
         }),
     });
 

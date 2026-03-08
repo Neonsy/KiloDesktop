@@ -11,6 +11,8 @@ import type {
     ProviderAuthFlowType,
     ProviderAuthMethod,
     ProviderAuthState,
+    ProviderSecret,
+    ProviderSecretKind,
     PermissionPolicy,
     PermissionScopeKind,
     RuntimeOpenAITransport,
@@ -20,7 +22,6 @@ import type {
     RuntimeProviderId,
     RulesetDefinition,
     RunStatus,
-    SecretReference,
     SkillfileDefinition,
     TopLevelTab,
     ToolCapability,
@@ -580,7 +581,9 @@ export type MarketplacePackageRecord = MarketplacePackage;
 
 export type KiloAccountContextRecord = KiloAccountContext;
 
-export type SecretReferenceRecord = SecretReference;
+export type ProviderSecretKindRecord = ProviderSecretKind;
+
+export type ProviderSecretRecord = ProviderSecret;
 
 export interface RuntimeSnapshotV1 {
     generatedAt: string;
@@ -621,7 +624,7 @@ export interface RuntimeSnapshotV1 {
     skillfiles: SkillfileDefinitionRecord[];
     marketplacePackages: MarketplacePackageRecord[];
     kiloAccountContext: KiloAccountContextRecord;
-    secretReferences: SecretReferenceRecord[];
+    providerSecrets: ProviderSecretRecord[];
     defaults: {
         providerId: string;
         modelId: string;
