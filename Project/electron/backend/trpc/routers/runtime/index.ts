@@ -1,12 +1,14 @@
 import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
 import {
     profileInputSchema,
+    runtimeFactoryResetInputSchema,
     runtimeEventsSubscriptionInputSchema,
     runtimeResetInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { runtimeEventBus } from '@/app/backend/runtime/services/runtimeEventBus';
 import { runtimeResetEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
+import { runtimeFactoryResetService } from '@/app/backend/runtime/services/runtimeFactoryReset';
 import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset';
 import { runtimeShellBootstrapService } from '@/app/backend/runtime/services/runtimeShellBootstrap';
 import { runtimeSnapshotService } from '@/app/backend/runtime/services/runtimeSnapshot';
@@ -85,6 +87,31 @@ export const runtimeRouter = router({
             cursor = Math.max(cursor, nextEvent.sequence);
             yield nextEvent;
         }
+    }),
+    factoryReset: publicProcedure.input(runtimeFactoryResetInputSchema).mutation(async ({ input }) => {
+        const result = await runtimeFactoryResetService.reset(input);
+        if (result.isErr()) {
+            throw toTrpcError(result.error);
+        }
+
+        const factoryResetResult = result.value;
+        await runtimeEventLogService.append(
+            runtimeResetEvent({
+                entityType: 'runtime',
+                domain: 'runtime',
+                entityId: 'runtime',
+                eventType: 'runtime.reset.applied',
+                payload: {
+                    target: 'full',
+                    counts: factoryResetResult.counts,
+                    dryRun: false,
+                    profileId: factoryResetResult.resetProfileId,
+                    workspaceFingerprint: null,
+                },
+            })
+        );
+
+        return factoryResetResult;
     }),
     reset: publicProcedure.input(runtimeResetInputSchema).mutation(async ({ input }) => {
         const result = await runtimeResetService.reset(input);

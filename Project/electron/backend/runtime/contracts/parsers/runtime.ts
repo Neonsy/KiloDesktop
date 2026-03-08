@@ -2,6 +2,7 @@ import { contextBudgets, runtimeResetTargets } from '@/app/backend/runtime/contr
 import {
     createParser,
     readEnumValue,
+    readBoolean,
     readObject,
     readOptionalBoolean,
     readOptionalNumber,
@@ -9,10 +10,12 @@ import {
 } from '@/app/backend/runtime/contracts/parsers/helpers';
 import type {
     ContextBudgetInput,
+    RuntimeFactoryResetInput,
     RuntimeEventsSubscriptionInput,
     RuntimeResetInput,
     WindowStateSubscriptionInput,
 } from '@/app/backend/runtime/contracts/types';
+import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/app/backend/runtime/contracts/types';
 
 export function parseRuntimeEventsSubscriptionInput(input: unknown): RuntimeEventsSubscriptionInput {
     if (input === undefined) {
@@ -78,6 +81,27 @@ export function parseRuntimeResetInput(input: unknown): RuntimeResetInput {
     };
 }
 
+export function parseRuntimeFactoryResetInput(input: unknown): RuntimeFactoryResetInput {
+    const source = readObject(input, 'input');
+    const confirm = readBoolean(source.confirm, 'confirm');
+    const confirmationText = readOptionalString(source.confirmationText, 'confirmationText') ?? '';
+
+    if (!confirm) {
+        throw new Error('Invalid "confirm": expected true for factory reset.');
+    }
+
+    if (confirmationText !== FACTORY_RESET_CONFIRMATION_TEXT) {
+        throw new Error(
+            `Invalid "confirmationText": expected exact phrase "${FACTORY_RESET_CONFIRMATION_TEXT}".`
+        );
+    }
+
+    return {
+        confirm,
+        confirmationText,
+    };
+}
+
 export function parseContextBudgetInput(input: unknown): ContextBudgetInput {
     const source = readObject(input, 'input');
     return {
@@ -88,4 +112,5 @@ export function parseContextBudgetInput(input: unknown): ContextBudgetInput {
 export const runtimeEventsSubscriptionInputSchema = createParser(parseRuntimeEventsSubscriptionInput);
 export const windowStateSubscriptionInputSchema = createParser(parseWindowStateSubscriptionInput);
 export const runtimeResetInputSchema = createParser(parseRuntimeResetInput);
+export const runtimeFactoryResetInputSchema = createParser(parseRuntimeFactoryResetInput);
 export const contextBudgetInputSchema = createParser(parseContextBudgetInput);

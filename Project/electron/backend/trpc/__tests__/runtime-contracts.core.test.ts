@@ -1,13 +1,23 @@
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-
+import { getPersistenceStoragePaths } from '@/app/backend/persistence/db';
+import { initializeSecretStore } from '@/app/backend/secrets/store';
 import {
-    runtimeContractProfileId,
-    registerRuntimeContractHooks,
     createCaller,
     createSessionInScope,
     defaultRuntimeOptions,
     getPersistence,
+    mkdirSync,
+    mkdtempSync,
+    os,
+    path,
+    readFileSync,
+    registerRuntimeContractHooks,
+    requireEntityId,
+    resetPersistenceForTests,
+    runtimeContractProfileId,
+    writeFileSync,
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
 
 registerRuntimeContractHooks();
@@ -429,4 +439,165 @@ describe('runtime contracts: core flows', () => {
         expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
         expect(snapshot.secretReferences).toEqual([]);
     });
+
+    it('factory reset removes app-owned data and keeps workspace-local files', async () => {
+        const previousUserDataPath = process.env['NEONCONDUCTOR_USER_DATA_PATH'];
+        const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-factory-reset-'));
+        const userDataPath = path.join(tempRoot, 'userData');
+        process.env['NEONCONDUCTOR_USER_DATA_PATH'] = userDataPath;
+        resetPersistenceForTests(path.join(userDataPath, 'runtime', 'alpha', 'neonconductor.db'));
+
+        const deletedSecretKeys: string[] = [];
+        initializeSecretStore({
+            get: () => Promise.resolve(null),
+            set: () => Promise.resolve(),
+            delete: (key) => {
+                deletedSecretKeys.push(key);
+                return Promise.resolve();
+            },
+        });
+
+        try {
+            const caller = createCaller();
+            const { sqlite } = getPersistence();
+            await caller.profile.create({ name: 'Factory Reset Profile' });
+            const workspacePath = mkdtempSync(path.join(os.tmpdir(), 'neonconductor-factory-reset-workspace-'));
+            const workspaceLocalRuntimePath = path.join(workspacePath, '.neonconductor');
+            mkdirSync(workspaceLocalRuntimePath, { recursive: true });
+            const workspaceLocalRuntimeFile = path.join(workspaceLocalRuntimePath, 'keep.md');
+            writeFileSync(workspaceLocalRuntimeFile, 'keep me');
+
+            const threadResult = await caller.conversation.createThread({
+                profileId,
+                topLevelTab: 'agent',
+                scope: 'workspace',
+                workspacePath,
+                title: 'Factory Reset Workspace Thread',
+            });
+            const threadId = requireEntityId(
+                threadResult.thread.id,
+                'thr',
+                'Expected factory reset thread id with "thr_" prefix.'
+            );
+            await caller.session.create({
+                profileId,
+                threadId,
+                kind: 'local',
+            });
+
+            const storagePaths = getPersistenceStoragePaths();
+            mkdirSync(path.join(storagePaths.globalAssetsRoot, 'skills'), { recursive: true });
+            writeFileSync(path.join(storagePaths.globalAssetsRoot, 'skills', 'sample.md'), '# skill');
+            mkdirSync(storagePaths.logsRoot, { recursive: true });
+            writeFileSync(path.join(storagePaths.logsRoot, '2026-03-08.ndjson'), '{"event":"log"}\n');
+            const managedWorktreePath = path.join(storagePaths.managedWorktreesRoot, 'workspace', 'feature-reset');
+            mkdirSync(managedWorktreePath, { recursive: true });
+            writeFileSync(path.join(managedWorktreePath, 'README.md'), 'managed worktree');
+
+            const now = new Date().toISOString();
+            const threadWorkspaceFingerprint = sqlite
+                .prepare(
+                    `
+                        SELECT conversation.workspace_fingerprint AS workspaceFingerprint
+                        FROM threads AS thread
+                        INNER JOIN conversations AS conversation
+                            ON conversation.id = thread.conversation_id
+                        WHERE thread.id = ?
+                    `
+                )
+                .get(threadId) as { workspaceFingerprint: string | null };
+            if (!threadWorkspaceFingerprint.workspaceFingerprint) {
+                throw new Error('Expected factory reset thread to be workspace-bound.');
+            }
+            sqlite
+                .prepare(
+                    `
+                        INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    `
+                )
+                .run('secret_ref_factory_reset', profileId, 'kilo', 'provider/kilo/default', 'api_key', 'active', now);
+            sqlite
+                .prepare(
+                    `
+                        INSERT INTO worktrees
+                            (
+                                id,
+                                profile_id,
+                                workspace_fingerprint,
+                                branch,
+                                base_branch,
+                                absolute_path,
+                                path_key,
+                                label,
+                                status,
+                                created_at,
+                                updated_at,
+                                last_used_at
+                            )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    `
+                )
+                .run(
+                    'wt_factory_reset',
+                    profileId,
+                    threadWorkspaceFingerprint.workspaceFingerprint,
+                    'feature-reset',
+                    'main',
+                    managedWorktreePath,
+                    process.platform === 'win32' ? managedWorktreePath.toLowerCase() : managedWorktreePath,
+                    'Factory Reset Worktree',
+                    'ready',
+                    now,
+                    now,
+                    now
+                );
+
+            const result = await caller.runtime.factoryReset({
+                confirm: true,
+                confirmationText: 'RESET APP DATA',
+            });
+            expect(result.applied).toBe(true);
+            expect(result.resetProfileId).toBe(profileId);
+            expect(result.counts.profiles).toBe(2);
+            expect(result.counts.workspaceRoots).toBe(1);
+            expect(result.counts.worktrees).toBe(1);
+            expect(result.cleanupCounts.secretKeys).toBe(1);
+            expect(result.cleanupCounts.globalAssetEntries).toBeGreaterThan(0);
+            expect(result.cleanupCounts.logEntries).toBeGreaterThan(0);
+            expect(result.cleanupCounts.managedWorktreeEntries).toBeGreaterThan(0);
+
+            const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId: result.resetProfileId });
+            expect(snapshot.profiles).toHaveLength(1);
+            expect(snapshot.profiles[0]?.id).toBe(profileId);
+            expect(snapshot.profiles[0]?.isActive).toBe(true);
+            expect(snapshot.conversations).toEqual([]);
+            expect(snapshot.secretReferences).toEqual([]);
+
+            const remainingWorkspaceRoots = sqlite
+                .prepare('SELECT COUNT(*) AS count FROM workspace_roots')
+                .get() as { count: number };
+            const remainingWorktrees = sqlite.prepare('SELECT COUNT(*) AS count FROM worktrees').get() as {
+                count: number;
+            };
+            const remainingProfiles = sqlite.prepare('SELECT COUNT(*) AS count FROM profiles').get() as { count: number };
+            expect(remainingWorkspaceRoots.count).toBe(0);
+            expect(remainingWorktrees.count).toBe(0);
+            expect(remainingProfiles.count).toBe(1);
+
+            expect(deletedSecretKeys).toEqual(['provider/kilo/default']);
+            expect(existsSync(storagePaths.globalAssetsRoot)).toBe(false);
+            expect(existsSync(storagePaths.logsRoot)).toBe(false);
+            expect(existsSync(storagePaths.managedWorktreesRoot)).toBe(false);
+            expect(readFileSync(workspaceLocalRuntimeFile, 'utf8')).toBe('keep me');
+            expect(() => sqlite.prepare('SELECT 1').get()).not.toThrow();
+        } finally {
+            if (previousUserDataPath === undefined) {
+                delete process.env['NEONCONDUCTOR_USER_DATA_PATH'];
+            } else {
+                process.env['NEONCONDUCTOR_USER_DATA_PATH'] = previousUserDataPath;
+            }
+            initializeSecretStore();
+        }
+    }, 15000);
 });

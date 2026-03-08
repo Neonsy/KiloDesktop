@@ -143,7 +143,7 @@ export function invalidateProfileQueries(utils: TrpcUtils, profileId: string | u
 }
 
 export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<void> {
-    await Promise.all([
+    const invalidations: Array<Promise<unknown>> = [
         utils.runtime.getShellBootstrap.invalidate(),
         utils.runtime.getDiagnosticSnapshot.invalidate(),
         utils.conversation.listBuckets.invalidate(),
@@ -178,5 +178,14 @@ export async function invalidateRuntimeResetQueries(utils: TrpcUtils): Promise<v
         utils.permission.listPending.invalidate(),
         utils.tool.list.invalidate(),
         utils.mcp.listServers.invalidate(),
-    ]);
+    ];
+
+    invalidations.push(utils.profile.getExecutionPreset.invalidate());
+    invalidations.push(utils.runtime.listWorkspaceRoots.invalidate());
+    invalidations.push(utils.worktree.list.invalidate());
+    invalidations.push(utils.session.getAttachedSkills.invalidate());
+    invalidations.push(utils.conversation.getEditPreference.invalidate());
+    invalidations.push(utils.conversation.getThreadTitlePreference.invalidate());
+
+    await Promise.all(invalidations);
 }

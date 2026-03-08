@@ -236,6 +236,28 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                         </section>
                     ) : null}
 
+                    <section className='border-destructive/30 bg-destructive/5 space-y-3 rounded-lg border p-3'>
+                        <div className='space-y-1'>
+                            <p className='text-sm font-semibold'>Factory Reset App Data</p>
+                            <p className='text-muted-foreground text-xs'>
+                                Deletes all app-owned chats, profiles, permissions, provider state, worktree records,
+                                managed worktrees, global assets, and logs. Workspace-local
+                                <code className='mx-1 rounded bg-black/5 px-1 py-0.5 text-[11px]'>.neonconductor</code>
+                                files inside your repositories are not removed.
+                            </p>
+                        </div>
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='destructive'
+                            disabled={controller.factoryResetMutation.isPending}
+                            onClick={() => {
+                                controller.setConfirmFactoryResetOpen(true);
+                            }}>
+                            Factory Reset App Data
+                        </Button>
+                    </section>
+
                     {controller.statusMessage ? <p className='text-primary text-xs'>{controller.statusMessage}</p> : null}
                 </div>
             </div>
@@ -254,6 +276,39 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                     void controller.deleteProfile();
                 }}
             />
+            <ConfirmDialog
+                open={controller.confirmFactoryResetOpen}
+                title='Factory Reset App Data'
+                message='This removes all app-owned data and recreates a fresh default profile. Type the confirmation phrase to continue.'
+                confirmLabel='Reset app data'
+                destructive
+                busy={controller.factoryResetMutation.isPending}
+                confirmDisabled={
+                    controller.factoryResetConfirmationText !== controller.factoryResetConfirmationPhrase
+                }
+                onCancel={() => {
+                    controller.setConfirmFactoryResetOpen(false);
+                    controller.setFactoryResetConfirmationText('');
+                }}
+                onConfirm={() => {
+                    void controller.factoryResetAppData();
+                }}>
+                <div className='space-y-2'>
+                    <p className='text-muted-foreground text-xs'>
+                        Enter <span className='font-semibold'>{controller.factoryResetConfirmationPhrase}</span> to
+                        confirm.
+                    </p>
+                    <input
+                        type='text'
+                        value={controller.factoryResetConfirmationText}
+                        onChange={(event) => {
+                            controller.setFactoryResetConfirmationText(event.target.value);
+                        }}
+                        className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
+                        placeholder={controller.factoryResetConfirmationPhrase}
+                    />
+                </div>
+            </ConfirmDialog>
         </section>
     );
 }

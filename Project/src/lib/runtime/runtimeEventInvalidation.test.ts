@@ -27,6 +27,8 @@ const openAiSubscriptionRateLimitsKey = 'provider.getOpenAI' + 'SubscriptionRate
 function createUtilsMock(calls: InvalidationCall[]) {
     return {
         conversation: {
+            getEditPreference: createInvalidateLeaf(calls, 'conversation.getEditPreference'),
+            getThreadTitlePreference: createInvalidateLeaf(calls, 'conversation.getThreadTitlePreference'),
             listBuckets: createInvalidateLeaf(calls, 'conversation.listBuckets'),
             listTags: createInvalidateLeaf(calls, 'conversation.listTags'),
             listThreads: createInvalidateLeaf(calls, 'conversation.listThreads'),
@@ -34,8 +36,10 @@ function createUtilsMock(calls: InvalidationCall[]) {
         runtime: {
             getShellBootstrap: createInvalidateLeaf(calls, 'runtime.getShellBootstrap'),
             getDiagnosticSnapshot: createInvalidateLeaf(calls, 'runtime.getDiagnosticSnapshot'),
+            listWorkspaceRoots: createInvalidateLeaf(calls, 'runtime.listWorkspaceRoots'),
         },
         session: {
+            getAttachedSkills: createInvalidateLeaf(calls, 'session.getAttachedSkills'),
             list: createInvalidateLeaf(calls, 'session.list'),
             status: createInvalidateLeaf(calls, 'session.status'),
             listRuns: createInvalidateLeaf(calls, 'session.listRuns'),
@@ -68,6 +72,7 @@ function createUtilsMock(calls: InvalidationCall[]) {
             latestBySession: createInvalidateLeaf(calls, 'orchestrator.latestBySession'),
         },
         profile: {
+            getExecutionPreset: createInvalidateLeaf(calls, 'profile.getExecutionPreset'),
             list: createInvalidateLeaf(calls, 'profile.list'),
             getActive: createInvalidateLeaf(calls, 'profile.getActive'),
         },
@@ -87,6 +92,9 @@ function createUtilsMock(calls: InvalidationCall[]) {
         },
         mcp: {
             listServers: createInvalidateLeaf(calls, 'mcp.listServers'),
+        },
+        worktree: {
+            list: createInvalidateLeaf(calls, 'worktree.list'),
         },
     };
 }

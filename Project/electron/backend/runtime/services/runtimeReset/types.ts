@@ -33,6 +33,9 @@ export const EMPTY_COUNTS: RuntimeResetCounts = {
     providerCatalogModels: 0,
     providerDiscoverySnapshots: 0,
     kiloModelRoutingPreferences: 0,
+    profiles: 0,
+    workspaceRoots: 0,
+    worktrees: 0,
 };
 
 export interface PlannedRuntimeResetOperation {

@@ -42,7 +42,9 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         });
 
         const persistenceChannel = resolvePersistenceChannel();
-        const persistenceDbPath = path.join(app.getPath('userData'), 'runtime', persistenceChannel, 'neonconductor.db');
+        const userDataPath = app.getPath('userData');
+        process.env['NEONCONDUCTOR_USER_DATA_PATH'] = userDataPath;
+        const persistenceDbPath = path.join(userDataPath, 'runtime', persistenceChannel, 'neonconductor.db');
         appLog.info({
             tag: 'runtime',
             message: 'Persistence channel resolved.',

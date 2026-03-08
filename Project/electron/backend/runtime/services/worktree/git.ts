@@ -1,10 +1,9 @@
 import { err, ok, type Result } from 'neverthrow';
 import { spawn } from 'node:child_process';
 import { mkdir, rm, stat } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
-import { getPersistence } from '@/app/backend/persistence/db';
+import { getPersistenceStoragePaths } from '@/app/backend/persistence/db';
 
 interface GitFailure {
     reason: 'git_unavailable' | 'workspace_not_git' | 'command_failed';
@@ -101,12 +100,7 @@ function sanitizePathSegment(value: string): string {
 }
 
 export function toManagedWorktreeRoot(): string {
-    const { dbPath } = getPersistence();
-    const runtimeRoot =
-        dbPath === ':memory:'
-            ? path.join(os.tmpdir(), 'neonconductor', 'runtime', 'memory')
-            : path.dirname(dbPath);
-    return path.join(runtimeRoot, 'worktrees');
+    return getPersistenceStoragePaths().managedWorktreesRoot;
 }
 
 export function buildManagedWorktreePath(input: {

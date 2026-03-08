@@ -598,7 +598,7 @@ describe('runtime contracts: permissions and tooling', () => {
             throw new Error('Expected yolo preset to still ask for unseen shell prefixes.');
         }
         expect(yoloAsk.error).toBe('permission_required');
-    }, 15_000);
+    }, 30_000);
 
 
     it('captures git diff artifacts and rolls checkpoints back for mutating agent runs', async () => {

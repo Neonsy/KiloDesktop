@@ -46,6 +46,7 @@ const validatedFsAuthorityGlobs = [
     'electron/backend/persistence/db.ts',
     'electron/backend/persistence/runtimeBaseline.ts',
     'electron/backend/runtime/services/registry/filesystem.ts',
+    'electron/backend/runtime/services/runtimeFactoryReset.ts',
     'electron/backend/runtime/services/toolExecution/handlers/listFiles.ts',
     'electron/backend/runtime/services/toolExecution/handlers/readFile.ts',
     'electron/backend/runtime/services/worktree/git.ts',
@@ -56,7 +57,10 @@ const processBridgeGlobs = [
     'electron/backend/runtime/services/toolExecution/handlers/runCommand.ts',
     'electron/backend/runtime/services/worktree/git.ts',
 ];
-const validatedFsTestGlobs = ['electron/backend/trpc/__tests__/runtime-contracts.shared.ts'];
+const validatedFsTestGlobs = [
+    'electron/backend/trpc/__tests__/runtime-contracts.shared.ts',
+    'electron/backend/trpc/__tests__/runtime-contracts.core.test.ts',
+];
 
 const sharedTypeLanguageOptions = {
     parser: tseslint.parser,

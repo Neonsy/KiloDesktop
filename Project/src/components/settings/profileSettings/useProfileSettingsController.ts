@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 import { createProfileSettingsActions } from '@/web/components/settings/profileSettings/actions';
 import { refetchProfilePreference } from '@/web/components/settings/profileSettings/refetch';
 import { resolveSelectedProfileId } from '@/web/components/settings/profileSettings/selection';
+import { invalidateRuntimeResetQueries } from '@/web/lib/runtime/invalidation/queryInvalidation';
 import { trpc } from '@/web/trpc/client';
+
+import { FACTORY_RESET_CONFIRMATION_TEXT } from '@/app/backend/runtime/contracts';
 
 export function useProfileSettingsController(input: {
     activeProfileId: string;
@@ -15,13 +18,26 @@ export function useProfileSettingsController(input: {
     const [threadTitleAiModelInput, setThreadTitleAiModelInput] = useState('');
     const [statusMessage, setStatusMessage] = useState<string | undefined>(undefined);
     const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+    const [confirmFactoryResetOpen, setConfirmFactoryResetOpen] = useState(false);
+    const [factoryResetConfirmationText, setFactoryResetConfirmationText] = useState('');
 
+    const utils = trpc.useUtils();
     const profilesQuery = trpc.profile.list.useQuery(undefined, { refetchOnWindowFocus: false });
     const createMutation = trpc.profile.create.useMutation();
     const renameMutation = trpc.profile.rename.useMutation();
     const duplicateMutation = trpc.profile.duplicate.useMutation();
     const deleteMutation = trpc.profile.delete.useMutation();
     const setActiveMutation = trpc.profile.setActive.useMutation();
+    const factoryResetMutation = trpc.runtime.factoryReset.useMutation({
+        onSuccess: async (result) => {
+            setConfirmFactoryResetOpen(false);
+            setFactoryResetConfirmationText('');
+            setSelectedProfileId(result.resetProfileId);
+            input.onProfileActivated(result.resetProfileId);
+            await invalidateRuntimeResetQueries(utils);
+            setStatusMessage('Factory reset completed. App data was reset to the default profile.');
+        },
+    });
 
     const profiles = profilesQuery.data?.profiles ?? [];
 
@@ -117,6 +133,9 @@ export function useProfileSettingsController(input: {
         threadTitleAiModelInput,
         statusMessage,
         confirmDeleteOpen,
+        confirmFactoryResetOpen,
+        factoryResetConfirmationText,
+        factoryResetConfirmationPhrase: FACTORY_RESET_CONFIRMATION_TEXT,
         cannotDeleteLastProfile: profiles.length <= 1,
         profilesQuery,
         createMutation,
@@ -124,6 +143,7 @@ export function useProfileSettingsController(input: {
         duplicateMutation,
         deleteMutation,
         setActiveMutation,
+        factoryResetMutation,
         editPreferenceQuery,
         setEditPreferenceMutation,
         threadTitlePreferenceQuery,
@@ -139,6 +159,8 @@ export function useProfileSettingsController(input: {
         setThreadTitleAiModelInput,
         setStatusMessage,
         setConfirmDeleteOpen,
+        setConfirmFactoryResetOpen,
+        setFactoryResetConfirmationText,
         updateExecutionPreset: async (preset: 'privacy' | 'standard' | 'yolo') => {
             if (!selectedProfile) {
                 return;
@@ -149,6 +171,12 @@ export function useProfileSettingsController(input: {
                 preset,
             });
             setStatusMessage('Updated execution preset.');
+        },
+        factoryResetAppData: async () => {
+            await factoryResetMutation.mutateAsync({
+                confirm: true,
+                confirmationText: factoryResetConfirmationText,
+            });
         },
         ...actions,
     };

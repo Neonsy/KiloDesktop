@@ -1,8 +1,7 @@
 import { mkdir, readdir, readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
-import { getPersistence } from '@/app/backend/persistence/db';
+import { getPersistenceStoragePaths } from '@/app/backend/persistence/db';
 import type { RegistryScope, RegistrySourceKind } from '@/app/backend/runtime/contracts';
 import type { RegistryPaths } from '@/app/backend/runtime/services/registry/types';
 import { workspaceContextService } from '@/app/backend/runtime/services/workspaceContext/service';
@@ -155,12 +154,7 @@ export async function resolveRegistryPaths(input: {
     workspaceFingerprint?: string;
     worktreeId?: `wt_${string}`;
 }): Promise<RegistryPaths> {
-    const { dbPath } = getPersistence();
-    const runtimeRoot =
-        dbPath === ':memory:'
-            ? path.join(os.tmpdir(), 'neonconductor', 'runtime', 'memory')
-            : path.dirname(dbPath);
-    const globalAssetsRoot = path.join(runtimeRoot, 'assets');
+    const { globalAssetsRoot } = getPersistenceStoragePaths();
 
     if (!input.workspaceFingerprint) {
         return {

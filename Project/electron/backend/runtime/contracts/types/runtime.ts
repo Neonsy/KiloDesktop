@@ -74,6 +74,13 @@ export interface RuntimeResetInput {
     confirm?: boolean;
 }
 
+export const FACTORY_RESET_CONFIRMATION_TEXT = 'RESET APP DATA';
+
+export interface RuntimeFactoryResetInput {
+    confirm: true;
+    confirmationText: string;
+}
+
 export interface RuntimeResetCounts {
     settings: number;
     runtimeEvents: number;
@@ -102,6 +109,9 @@ export interface RuntimeResetCounts {
     providerCatalogModels: number;
     providerDiscoverySnapshots: number;
     kiloModelRoutingPreferences: number;
+    profiles: number;
+    workspaceRoots: number;
+    worktrees: number;
 }
 
 export interface RuntimeResetResult {
@@ -109,6 +119,20 @@ export interface RuntimeResetResult {
     target: RuntimeResetTarget;
     applied: boolean;
     counts: RuntimeResetCounts;
+}
+
+export interface RuntimeFactoryResetCleanupCounts {
+    secretKeys: number;
+    managedWorktreeEntries: number;
+    globalAssetEntries: number;
+    logEntries: number;
+}
+
+export interface RuntimeFactoryResetResult {
+    applied: boolean;
+    counts: RuntimeResetCounts;
+    cleanupCounts: RuntimeFactoryResetCleanupCounts;
+    resetProfileId: string;
 }
 
 export interface ContextBudgetInput {

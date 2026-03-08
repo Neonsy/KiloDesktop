@@ -174,6 +174,7 @@ export type { EntityId };
 export {
     execFileSync,
     getPersistence,
+    resetPersistenceForTests,
     mkdirSync,
     mkdtempSync,
     os,

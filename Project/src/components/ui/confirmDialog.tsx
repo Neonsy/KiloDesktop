@@ -8,6 +8,8 @@ interface ConfirmDialogProps {
     cancelLabel?: string;
     destructive?: boolean;
     busy?: boolean;
+    confirmDisabled?: boolean;
+    children?: ReactNode;
     onConfirm: () => void;
     onCancel: () => void;
 }
@@ -20,6 +22,8 @@ export function ConfirmDialog({
     cancelLabel = 'Cancel',
     destructive = false,
     busy = false,
+    confirmDisabled = false,
+    children,
     onConfirm,
     onCancel,
 }: ConfirmDialogProps): ReactNode {
@@ -32,6 +36,7 @@ export function ConfirmDialog({
             <section className='border-border bg-card text-card-foreground w-full max-w-sm rounded-xl border p-5 shadow-xl'>
                 <h2 className='text-base font-semibold'>{title}</h2>
                 <p className='text-muted-foreground mt-2 text-sm'>{message}</p>
+                {children ? <div className='mt-4'>{children}</div> : null}
                 <div className='mt-5 flex justify-end gap-2'>
                     <button
                         type='button'
@@ -46,7 +51,7 @@ export function ConfirmDialog({
                             destructive ? 'bg-destructive hover:bg-destructive/85' : 'bg-primary hover:bg-primary/85'
                         }`}
                         onClick={onConfirm}
-                        disabled={busy}>
+                        disabled={busy || confirmDisabled}>
                         {busy ? 'Working...' : confirmLabel}
                     </button>
                 </div>

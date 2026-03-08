@@ -23,6 +23,14 @@ export interface PersistenceContext {
     dbPath: string;
 }
 
+export interface PersistenceStoragePaths {
+    runtimeRoot: string;
+    userDataRoot: string;
+    globalAssetsRoot: string;
+    managedWorktreesRoot: string;
+    logsRoot: string;
+}
+
 export interface InitializePersistenceOptions {
     dataDir?: string;
     dbPath?: string;
@@ -48,6 +56,24 @@ function failInvariant(message: string, details?: Record<string, unknown>): neve
 
 function isMemoryDbPath(dbPath: string): boolean {
     return dbPath === TEST_MEMORY_PATH;
+}
+
+function resolveRuntimeRoot(dbPath: string): string {
+    return isMemoryDbPath(dbPath) ? path.join(os.tmpdir(), 'neonconductor', 'runtime', 'memory') : path.dirname(dbPath);
+}
+
+function resolveUserDataRoot(runtimeRoot: string): string {
+    const explicitUserDataPath = process.env['NEONCONDUCTOR_USER_DATA_PATH']?.trim();
+    if (explicitUserDataPath && path.isAbsolute(explicitUserDataPath)) {
+        return explicitUserDataPath;
+    }
+
+    const runtimeParent = path.dirname(runtimeRoot);
+    if (path.basename(runtimeParent).toLowerCase() === 'runtime') {
+        return path.dirname(runtimeParent);
+    }
+
+    return path.dirname(runtimeRoot);
 }
 
 function resolveDefaultDbPath(): string {
@@ -151,6 +177,20 @@ function applySqlMigrations(sqlite: BetterSqliteDatabase): void {
 export function reseedRuntimeData(): void {
     const context = getPersistence();
     seedRuntimeData(context.sqlite, DEFAULT_PROFILE_ID);
+}
+
+export function getPersistenceStoragePaths(): PersistenceStoragePaths {
+    const { dbPath } = getPersistence();
+    const runtimeRoot = resolveRuntimeRoot(dbPath);
+    const userDataRoot = resolveUserDataRoot(runtimeRoot);
+
+    return {
+        runtimeRoot,
+        userDataRoot,
+        globalAssetsRoot: path.join(runtimeRoot, 'assets'),
+        managedWorktreesRoot: path.join(runtimeRoot, 'worktrees'),
+        logsRoot: path.join(userDataRoot, 'logs'),
+    };
 }
 
 function createPersistenceContext(dbPath: string): PersistenceContext {
