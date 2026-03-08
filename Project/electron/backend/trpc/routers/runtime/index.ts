@@ -11,6 +11,7 @@ import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset
 import { runtimeShellBootstrapService } from '@/app/backend/runtime/services/runtimeShellBootstrap';
 import { runtimeSnapshotService } from '@/app/backend/runtime/services/runtimeSnapshot';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
+import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
 
 function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<RuntimeEventRecordV1 | null> {
     return new Promise((resolve) => {
@@ -40,7 +41,12 @@ function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<R
 export const runtimeRouter = router({
     // Diagnostic-only whole-runtime inspection. Normal app rendering should use scoped reads.
     getDiagnosticSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
-        return runtimeSnapshotService.getSnapshot(input.profileId);
+        const result = await runtimeSnapshotService.getSnapshot(input.profileId);
+        if (result.isErr()) {
+            throw toTrpcError(result.error);
+        }
+
+        return result.value;
     }),
     getShellBootstrap: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return runtimeShellBootstrapService.getShellBootstrap(input.profileId);
@@ -82,8 +88,12 @@ export const runtimeRouter = router({
     }),
     reset: publicProcedure.input(runtimeResetInputSchema).mutation(async ({ input }) => {
         const result = await runtimeResetService.reset(input);
+        if (result.isErr()) {
+            throw toTrpcError(result.error);
+        }
+        const resetResult = result.value;
 
-        if (result.applied) {
+        if (resetResult.applied) {
             await runtimeEventLogService.append(
                 runtimeResetEvent({
                 entityType: 'runtime',
@@ -91,9 +101,9 @@ export const runtimeRouter = router({
                 entityId: 'runtime',
                 eventType: 'runtime.reset.applied',
                 payload: {
-                    target: result.target,
-                    counts: result.counts,
-                    dryRun: result.dryRun,
+                    target: resetResult.target,
+                    counts: resetResult.counts,
+                    dryRun: resetResult.dryRun,
                     profileId: input.profileId ?? null,
                     workspaceFingerprint: input.workspaceFingerprint ?? null,
                 },
@@ -101,6 +111,6 @@ export const runtimeRouter = router({
             );
         }
 
-        return result;
+        return resetResult;
     }),
 });

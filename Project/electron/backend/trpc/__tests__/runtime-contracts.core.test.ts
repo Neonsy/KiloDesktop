@@ -1,0 +1,432 @@
+import { describe, expect, it } from 'vitest';
+
+
+import {
+    runtimeContractProfileId,
+    registerRuntimeContractHooks,
+    createCaller,
+    createSessionInScope,
+    defaultRuntimeOptions,
+    getPersistence,
+} from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
+
+registerRuntimeContractHooks();
+
+describe('runtime contracts: core flows', () => {
+    const profileId = runtimeContractProfileId;
+
+    it('exposes all new runtime domains in root router', async () => {
+        const caller = createCaller();
+
+        const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
+        const shellBootstrap = await caller.runtime.getShellBootstrap({ profileId });
+        const sessions = await caller.session.list({ profileId });
+        const providers = await caller.provider.listProviders({ profileId });
+        const defaults = await caller.provider.getDefaults({ profileId });
+        const modes = await caller.mode.list({ profileId, topLevelTab: 'agent' });
+        const activeMode = await caller.mode.getActive({ profileId, topLevelTab: 'agent' });
+        const pendingPermissions = await caller.permission.listPending();
+        const tools = await caller.tool.list();
+        const mcpServers = await caller.mcp.listServers();
+
+        expect(snapshot.lastSequence).toBeGreaterThanOrEqual(0);
+        expect(snapshot.activeProfileId).toBe(profileId);
+        expect(snapshot.profiles.some((profile) => profile.id === profileId && profile.isActive)).toBe(true);
+        expect(sessions.sessions).toEqual([]);
+        expect(snapshot.conversations).toEqual([]);
+        expect(snapshot.threads).toEqual([]);
+        expect(snapshot.tags).toEqual([]);
+        expect(snapshot.threadTags).toEqual([]);
+        expect(snapshot.diffs).toEqual([]);
+        expect(snapshot.modeDefinitions.some((mode) => mode.topLevelTab === 'chat' && mode.modeKey === 'chat')).toBe(
+            true
+        );
+        expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
+        expect(snapshot.providerAuthStates.length).toBeGreaterThan(0);
+        expect(snapshot.secretReferences).toEqual([]);
+        expect(shellBootstrap.lastSequence).toBeGreaterThanOrEqual(0);
+        expect(shellBootstrap.threadTags).toEqual([]);
+        expect(shellBootstrap.providers.length).toBeGreaterThan(0);
+        expect(shellBootstrap.providerModels.length).toBeGreaterThan(0);
+        expect(defaults.defaults.providerId).toBe('kilo');
+        expect(providers.providers.length).toBeGreaterThan(0);
+        expect(modes.modes.some((mode) => mode.modeKey === 'code')).toBe(true);
+        expect(activeMode.activeMode.modeKey).toBe('code');
+        expect(pendingPermissions.requests).toEqual([]);
+        expect(tools.tools.length).toBeGreaterThan(0);
+        expect(mcpServers.servers.length).toBeGreaterThan(0);
+    });
+
+
+    it('returns a typed not-found error when no enabled modes exist for a tab', async () => {
+        const caller = createCaller();
+        const { db } = getPersistence();
+
+        await db
+            .updateTable('mode_definitions')
+            .set({ enabled: 0 })
+            .where('profile_id', '=', profileId)
+            .where('top_level_tab', '=', 'agent')
+            .execute();
+
+        await expect(caller.mode.getActive({ profileId, topLevelTab: 'agent' })).rejects.toMatchObject({
+            message: `No enabled modes found for tab "agent" on profile "${profileId}".`,
+        });
+    });
+
+
+    it('supports profile lifecycle with active switching, secure duplication, and last-profile guard', async () => {
+        const caller = createCaller();
+
+        const initialActive = await caller.profile.getActive();
+        expect(initialActive.activeProfileId).toBe(profileId);
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-profile-source-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await caller.profile.create({
+            name: 'Workspace Profile',
+        });
+
+        const renamed = await caller.profile.rename({
+            profileId: created.profile.id,
+            name: 'Workspace Profile Renamed',
+        });
+        expect(renamed.updated).toBe(true);
+        if (!renamed.updated) {
+            throw new Error('Expected profile rename to succeed.');
+        }
+        expect(renamed.profile.name).toBe('Workspace Profile Renamed');
+
+        const duplicated = await caller.profile.duplicate({
+            profileId,
+            name: 'Source Duplicate',
+        });
+        expect(duplicated.duplicated).toBe(true);
+        if (!duplicated.duplicated) {
+            throw new Error('Expected profile duplication to succeed.');
+        }
+
+        const duplicatedSnapshot = await caller.runtime.getDiagnosticSnapshot({
+            profileId: duplicated.profile.id,
+        });
+        expect(duplicatedSnapshot.secretReferences).toEqual([]);
+        const duplicatedOpenAiAuth = duplicatedSnapshot.providerAuthStates.find(
+            (state) => state.providerId === 'openai'
+        );
+        expect(duplicatedOpenAiAuth?.authState).toBe('logged_out');
+        expect(duplicatedOpenAiAuth?.authMethod).toBe('none');
+
+        const activated = await caller.profile.setActive({
+            profileId: duplicated.profile.id,
+        });
+        expect(activated.updated).toBe(true);
+        if (!activated.updated) {
+            throw new Error('Expected profile activation to succeed.');
+        }
+        expect(activated.profile.id).toBe(duplicated.profile.id);
+
+        const activeAfterSwitch = await caller.profile.getActive();
+        expect(activeAfterSwitch.activeProfileId).toBe(duplicated.profile.id);
+
+        const deleteDuplicate = await caller.profile.delete({
+            profileId: duplicated.profile.id,
+        });
+        expect(deleteDuplicate.deleted).toBe(true);
+        if (!deleteDuplicate.deleted) {
+            throw new Error('Expected duplicated profile delete to succeed.');
+        }
+        expect(deleteDuplicate.activeProfileId).toBeDefined();
+
+        const deleteCreated = await caller.profile.delete({
+            profileId: created.profile.id,
+        });
+        expect(deleteCreated.deleted).toBe(true);
+
+        const deleteLast = await caller.profile.delete({
+            profileId,
+        });
+        expect(deleteLast.deleted).toBe(false);
+        if (deleteLast.deleted) {
+            throw new Error('Expected last profile deletion to fail.');
+        }
+        expect(deleteLast.reason).toBe('last_profile');
+    });
+
+
+    it('rejects invalid mode/tab combinations and missing execution context', async () => {
+        const caller = createCaller();
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Invalid mode context thread',
+            kind: 'local',
+        });
+
+        const invalidModeForTab = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Should fail due to tab/mode mismatch',
+            topLevelTab: 'chat',
+            modeKey: 'code',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(invalidModeForTab.accepted).toBe(false);
+        if (invalidModeForTab.accepted) {
+            throw new Error('Expected invalid mode/tab run start to be rejected.');
+        }
+        expect(invalidModeForTab.code).toBe('invalid_mode');
+        expect(invalidModeForTab.message).toContain('invalid for tab');
+
+        await expect(
+            caller.session.startRun({
+                profileId,
+                sessionId: created.session.id,
+                prompt: 'Should fail due to missing mode key',
+                topLevelTab: 'chat',
+                runtimeOptions: defaultRuntimeOptions,
+            } as unknown as Parameters<typeof caller.session.startRun>[0])
+        ).rejects.toThrow('modeKey');
+    });
+
+
+    it('supports workspace-scoped runtime reset dry-run and apply', async () => {
+        const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            title: 'Workspace Reset Thread',
+            kind: 'local',
+            workspaceFingerprint: 'wsf_runtime_contracts',
+        });
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO rulesets (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'ruleset_workspace_target',
+                profileId,
+                'wsf_runtime_contracts',
+                'Workspace Rules',
+                '# Rules',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO skillfiles (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'skill_workspace_target',
+                profileId,
+                'wsf_runtime_contracts',
+                'Workspace Skillfile',
+                '# Skill',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO rulesets (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'ruleset_workspace_other',
+                profileId,
+                'wsf_other_workspace',
+                'Other Rules',
+                '# Rules',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+
+        const dryRun = await caller.runtime.reset({
+            target: 'workspace',
+            workspaceFingerprint: 'wsf_runtime_contracts',
+            dryRun: true,
+        });
+        expect(dryRun.applied).toBe(false);
+        expect(dryRun.counts.sessions).toBe(1);
+        expect(dryRun.counts.rulesets).toBe(1);
+        expect(dryRun.counts.skillfiles).toBe(1);
+
+        const applied = await caller.runtime.reset({
+            target: 'workspace',
+            workspaceFingerprint: 'wsf_runtime_contracts',
+            confirm: true,
+        });
+        expect(applied.applied).toBe(true);
+        expect(applied.counts.sessions).toBe(1);
+
+        const sessions = await caller.session.list({ profileId });
+        expect(sessions.sessions.some((item) => item.id === created.session.id)).toBe(false);
+
+        const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
+        expect(snapshot.lastSequence).toBeGreaterThan(0);
+
+        const remainingRulesetCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM rulesets WHERE workspace_fingerprint = ?')
+            .get('wsf_other_workspace') as { count: number };
+        expect(remainingRulesetCount.count).toBe(1);
+    });
+
+
+    it('resets only targeted profile-scoped parity rows for profile_settings', async () => {
+        const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+        const otherProfileId = 'profile_other';
+
+        sqlite
+            .prepare('INSERT INTO profiles (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)')
+            .run(otherProfileId, 'Other Profile', now, now);
+
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO mode_definitions (id, profile_id, top_level_tab, mode_key, label, prompt_json, execution_policy_json, source, enabled, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'mode_profile_other_agent_code',
+                otherProfileId,
+                'agent',
+                'code',
+                'Other Agent Code',
+                '{}',
+                '{}',
+                'user',
+                1,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO rulesets (id, profile_id, workspace_fingerprint, name, body_markdown, source, enabled, precedence, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'ruleset_profile_other',
+                otherProfileId,
+                null,
+                'Other Profile Rules',
+                '# Rules',
+                'user',
+                1,
+                100,
+                now,
+                now
+            );
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run(
+                'secret_ref_profile_other',
+                otherProfileId,
+                'openai',
+                'provider/openai/other',
+                'api_key',
+                'active',
+                now
+            );
+
+        const dryRun = await caller.runtime.reset({
+            target: 'profile_settings',
+            profileId,
+            dryRun: true,
+        });
+        expect(dryRun.applied).toBe(false);
+        expect(dryRun.counts.modeDefinitions).toBeGreaterThan(0);
+        expect(dryRun.counts.kiloAccountSnapshots).toBeGreaterThan(0);
+
+        const applied = await caller.runtime.reset({
+            target: 'profile_settings',
+            profileId,
+            confirm: true,
+        });
+        expect(applied.applied).toBe(true);
+
+        const defaultProfileModeCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM mode_definitions WHERE profile_id = ?')
+            .get(profileId) as { count: number };
+        expect(defaultProfileModeCount.count).toBe(0);
+
+        const otherProfileModeCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM mode_definitions WHERE profile_id = ?')
+            .get(otherProfileId) as { count: number };
+        expect(otherProfileModeCount.count).toBe(1);
+
+        const otherProfileSecretRefCount = sqlite
+            .prepare('SELECT COUNT(*) AS count FROM secret_references WHERE profile_id = ?')
+            .get(otherProfileId) as { count: number };
+        expect(otherProfileSecretRefCount.count).toBe(1);
+    });
+
+
+    it('full reset clears parity rows and reseeds baseline modes', async () => {
+        const caller = createCaller();
+        const { sqlite } = getPersistence();
+        const now = new Date().toISOString();
+
+        sqlite
+            .prepare(
+                `
+                    INSERT INTO secret_references (id, profile_id, provider_id, secret_key_ref, secret_kind, status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                `
+            )
+            .run('secret_ref_profile_default', profileId, 'kilo', 'provider/kilo/default', 'api_key', 'active', now);
+
+        const dryRun = await caller.runtime.reset({
+            target: 'full',
+            profileId,
+            dryRun: true,
+        });
+        expect(dryRun.applied).toBe(false);
+        expect(dryRun.counts.modeDefinitions).toBeGreaterThan(0);
+        expect(dryRun.counts.secretReferences).toBe(1);
+
+        const applied = await caller.runtime.reset({
+            target: 'full',
+            profileId,
+            confirm: true,
+        });
+        expect(applied.applied).toBe(true);
+
+        const snapshot = await caller.runtime.getDiagnosticSnapshot({ profileId });
+        expect(snapshot.modeDefinitions.length).toBe(8);
+        expect(snapshot.kiloAccountContext.authState).toBe('logged_out');
+        expect(snapshot.secretReferences).toEqual([]);
+    });
+});

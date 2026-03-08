@@ -1,4 +1,4 @@
-import { isEntityId, isProviderId } from '@/web/components/conversation/shellHelpers';
+import { isEntityId, isProviderId } from '@/web/components/conversation/shell/workspace/helpers';
 import { readConversationSelectionState } from '@/web/lib/runtime/invalidation/selectionState';
 import type { RuntimeEventContext } from '@/web/lib/runtime/invalidation/types';
 

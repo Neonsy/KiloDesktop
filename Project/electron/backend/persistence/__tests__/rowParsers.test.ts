@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/rowParsers';
+import { parseEntityId, parseEnumValue, parseJsonRecord } from '@/app/backend/persistence/stores/shared/rowParsers';
 
 describe('rowParsers', () => {
     it('parses enum values and rejects invalid values', () => {

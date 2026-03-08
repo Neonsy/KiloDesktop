@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shellPromptSubmit';
+import { submitPrompt as submitPromptFromComposer } from '@/web/components/conversation/shell/actions/promptSubmit';
 
 import type {
     EntityId,

@@ -41,7 +41,9 @@ function resolvePretty(isDev: boolean): boolean {
 }
 
 function createAppLogMethod(level: 'info' | 'warn' | 'error' | 'debug'): AppLogMethod {
-    return ((...args: [string, string] | [Record<string, unknown>]) => {
+    function appLogMethod(tag: string, message: string): void;
+    function appLogMethod(event: Record<string, unknown>): void;
+    function appLogMethod(...args: [string, string] | [Record<string, unknown>]): void {
         if (!appLoggerEnabled) {
             return;
         }
@@ -53,7 +55,9 @@ function createAppLogMethod(level: 'info' | 'warn' | 'error' | 'debug'): AppLogM
         }
 
         target(args[0]);
-    }) as AppLogMethod;
+    }
+
+    return appLogMethod;
 }
 
 export const appLog = {

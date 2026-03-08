@@ -20,6 +20,7 @@ const SECTION_LABELS: Record<SettingsSection, string> = {
     profiles: 'Profiles',
     agents: 'Agents',
 };
+const SETTINGS_SECTIONS: ReadonlyArray<SettingsSection> = ['providers', 'profiles', 'agents'];
 
 export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: SettingsSheetProps) {
     const [activeSection, setActiveSection] = useState<SettingsSection>('providers');
@@ -35,7 +36,7 @@ export function SettingsSheet({ open, profileId, onClose, onProfileActivated }: 
             <section className='border-border bg-card text-card-foreground fixed inset-y-0 right-0 z-50 flex w-[min(1040px,95vw)] border-l shadow-2xl'>
                 <aside className='border-border bg-background/50 flex w-52 flex-col gap-2 border-r p-3'>
                     <h2 className='text-sm font-semibold tracking-wide uppercase'>Settings</h2>
-                    {(Object.keys(SECTION_LABELS) as SettingsSection[]).map((section) => (
+                    {SETTINGS_SECTIONS.map((section) => (
                         <button
                             key={section}
                             type='button'

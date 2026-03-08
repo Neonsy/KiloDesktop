@@ -1,4 +1,4 @@
-import type { ProviderCatalogModelUpsert } from '@/app/backend/persistence/stores/providerCatalogStore';
+import type { ProviderCatalogModelUpsert } from '@/app/backend/persistence/stores/provider/providerCatalogStore';
 import { applyProviderMetadataOverride } from '@/app/backend/providers/metadata/overrides';
 import type {
     MetadataKnownSource,

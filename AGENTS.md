@@ -4,9 +4,13 @@
 
 ### 1) Optimize for Clarity and Changeability
 - Write code that is easy to read, easy to trace, and easy to change.
+- Reading and learning the codebase should feel trivial in touched areas.
 - Establish obvious patterns early so contribution paths stay clear.
 - Prefer designs where small changes touch few files.
 - Avoid cleverness that hides intent.
+- Prefer full, intention-revealing names like `value`, `workspaceContext`, `permissionRequest`, and `selectedRunId`.
+- Avoid low-information names like `v`, `x`, `data`, `item`, `res`, or `tmp` unless the scope is tiny and unambiguous.
+- Local clarity comes first: do not rely on tribal knowledge or surrounding files to explain a symbol that could be named clearly in place.
 
 ### 2) Do Not Tolerate Quality Decay
 - Treat suspicious "convenient" code as a defect, not a shortcut.
@@ -25,6 +29,13 @@
 - Do not let folders become dumping grounds.
 - Group by responsibility, not convenience.
 - Keep folder fan-out reasonable: a folder with too many unrelated files increases cognitive load and should be split into clearer subfolders.
+
+### 4.5) Prefer Self-Explanatory Code Before More Documentation
+- Make code understandable through names, boundaries, and structure first.
+- Add sparse inline comments only when they reduce real ambiguity around non-obvious logic, invariants, failure modes, or surprising choices.
+- Use markdown docs for cross-cutting architecture, lifecycle flows, precedence rules, subsystem contracts, and contributor workflows that span multiple modules.
+- Do not use markdown docs as a band-aid for unclear local code.
+- Do not add noisy comments that only restate obvious code.
 
 ### 5) Keep Boundaries Type-Safe
 - Do not use broad `as SomeType` casts to silence type errors.

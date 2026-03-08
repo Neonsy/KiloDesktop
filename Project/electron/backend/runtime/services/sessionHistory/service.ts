@@ -1,5 +1,5 @@
 import { sessionHistoryStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
-import { parseEntityId } from '@/app/backend/persistence/stores/rowParsers';
+import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParsers';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 

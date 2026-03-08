@@ -7,12 +7,12 @@ export interface EventOriginContext extends CorrelationContext {
     origin?: string | undefined;
 }
 
-export function withCorrelationContext<T extends Record<string, unknown>>(
+export function withCorrelationContext(
     context: CorrelationContext | undefined,
-    fields?: T
-): T & Record<string, unknown> {
+    fields?: Record<string, unknown>
+): Record<string, unknown> {
     return {
-        ...(fields ?? ({} as T)),
+        ...(fields ?? {}),
         ...(context?.requestId ? { requestId: context.requestId } : {}),
         ...(context?.correlationId ? { correlationId: context.correlationId } : {}),
     };

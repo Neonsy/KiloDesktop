@@ -23,18 +23,23 @@ import {
     worktreeStore,
     workspaceRootStore,
 } from '@/app/backend/persistence/stores';
-import { toProfileStoreException } from '@/app/backend/persistence/stores/profileStoreErrors';
 import type { RuntimeSnapshotV1 } from '@/app/backend/persistence/types';
 import { providerManagementService } from '@/app/backend/providers/service';
+import {
+    errOp,
+    okOp,
+    toOperationalError,
+    type OperationalResult,
+} from '@/app/backend/runtime/services/common/operationalError';
 import { getExecutionPreset } from '@/app/backend/runtime/services/profile/executionPreset';
 import { appLog } from '@/app/main/logging';
 
 export interface RuntimeSnapshotService {
-    getSnapshot(profileId: string): Promise<RuntimeSnapshotV1>;
+    getSnapshot(profileId: string): Promise<OperationalResult<RuntimeSnapshotV1>>;
 }
 
 class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
-    async getSnapshot(profileId: string): Promise<RuntimeSnapshotV1> {
+    async getSnapshot(profileId: string): Promise<OperationalResult<RuntimeSnapshotV1>> {
         // Diagnostic-only whole-runtime snapshot. Renderer app paths should stay on scoped contracts.
         const startedAt = Date.now();
         appLog.info({
@@ -43,160 +48,161 @@ class RuntimeSnapshotServiceImpl implements RuntimeSnapshotService {
             profileId,
         });
 
-        const loadSlice = async <T>(slice: string, loader: () => Promise<T>): Promise<T> => {
-            try {
-                return await loader();
-            } catch (error) {
+        try {
+            const activeProfileResult = await profileStore.getActive();
+            if (activeProfileResult.isErr()) {
                 appLog.error({
                     tag: 'runtime.snapshot',
-                    message: 'Runtime snapshot slice load failed.',
+                    message: 'Runtime snapshot build failed.',
                     profileId,
-                    slice,
-                    error: error instanceof Error ? error.message : String(error),
+                    durationMs: Date.now() - startedAt,
+                    error: activeProfileResult.error.message,
+                    code: 'not_found',
                 });
-                throw error;
+                return errOp('not_found', activeProfileResult.error.message);
             }
-        };
 
-        const [
-            profiles,
-            activeProfile,
-            sessions,
-            runs,
-            messages,
-            messageParts,
-            runUsage,
-            providerUsageSummaries,
-            permissions,
-            executionPreset,
-            providers,
-            providerModels,
-            providerAuthStates,
-            providerAuthFlows,
-            providerDiscoverySnapshots,
-            tools,
-            mcpServers,
-            defaults,
-            lastSequence,
-            conversations,
-            workspaceRoots,
-            worktrees,
-            threads,
-            tags,
-            threadTags,
-            diffs,
-            checkpoints,
-            modeDefinitions,
-            rulesets,
-            skillfiles,
-            marketplacePackages,
-            kiloAccountContext,
-            secretReferences,
-        ] = await Promise.all([
-            loadSlice('profiles', () => profileStore.list()),
-            loadSlice('active-profile', async () => {
-                const activeProfileResult = await profileStore.getActive();
-                if (activeProfileResult.isErr()) {
-                    throw toProfileStoreException(activeProfileResult.error);
-                }
-
-                return activeProfileResult.value;
-            }),
-            loadSlice('sessions', () => sessionStore.list(profileId)),
-            loadSlice('runs', () => runStore.listByProfile(profileId)),
-            loadSlice('messages', () => messageStore.listMessagesByProfile(profileId)),
-            loadSlice('message-parts', () => messageStore.listPartsByProfile(profileId)),
-            loadSlice('run-usage', () => runUsageStore.listByProfile(profileId)),
-            loadSlice('provider-usage', () => runUsageStore.summarizeByProfile(profileId)),
-            loadSlice('permissions', () => permissionStore.listAll()),
-            loadSlice('execution-preset', () => getExecutionPreset(profileId)),
-            loadSlice('providers', () => providerManagementService.listProviders(profileId)),
-            loadSlice('provider-models', () => providerManagementService.listModelsByProfile(profileId)),
-            loadSlice('provider-auth-states', () => providerManagementService.listAuthStates(profileId)),
-            loadSlice('provider-auth-flows', () => providerAuthFlowStore.listByProfile(profileId)),
-            loadSlice('provider-discovery-snapshots', () =>
-                providerManagementService.listDiscoverySnapshots(profileId)
-            ),
-            loadSlice('tools', () => toolStore.list()),
-            loadSlice('mcp-servers', () => mcpStore.listServers()),
-            loadSlice('provider-defaults', () => providerManagementService.getDefaults(profileId)),
-            loadSlice('runtime-last-sequence', () => runtimeEventStore.getLastSequence()),
-            loadSlice('conversations', () => conversationStore.listBuckets(profileId)),
-            loadSlice('workspace-roots', () => workspaceRootStore.listByProfile(profileId)),
-            loadSlice('worktrees', () => worktreeStore.listByProfile(profileId)),
-            loadSlice('threads', () =>
+            const [
+                profiles,
+                sessions,
+                runs,
+                messages,
+                messageParts,
+                runUsage,
+                providerUsageSummaries,
+                permissions,
+                executionPreset,
+                providers,
+                providerModels,
+                providerAuthStates,
+                providerAuthFlows,
+                providerDiscoverySnapshots,
+                tools,
+                mcpServers,
+                defaults,
+                lastSequence,
+                conversations,
+                workspaceRoots,
+                worktrees,
+                threads,
+                tags,
+                threadTags,
+                diffs,
+                checkpoints,
+                modeDefinitions,
+                rulesets,
+                skillfiles,
+                marketplacePackages,
+                kiloAccountContext,
+                secretReferences,
+            ] = await Promise.all([
+                profileStore.list(),
+                sessionStore.list(profileId),
+                runStore.listByProfile(profileId),
+                messageStore.listMessagesByProfile(profileId),
+                messageStore.listPartsByProfile(profileId),
+                runUsageStore.listByProfile(profileId),
+                runUsageStore.summarizeByProfile(profileId),
+                permissionStore.listAll(),
+                getExecutionPreset(profileId),
+                providerManagementService.listProviders(profileId),
+                providerManagementService.listModelsByProfile(profileId),
+                providerManagementService.listAuthStates(profileId),
+                providerAuthFlowStore.listByProfile(profileId),
+                providerManagementService.listDiscoverySnapshots(profileId),
+                toolStore.list(),
+                mcpStore.listServers(),
+                providerManagementService.getDefaults(profileId),
+                runtimeEventStore.getLastSequence(),
+                conversationStore.listBuckets(profileId),
+                workspaceRootStore.listByProfile(profileId),
+                worktreeStore.listByProfile(profileId),
                 threadStore.list({
                     profileId,
                     activeTab: 'chat',
                     showAllModes: true,
                     groupView: 'workspace',
                     sort: 'latest',
-                })
-            ),
-            loadSlice('tags', () => tagStore.listByProfile(profileId)),
-            loadSlice('thread-tags', () => tagStore.listThreadTagsByProfile(profileId)),
-            loadSlice('diffs', () => diffStore.listByProfile(profileId)),
-            loadSlice('checkpoints', () => checkpointStore.listByProfile(profileId)),
-            loadSlice('mode-definitions', () => modeStore.listByProfile(profileId)),
-            loadSlice('rulesets', () => rulesetStore.listByProfile(profileId)),
-            loadSlice('skillfiles', () => skillfileStore.listByProfile(profileId)),
-            loadSlice('marketplace-packages', () => marketplaceStore.listPackages()),
-            loadSlice('kilo-account-context', () => accountSnapshotStore.getByProfile(profileId)),
-            loadSlice('secret-references', () => secretReferenceStore.listByProfile(profileId)),
-        ]);
+                }),
+                tagStore.listByProfile(profileId),
+                tagStore.listThreadTagsByProfile(profileId),
+                diffStore.listByProfile(profileId),
+                checkpointStore.listByProfile(profileId),
+                modeStore.listByProfile(profileId),
+                rulesetStore.listByProfile(profileId),
+                skillfileStore.listByProfile(profileId),
+                marketplaceStore.listPackages(),
+                accountSnapshotStore.getByProfile(profileId),
+                secretReferenceStore.listByProfile(profileId),
+            ]);
 
-        const snapshot: RuntimeSnapshotV1 = {
-            generatedAt: new Date().toISOString(),
-            lastSequence,
-            profiles,
-            activeProfileId: activeProfile.activeProfileId,
-            sessions,
-            runs,
-            messages,
-            messageParts,
-            runUsage,
-            providerUsageSummaries,
-            permissions,
-            executionPreset,
-            providers,
-            providerModels,
-            providerAuthStates,
-            providerAuthFlows,
-            providerDiscoverySnapshots,
-            tools,
-            mcpServers,
-            conversations,
-            workspaceRoots,
-            worktrees,
-            threads,
-            tags,
-            threadTags,
-            diffs,
-            checkpoints,
-            modeDefinitions,
-            rulesets,
-            skillfiles,
-            marketplacePackages,
-            kiloAccountContext,
-            secretReferences,
-            defaults,
-        };
+            const snapshot: RuntimeSnapshotV1 = {
+                generatedAt: new Date().toISOString(),
+                lastSequence,
+                profiles,
+                activeProfileId: activeProfileResult.value.activeProfileId,
+                sessions,
+                runs,
+                messages,
+                messageParts,
+                runUsage,
+                providerUsageSummaries,
+                permissions,
+                executionPreset,
+                providers,
+                providerModels,
+                providerAuthStates,
+                providerAuthFlows,
+                providerDiscoverySnapshots,
+                tools,
+                mcpServers,
+                conversations,
+                workspaceRoots,
+                worktrees,
+                threads,
+                tags,
+                threadTags,
+                diffs,
+                checkpoints,
+                modeDefinitions,
+                rulesets,
+                skillfiles,
+                marketplacePackages,
+                kiloAccountContext,
+                secretReferences,
+                defaults,
+            };
 
-        appLog.info({
-            tag: 'runtime.snapshot',
-            message: 'Runtime snapshot built.',
-            profileId,
-            durationMs: Date.now() - startedAt,
-            sessions: snapshot.sessions.length,
-            runs: snapshot.runs.length,
-            messages: snapshot.messages.length,
-            providers: snapshot.providers.length,
-            providerModels: snapshot.providerModels.length,
-            profiles: snapshot.profiles.length,
-            lastSequence: snapshot.lastSequence,
-        });
+            appLog.info({
+                tag: 'runtime.snapshot',
+                message: 'Runtime snapshot built.',
+                profileId,
+                durationMs: Date.now() - startedAt,
+                sessions: snapshot.sessions.length,
+                runs: snapshot.runs.length,
+                messages: snapshot.messages.length,
+                providers: snapshot.providers.length,
+                providerModels: snapshot.providerModels.length,
+                profiles: snapshot.profiles.length,
+                lastSequence: snapshot.lastSequence,
+            });
 
-        return snapshot;
+            return okOp(snapshot);
+        } catch (error) {
+            const operationalError = toOperationalError(error, 'request_failed', 'Failed to build runtime snapshot.');
+            appLog.error({
+                tag: 'runtime.snapshot',
+                message: 'Runtime snapshot build failed.',
+                profileId,
+                durationMs: Date.now() - startedAt,
+                error: operationalError.message,
+                code: operationalError.code,
+            });
+            return errOp(operationalError.code, operationalError.message, {
+                ...(operationalError.details ? { details: operationalError.details } : {}),
+                ...(operationalError.retryable !== undefined ? { retryable: operationalError.retryable } : {}),
+            });
+        }
     }
 }
 

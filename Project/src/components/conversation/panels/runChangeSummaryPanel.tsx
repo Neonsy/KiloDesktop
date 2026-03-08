@@ -3,6 +3,16 @@ import { Button } from '@/web/components/ui/button';
 import type { DiffFileArtifact } from '@/app/backend/persistence/types';
 import type { DiffOverview } from '@/app/backend/runtime/contracts';
 
+const diffStatuses: ReadonlyArray<DiffFileArtifact['status']> = [
+    'added',
+    'modified',
+    'deleted',
+    'renamed',
+    'copied',
+    'type_changed',
+    'untracked',
+];
+
 function formatLineDelta(label: string, value: number | undefined): string | null {
     if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
         return null;
@@ -24,6 +34,17 @@ function formatDirectoryDetail(input: { fileCount: number; addedLines?: number; 
         (value): value is string => Boolean(value)
     );
     return deltas.length > 0 ? `${String(input.fileCount)} files · ${deltas.join(' · ')}` : `${String(input.fileCount)} files`;
+}
+
+function statusCountEntries(
+    overview: Extract<DiffOverview, { kind: 'git' }>
+): Array<{ status: DiffFileArtifact['status']; count: number }> {
+    return diffStatuses
+        .map((status) => ({
+            status,
+            count: overview.statusCounts[status],
+        }))
+        .filter((entry) => entry.count > 0);
 }
 
 interface RunChangeSummaryPanelProps {
@@ -94,14 +115,11 @@ export function RunChangeSummaryPanel({ selectedRunId, overview, onJumpToDiffs }
                                 <span className='text-sm font-medium'>Status Counts</span>
                             </header>
                             <div className='flex flex-wrap gap-2 p-3'>
-                                {Object.entries(overview.statusCounts)
-                                    .filter(([, count]) => count > 0)
-                                    .map(([status, count]) => (
+                                {statusCountEntries(overview).map(({ status, count }) => (
                                         <span
                                             key={status}
                                             className='bg-secondary text-secondary-foreground rounded-full px-2.5 py-1 text-[11px] font-medium'>
-                                            {formatStatusLabel(status as DiffFileArtifact['status'])}
-                                            : {String(count)}
+                                            {formatStatusLabel(status)}: {String(count)}
                                         </span>
                                     ))}
                             </div>

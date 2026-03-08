@@ -1,5 +1,11 @@
 import { getPersistence, reseedRuntimeData } from '@/app/backend/persistence/db';
 import type { RuntimeResetInput, RuntimeResetResult } from '@/app/backend/runtime/contracts';
+import {
+    errOp,
+    okOp,
+    toOperationalError,
+    type OperationalResult,
+} from '@/app/backend/runtime/services/common/operationalError';
 import { planFullReset } from '@/app/backend/runtime/services/runtimeReset/full';
 import { planProfileSettingsReset } from '@/app/backend/runtime/services/runtimeReset/profileSettings';
 import { removeSecretsByReferences } from '@/app/backend/runtime/services/runtimeReset/secrets';
@@ -8,11 +14,11 @@ import { planWorkspaceReset } from '@/app/backend/runtime/services/runtimeReset/
 import { appLog } from '@/app/main/logging';
 
 export interface RuntimeResetService {
-    reset(input: RuntimeResetInput): Promise<RuntimeResetResult>;
+    reset(input: RuntimeResetInput): Promise<OperationalResult<RuntimeResetResult>>;
 }
 
 class RuntimeResetServiceImpl implements RuntimeResetService {
-    async reset(input: RuntimeResetInput): Promise<RuntimeResetResult> {
+    async reset(input: RuntimeResetInput): Promise<OperationalResult<RuntimeResetResult>> {
         const startedAt = Date.now();
         appLog.info({
             tag: 'runtime.reset',
@@ -56,17 +62,22 @@ class RuntimeResetServiceImpl implements RuntimeResetService {
                 counts: plan.counts,
             });
 
-            return result;
+            return okOp(result);
         } catch (error) {
+            const operationalError = toOperationalError(error, 'request_failed', 'Runtime reset failed.');
             appLog.error({
                 tag: 'runtime.reset',
                 message: 'Runtime reset failed.',
                 target: input.target,
                 dryRun,
                 durationMs: Date.now() - startedAt,
-                error: error instanceof Error ? error.message : String(error),
+                error: operationalError.message,
+                code: operationalError.code,
             });
-            throw error;
+            return errOp(operationalError.code, operationalError.message, {
+                ...(operationalError.details ? { details: operationalError.details } : {}),
+                ...(operationalError.retryable !== undefined ? { retryable: operationalError.retryable } : {}),
+            });
         }
     }
 

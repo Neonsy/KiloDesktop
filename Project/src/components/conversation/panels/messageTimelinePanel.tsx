@@ -1,9 +1,9 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { MessageTimelineEmptyState, MessageTimelineItem } from '@/web/components/conversation/messageTimeline';
-import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messageTimelineModel';
-import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
+import { MessageTimelineEmptyState, MessageTimelineItem } from '@/web/components/conversation/messages/messageTimeline';
+import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messages/messageTimelineModel';
+import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
 import { Button } from '@/web/components/ui/button';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
+import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
 import { createPendingMessageEdit } from '@/web/components/conversation/pendingMessageEdit';
 
 describe('createPendingMessageEdit', () => {

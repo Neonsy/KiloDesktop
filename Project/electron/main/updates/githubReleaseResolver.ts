@@ -90,13 +90,19 @@ function compareVersions(a: ParsedChannelVersion, b: ParsedChannelVersion): numb
     return a.prerelease - b.prerelease;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object';
+}
+
 function isGitHubReleaseListItem(value: unknown): value is GitHubReleaseListItem {
+    if (!isRecord(value)) {
+        return false;
+    }
+
     return (
-        value !== null &&
-        typeof value === 'object' &&
-        typeof (value as Record<string, unknown>)['tag_name'] === 'string' &&
-        typeof (value as Record<string, unknown>)['draft'] === 'boolean' &&
-        typeof (value as Record<string, unknown>)['prerelease'] === 'boolean'
+        typeof value['tag_name'] === 'string' &&
+        typeof value['draft'] === 'boolean' &&
+        typeof value['prerelease'] === 'boolean'
     );
 }
 

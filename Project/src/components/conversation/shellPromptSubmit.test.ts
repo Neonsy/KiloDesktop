@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_RUN_OPTIONS } from '@/web/components/conversation/shellHelpers';
-import { submitPrompt } from '@/web/components/conversation/shellPromptSubmit';
+import { submitPrompt } from '@/web/components/conversation/shell/actions/promptSubmit';
+import { DEFAULT_RUN_OPTIONS } from '@/web/components/conversation/shell/workspace/helpers';
 
 describe('submitPrompt', () => {
     it('starts plan mode and clears prompt state on success', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildConversationSidebarModel } from '@/web/components/conversation/sidebarModel';
+import { buildConversationSidebarModel } from '@/web/components/conversation/sidebar/sidebarModel';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 

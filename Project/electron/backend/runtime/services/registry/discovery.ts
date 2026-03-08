@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
-import { nowIso } from '@/app/backend/persistence/stores/utils';
+import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { ModeExecutionPolicy, RegistryScope, RegistrySourceKind, TopLevelTab } from '@/app/backend/runtime/contracts';
 import {
     loadRegistryAssetFiles,

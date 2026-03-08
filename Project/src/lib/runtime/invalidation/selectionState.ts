@@ -1,4 +1,4 @@
-import { isEntityId } from '@/web/components/conversation/shellHelpers';
+import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import type { ConversationSelectionState } from '@/web/lib/runtime/invalidation/types';
 
 function emptySelectionState(): ConversationSelectionState {

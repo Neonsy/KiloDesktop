@@ -4,7 +4,7 @@ import {
     applySessionModelOverride,
     applySessionProviderOverride,
 } from '@/web/components/conversation/sessionTargetState';
-import { isEntityId } from '@/web/components/conversation/shellHelpers';
+import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 
 import type { SessionCreateInput, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 import type { EntityId } from '@/app/backend/runtime/contracts';

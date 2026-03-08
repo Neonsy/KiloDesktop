@@ -75,3 +75,25 @@ export function isOperationalError(error: unknown): error is OperationalError {
     const candidate = error as { code?: unknown; message?: unknown };
     return typeof candidate.code === 'string' && typeof candidate.message === 'string';
 }
+
+export function toOperationalError(
+    error: unknown,
+    fallbackCode: OperationalErrorCode,
+    fallbackMessage = 'Operation failed.'
+): OperationalError {
+    if (isOperationalError(error)) {
+        return error;
+    }
+
+    if (error instanceof Error) {
+        return {
+            code: fallbackCode,
+            message: error.message || fallbackMessage,
+        };
+    }
+
+    return {
+        code: fallbackCode,
+        message: typeof error === 'string' ? error : fallbackMessage,
+    };
+}

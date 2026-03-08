@@ -56,7 +56,7 @@ const processBridgeGlobs = [
     'electron/backend/runtime/services/toolExecution/handlers/runCommand.ts',
     'electron/backend/runtime/services/worktree/git.ts',
 ];
-const validatedFsTestGlobs = ['electron/backend/trpc/__tests__/runtime-contracts.test.ts'];
+const validatedFsTestGlobs = ['electron/backend/trpc/__tests__/runtime-contracts.shared.ts'];
 
 const sharedTypeLanguageOptions = {
     parser: tseslint.parser,

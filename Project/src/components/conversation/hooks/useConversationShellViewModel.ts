@@ -1,9 +1,9 @@
-import { useConversationShellQueries } from '@/web/components/conversation/conversationShellQueries';
-import { useConversationShellRunTarget } from '@/web/components/conversation/conversationShellRunTarget';
 import { useConversationUiState } from '@/web/components/conversation/hooks/useConversationUiState';
 import { useSessionRunSelection } from '@/web/components/conversation/hooks/useSessionRunSelection';
 import { useThreadSidebarState } from '@/web/components/conversation/hooks/useThreadSidebarState';
-import { isEntityId } from '@/web/components/conversation/shellHelpers';
+import { useConversationQueries } from '@/web/components/conversation/shell/queries/useConversationQueries';
+import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
 import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -11,10 +11,10 @@ import type { TopLevelTab } from '@/app/backend/runtime/contracts';
 function buildWorkspaceScope(input: {
     selectedThread: ReturnType<typeof useThreadSidebarState>['visibleThreads'][number] | undefined;
     selectedManagedWorktree:
-        | NonNullable<ReturnType<typeof useConversationShellQueries>['shellBootstrapQuery']['data']>['worktrees'][number]
+        | NonNullable<ReturnType<typeof useConversationQueries>['shellBootstrapQuery']['data']>['worktrees'][number]
         | undefined;
     selectedWorkspaceRoot:
-        | NonNullable<ReturnType<typeof useConversationShellQueries>['shellBootstrapQuery']['data']>['workspaceRoots'][number]
+        | NonNullable<ReturnType<typeof useConversationQueries>['shellBootstrapQuery']['data']>['workspaceRoots'][number]
         | undefined;
 }) {
     const { selectedManagedWorktree, selectedThread, selectedWorkspaceRoot } = input;
@@ -49,10 +49,10 @@ export function useConversationShellViewModel(input: {
     profileId: string;
     topLevelTab: TopLevelTab;
     modeKey: string;
-    queries: ReturnType<typeof useConversationShellQueries>;
+    queries: ReturnType<typeof useConversationQueries>;
     uiState: ReturnType<typeof useConversationUiState>;
     sidebarState: ReturnType<typeof useThreadSidebarState>;
-    runTargetState: ReturnType<typeof useConversationShellRunTarget>;
+    runTargetState: ReturnType<typeof useConversationRunTarget>;
 }) {
     const selectedThread = input.uiState.selectedThreadId
         ? input.sidebarState.visibleThreads.find((thread) => thread.id === input.uiState.selectedThreadId)
