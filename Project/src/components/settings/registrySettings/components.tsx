@@ -1,5 +1,4 @@
-import { RichContentBlocks } from '@/web/components/content/richContent';
-import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
+import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 
 import type { ModeDefinitionRecord, RulesetDefinitionRecord, SkillfileDefinitionRecord } from '@/app/backend/persistence/types';
 
@@ -35,7 +34,7 @@ export function AssetCard({
     subtitle: string;
     bodyMarkdown: string;
 }) {
-    const previewBlocks = parseRichContentBlocks(previewMarkdown(bodyMarkdown));
+    const preview = previewMarkdown(bodyMarkdown);
 
     return (
         <article className='border-border bg-card rounded-2xl border p-4 shadow-sm'>
@@ -51,9 +50,9 @@ export function AssetCard({
                 </div>
             </div>
             <AssetMeta asset={asset} />
-            {previewBlocks.length > 0 ? (
+            {preview.length > 0 ? (
                 <div className='border-border bg-background/70 mt-3 rounded-xl border p-3'>
-                    <RichContentBlocks blocks={previewBlocks} className='space-y-2' />
+                    <MarkdownContent markdown={preview} className='space-y-2' />
                 </div>
             ) : null}
             {asset.originPath ? <p className='text-muted-foreground mt-3 break-all text-[11px]'>{asset.originPath}</p> : null}

@@ -10,7 +10,7 @@ import type {
     SessionSummaryRecord,
     ThreadListRecord,
 } from '@/app/backend/persistence/types';
-import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { DiffOverview, RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 import type { ReactNode } from 'react';
 
@@ -87,6 +87,7 @@ interface ConversationShellWorkspaceSectionProps {
               attachedSkillCount: number;
           }
         | undefined;
+    runDiffOverview?: DiffOverview;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
@@ -138,6 +139,7 @@ export function ConversationShellWorkspaceSection({
     selectedUsageSummary,
     registrySummary,
     agentContextSummary,
+    runDiffOverview,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -192,6 +194,7 @@ export function ConversationShellWorkspaceSection({
                 {...(selectedUsageSummary ? { selectedUsageSummary } : {})}
                 {...(registrySummary ? { registrySummary } : {})}
                 {...(agentContextSummary ? { agentContextSummary } : {})}
+                {...(runDiffOverview ? { runDiffOverview } : {})}
                 providerOptions={providerOptions}
                 modelOptions={modelOptions}
                 runErrorMessage={runErrorMessage}

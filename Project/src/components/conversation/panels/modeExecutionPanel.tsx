@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { RichContentBlocks } from '@/web/components/content/richContent';
-import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
+import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import { Button } from '@/web/components/ui/button';
 
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -93,15 +92,12 @@ export function ModeExecutionPanel({
         return null;
     }
 
-    const summaryPreviewBlocks = parseRichContentBlocks(summaryDraft);
-    const itemPreviewBlocks = parseRichContentBlocks(
-        itemsDraft
-            .split('\n')
-            .map((item) => item.trim())
-            .filter((item) => item.length > 0)
-            .map((item) => `- ${item}`)
-            .join('\n')
-    );
+    const itemPreviewMarkdown = itemsDraft
+        .split('\n')
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .map((item) => `- ${item}`)
+        .join('\n');
 
     return (
         <section className='border-border bg-card mb-3 rounded-md border p-3'>
@@ -168,8 +164,8 @@ export function ModeExecutionPanel({
                                     }}
                                 />
                                 <div className='border-border bg-background rounded-md border p-3'>
-                                    {summaryPreviewBlocks.length > 0 ? (
-                                        <RichContentBlocks blocks={summaryPreviewBlocks} />
+                                    {summaryDraft.trim().length > 0 ? (
+                                        <MarkdownContent markdown={summaryDraft} />
                                     ) : (
                                         <p className='text-muted-foreground text-xs'>Summary preview will render here.</p>
                                     )}
@@ -186,8 +182,8 @@ export function ModeExecutionPanel({
                                     }}
                                 />
                                 <div className='border-border bg-background rounded-md border p-3'>
-                                    {itemPreviewBlocks.length > 0 ? (
-                                        <RichContentBlocks blocks={itemPreviewBlocks} />
+                                    {itemPreviewMarkdown.length > 0 ? (
+                                        <MarkdownContent markdown={itemPreviewMarkdown} />
                                     ) : (
                                         <p className='text-muted-foreground text-xs'>Item preview will render here.</p>
                                     )}
@@ -267,7 +263,7 @@ export function ModeExecutionPanel({
                                         {String(step.sequence)}. {step.status}
                                     </p>
                                 </div>
-                                <RichContentBlocks blocks={parseRichContentBlocks(step.description)} className='space-y-2' />
+                                <MarkdownContent markdown={step.description} className='space-y-2' />
                             </div>
                         ))}
                     </div>

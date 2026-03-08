@@ -2,6 +2,7 @@ import type { MessageTimelineEntry } from '@/web/components/conversation/message
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
 import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pendingPermissionsPanel';
+import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
 import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
 import { Button } from '@/web/components/ui/button';
 
@@ -13,6 +14,7 @@ import type {
     RunRecord,
     SessionSummaryRecord,
 } from '@/app/backend/persistence/types';
+import type { DiffOverview } from '@/app/backend/runtime/contracts';
 
 import type { ReactNode } from 'react';
 
@@ -85,6 +87,7 @@ interface SessionWorkspacePanelProps {
               attachedSkillCount: number;
           }
         | undefined;
+    runDiffOverview?: DiffOverview;
     providerOptions: Array<{ id: string; label: string; authState: string }>;
     modelOptions: Array<{ id: string; label: string; price?: number; latency?: number; tps?: number }>;
     runErrorMessage: string | undefined;
@@ -132,6 +135,7 @@ export function SessionWorkspacePanel({
     selectedUsageSummary,
     registrySummary,
     agentContextSummary,
+    runDiffOverview,
     providerOptions,
     modelOptions,
     runErrorMessage,
@@ -226,6 +230,11 @@ export function SessionWorkspacePanel({
                 />
 
                 {attachedSkillsPanel}
+
+                <RunChangeSummaryPanel
+                    {...(selectedRunId ? { selectedRunId } : {})}
+                    {...(runDiffOverview ? { overview: runDiffOverview } : {})}
+                />
 
                 <PendingPermissionsPanel
                     requests={pendingPermissions}

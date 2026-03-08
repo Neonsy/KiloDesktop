@@ -1,5 +1,4 @@
-import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
-import type { RichContentBlock } from '@/web/components/content/richContentModel';
+import { buildMessageCopyPayloads } from '@/web/components/conversation/messageCopy';
 import { projectConversationParts } from '@/web/lib/runtime/reasoningProjection';
 
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
@@ -8,7 +7,6 @@ export interface MessageTimelineBodyEntry {
     id: string;
     type: 'assistant_reasoning' | 'assistant_text' | 'user_text';
     text: string;
-    blocks: RichContentBlock[];
     providerLimitedReasoning: boolean;
 }
 
@@ -18,6 +16,8 @@ export interface MessageTimelineEntry {
     role: MessageRecord['role'];
     createdAt: string;
     body: MessageTimelineBodyEntry[];
+    plainCopyText?: string;
+    rawCopyText?: string;
     editableText?: string;
 }
 
@@ -46,7 +46,6 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
             id: item.id,
             type: item.role,
             text: item.text,
-            blocks: parseRichContentBlocks(item.text),
             providerLimitedReasoning: item.providerLimitedReasoning,
         }));
     }
@@ -62,7 +61,6 @@ function buildBodyEntries(message: MessageRecord, parts: MessagePartRecord[]): M
             id: part.id,
             type: message.role === 'user' ? 'user_text' : 'assistant_text',
             text,
-            blocks: parseRichContentBlocks(text),
             providerLimitedReasoning: false,
         });
     }
@@ -85,12 +83,23 @@ export function buildTimelineEntries(
                       .join('\n\n')
                 : undefined;
 
+        const copyPayloads = buildMessageCopyPayloads({
+            id: message.id,
+            runId: message.runId,
+            role: message.role,
+            createdAt: message.createdAt,
+            body,
+            ...(editableText && editableText.trim().length > 0 ? { editableText } : {}),
+        });
+
         return {
             id: message.id,
             runId: message.runId,
             role: message.role,
             createdAt: message.createdAt,
             body,
+            ...(copyPayloads.plainText ? { plainCopyText: copyPayloads.plainText } : {}),
+            ...(copyPayloads.rawText ? { rawCopyText: copyPayloads.rawText } : {}),
             ...(editableText && editableText.trim().length > 0 ? { editableText } : {}),
         };
     });

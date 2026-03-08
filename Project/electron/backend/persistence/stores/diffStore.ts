@@ -17,6 +17,8 @@ function mapDiffFileArtifact(value: unknown): DiffFileArtifact | null {
     const path = value['path'];
     const status = value['status'];
     const previousPath = value['previousPath'];
+    const addedLines = value['addedLines'];
+    const deletedLines = value['deletedLines'];
     if (
         !isJsonString(path) ||
         !isJsonString(status) ||
@@ -29,6 +31,8 @@ function mapDiffFileArtifact(value: unknown): DiffFileArtifact | null {
         path,
         status: status as DiffFileArtifact['status'],
         ...(isJsonString(previousPath) ? { previousPath } : {}),
+        ...(typeof addedLines === 'number' && Number.isFinite(addedLines) ? { addedLines } : {}),
+        ...(typeof deletedLines === 'number' && Number.isFinite(deletedLines) ? { deletedLines } : {}),
     };
 }
 
@@ -49,6 +53,8 @@ function mapDiffArtifact(value: string): DiffArtifact {
 
     if (kind === 'git') {
         const fileCount = parsed['fileCount'];
+        const totalAddedLines = parsed['totalAddedLines'];
+        const totalDeletedLines = parsed['totalDeletedLines'];
         const files = isJsonUnknownArray(parsed['files'])
             ? parsed['files'].map(mapDiffFileArtifact).filter((value): value is DiffFileArtifact => value !== null)
             : [];
@@ -64,6 +70,8 @@ function mapDiffArtifact(value: string): DiffArtifact {
             workspaceLabel,
             baseRef: 'HEAD',
             fileCount: typeof fileCount === 'number' && Number.isFinite(fileCount) ? fileCount : files.length,
+            ...(typeof totalAddedLines === 'number' && Number.isFinite(totalAddedLines) ? { totalAddedLines } : {}),
+            ...(typeof totalDeletedLines === 'number' && Number.isFinite(totalDeletedLines) ? { totalDeletedLines } : {}),
             files,
             fullPatch,
             patchesByPath,

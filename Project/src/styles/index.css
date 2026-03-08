@@ -99,53 +99,49 @@ body {
     user-select: none;
 }
 
-.message-code-surface {
+.markdown-code-surface {
     background:
         linear-gradient(180deg, color-mix(in srgb, var(--color-card) 94%, transparent), color-mix(in srgb, var(--color-background) 100%, transparent));
 }
 
-.message-code-line {
-    display: grid;
-    grid-template-columns: 2.5rem minmax(0, 1fr);
-    gap: 0.75rem;
-    align-items: baseline;
+.markdown-content > :first-child {
+    margin-top: 0;
 }
 
-.message-code-line-number {
-    color: color-mix(in srgb, var(--color-muted-foreground) 82%, transparent);
-    text-align: right;
-    user-select: none;
+.markdown-content > :last-child {
+    margin-bottom: 0;
 }
 
-.message-token-keyword {
-    color: color-mix(in srgb, var(--color-primary) 88%, white 12%);
+.markdown-content blockquote > * {
+    margin: 0;
 }
 
-.message-token-string {
-    color: #10b981;
+.markdown-content li > p {
+    display: inline;
 }
 
-.dark .message-token-string {
-    color: #6ee7b7;
+.markdown-content input[type='checkbox'] {
+    margin-right: 0.5rem;
 }
 
-.message-token-number {
-    color: #d97706;
+.markdown-table th,
+.markdown-table td {
+    border-color: hsl(var(--border));
 }
 
-.dark .message-token-number {
-    color: #fbbf24;
+.markdown-shiki pre {
+    margin: 0;
+    min-width: max-content;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5rem;
+    border-radius: calc(var(--radius) - 2px);
+    padding: 0.25rem 0;
 }
 
-.message-token-comment {
-    color: color-mix(in srgb, var(--color-muted-foreground) 90%, transparent);
-    font-style: italic;
-}
-
-.message-token-operator {
-    color: #e11d48;
-}
-
-.dark .message-token-operator {
-    color: #fb7185;
+.markdown-shiki code {
+    display: block;
+    min-width: max-content;
+    font-family: inherit;
 }

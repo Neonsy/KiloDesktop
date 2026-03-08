@@ -332,6 +332,8 @@ export interface DiffFileArtifact {
     path: string;
     status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'type_changed' | 'untracked';
     previousPath?: string;
+    addedLines?: number;
+    deletedLines?: number;
 }
 
 export interface GitDiffArtifact {
@@ -340,6 +342,8 @@ export interface GitDiffArtifact {
     workspaceLabel: string;
     baseRef: 'HEAD';
     fileCount: number;
+    totalAddedLines?: number;
+    totalDeletedLines?: number;
     files: DiffFileArtifact[];
     fullPatch: string;
     patchesByPath: Record<string, string>;

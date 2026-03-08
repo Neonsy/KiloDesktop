@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { RichContentBlocks } from '@/web/components/content/richContent';
-import { parseRichContentBlocks } from '@/web/components/content/richContentModel';
+import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import { Button } from '@/web/components/ui/button';
 import { trpc } from '@/web/trpc/client';
 
@@ -79,10 +78,7 @@ export function DiffCheckpointPanel({
         setSelectedPath(firstSelectablePath);
     }, [firstSelectablePath, selectedDiff?.id]);
 
-    const patchBlocks =
-        patchQuery.data?.found && patchQuery.data.patch
-            ? parseRichContentBlocks(`\`\`\`diff\n${patchQuery.data.patch}\n\`\`\``)
-            : [];
+    const patchMarkdown = patchQuery.data?.found && patchQuery.data.patch ? `\`\`\`diff\n${patchQuery.data.patch}\n\`\`\`` : '';
     const fileGroups = selectedDiff?.artifact.kind === 'git' ? groupFilesByDirectory(selectedDiff.artifact.files) : [];
 
     return (
@@ -256,7 +252,7 @@ export function DiffCheckpointPanel({
                             {patchQuery.isLoading ? (
                                 <p className='text-muted-foreground text-sm'>Loading patch…</p>
                             ) : patchQuery.data?.found ? (
-                                <RichContentBlocks blocks={patchBlocks} />
+                                <MarkdownContent markdown={patchMarkdown} />
                             ) : selectedDiff.artifact.kind === 'git' ? (
                                 <p className='text-muted-foreground text-sm'>Select a changed file to inspect its patch.</p>
                             ) : (

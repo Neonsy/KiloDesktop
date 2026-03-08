@@ -63,10 +63,8 @@ describe('message timeline model', () => {
         expect(entries).toHaveLength(1);
         expect(entries[0]?.body.map((item) => item.id)).toEqual(['part_text', 'part_reasoning', 'part_summary']);
         expect(entries[0]?.body[2]?.providerLimitedReasoning).toBe(true);
-        expect(entries[0]?.body[0]?.blocks[1]).toMatchObject({
-            kind: 'code',
-            language: 'typescript',
-        });
+        expect(entries[0]?.plainCopyText).toContain('const total = 7');
+        expect(entries[0]?.rawCopyText).toContain('```ts');
     });
 
     it('projects user message text parts only', () => {
@@ -82,6 +80,8 @@ describe('message timeline model', () => {
         expect(entries[0]?.body).toHaveLength(1);
         expect(entries[0]?.body[0]?.type).toBe('user_text');
         expect(entries[0]?.body[0]?.text).toBe('User prompt');
+        expect(entries[0]?.plainCopyText).toBe('User prompt');
+        expect(entries[0]?.rawCopyText).toBe('User prompt');
     });
 
     it('returns true when within the default bottom threshold and false when far away', () => {

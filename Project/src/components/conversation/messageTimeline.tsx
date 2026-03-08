@@ -1,5 +1,10 @@
-import { RichContentBlocks } from '@/web/components/content/richContent';
+import { Copy } from 'lucide-react';
+import { useState } from 'react';
+
+import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
 import type { MessageTimelineEntry } from '@/web/components/conversation/messageTimelineModel';
+import { Button } from '@/web/components/ui/button';
+import { copyText } from '@/web/lib/copy';
 
 interface MessageTimelineItemProps {
     entry: MessageTimelineEntry;
@@ -23,6 +28,21 @@ export function MessageTimelineItem({
     onBranchFromMessage,
 }: MessageTimelineItemProps) {
     const canEdit = entry.role === 'user' && typeof entry.editableText === 'string' && entry.editableText.length > 0;
+    const canCopy = typeof entry.plainCopyText === 'string' && entry.plainCopyText.length > 0;
+    const [copyFeedback, setCopyFeedback] = useState<string | undefined>(undefined);
+
+    async function handleCopy(sourceMode: 'plain' | 'raw') {
+        const payload = sourceMode === 'raw' ? entry.rawCopyText : entry.plainCopyText;
+        if (!payload) {
+            return;
+        }
+
+        const copied = await copyText(payload);
+        setCopyFeedback(copied ? (sourceMode === 'raw' ? 'Source copied' : 'Copied') : 'Copy failed');
+        window.setTimeout(() => {
+            setCopyFeedback(undefined);
+        }, 1400);
+    }
 
     return (
         <article className='border-border bg-card rounded-xl border p-4 shadow-sm'>
@@ -35,28 +55,46 @@ export function MessageTimelineItem({
                         {new Date(entry.createdAt).toLocaleTimeString()}
                     </span>
                 </div>
-                {canEdit ? (
-                    <div className='flex items-center gap-1'>
-                        <button
+                <div className='flex items-center gap-1'>
+                    {copyFeedback ? <span className='text-muted-foreground px-1 text-[11px]'>{copyFeedback}</span> : null}
+                    {canCopy ? (
+                        <Button
                             type='button'
-                            className='border-border bg-background hover:bg-accent rounded border px-2 py-0.5 text-[11px]'
-                            onClick={() => {
-                                onEditMessage?.(entry);
+                            size='sm'
+                            variant='outline'
+                            className='h-7 px-2 text-[11px]'
+                            title='Copy rendered text. Shift-click to copy source markdown.'
+                            aria-label='Copy message'
+                            onClick={(event) => {
+                                void handleCopy(event.shiftKey ? 'raw' : 'plain');
                             }}>
-                            Edit
-                        </button>
-                        {canBranch ? (
+                            <Copy className='h-3.5 w-3.5' />
+                            Copy
+                        </Button>
+                    ) : null}
+                    {canEdit ? (
+                        <div className='flex items-center gap-1'>
                             <button
                                 type='button'
                                 className='border-border bg-background hover:bg-accent rounded border px-2 py-0.5 text-[11px]'
                                 onClick={() => {
-                                    onBranchFromMessage?.(entry);
+                                    onEditMessage?.(entry);
                                 }}>
-                                Branch
+                                Edit
                             </button>
-                        ) : null}
-                    </div>
-                ) : null}
+                            {canBranch ? (
+                                <button
+                                    type='button'
+                                    className='border-border bg-background hover:bg-accent rounded border px-2 py-0.5 text-[11px]'
+                                    onClick={() => {
+                                        onBranchFromMessage?.(entry);
+                                    }}>
+                                    Branch
+                                </button>
+                            ) : null}
+                        </div>
+                    ) : null}
+                </div>
             </header>
             <div className='space-y-3'>
                 {entry.body.length > 0 ? (
@@ -72,7 +110,7 @@ export function MessageTimelineItem({
                                     ) : null}
                                 </div>
                             ) : null}
-                            <RichContentBlocks blocks={item.blocks} />
+                            <MarkdownContent markdown={item.text} />
                         </div>
                     ))
                 ) : (

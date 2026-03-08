@@ -2793,15 +2793,23 @@ name: Docs Lookup
         if (!diff) {
             throw new Error('Expected diff artifact for mutating run.');
         }
+        expect(diffs.overview?.kind).toBe('git');
+        if (diffs.overview?.kind !== 'git') {
+            throw new Error('Expected git diff overview for mutating run.');
+        }
         expect(diff.artifact.kind).toBe('git');
         if (diff.artifact.kind !== 'git') {
             throw new Error('Expected git diff artifact.');
         }
+        expect(diff.artifact.totalAddedLines).toBeGreaterThanOrEqual(1);
         const readmePath = diff.artifact.files.find((file) => file.path.endsWith('README.md'))?.path;
         expect(Boolean(readmePath)).toBe(true);
         if (!readmePath) {
             throw new Error('Expected README diff entry.');
         }
+        const readmeFile = diff.artifact.files.find((file) => file.path === readmePath);
+        expect(readmeFile?.addedLines).toBeGreaterThanOrEqual(1);
+        expect(diffs.overview.highlightedFiles.some((file) => file.path === readmePath)).toBe(true);
 
         const patch = await caller.diff.getFilePatch({
             profileId,
@@ -2940,6 +2948,7 @@ name: Docs Lookup
         if (!diff) {
             throw new Error('Expected diff artifact even when git capture is unsupported.');
         }
+        expect(diffs.overview?.kind).toBe('unsupported');
         expect(diff.artifact.kind).toBe('unsupported');
         if (diff.artifact.kind !== 'unsupported') {
             throw new Error('Expected unsupported diff artifact.');

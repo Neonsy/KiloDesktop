@@ -118,6 +118,74 @@ function parsePatchSections(fullPatch: string): Record<string, string> {
     );
 }
 
+function countPatchLineStats(patch: string): { addedLines: number; deletedLines: number } | undefined {
+    const lines = patch.replace(/\r\n?/g, '\n').split('\n');
+    let addedLines = 0;
+    let deletedLines = 0;
+    let inHunk = false;
+
+    for (const line of lines) {
+        if (line.startsWith('@@')) {
+            inHunk = true;
+            continue;
+        }
+
+        if (!inHunk) {
+            continue;
+        }
+
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+            addedLines += 1;
+            continue;
+        }
+
+        if (line.startsWith('-') && !line.startsWith('---')) {
+            deletedLines += 1;
+        }
+    }
+
+    if (addedLines === 0 && deletedLines === 0) {
+        return undefined;
+    }
+
+    return { addedLines, deletedLines };
+}
+
+function applyLineStats(files: DiffFileArtifact[], patchesByPath: Record<string, string>): {
+    files: DiffFileArtifact[];
+    totalAddedLines: number;
+    totalDeletedLines: number;
+} {
+    let totalAddedLines = 0;
+    let totalDeletedLines = 0;
+
+    const filesWithStats = files.map((file) => {
+        const patch = patchesByPath[file.path];
+        if (!patch) {
+            return file;
+        }
+
+        const stats = countPatchLineStats(patch);
+        if (!stats) {
+            return file;
+        }
+
+        totalAddedLines += stats.addedLines;
+        totalDeletedLines += stats.deletedLines;
+        return {
+            ...file,
+            addedLines: stats.addedLines,
+            deletedLines: stats.deletedLines,
+        };
+    });
+
+    return {
+        files: filesWithStats,
+        totalAddedLines,
+        totalDeletedLines,
+    };
+}
+
 async function runGitCommand(input: {
     cwd: string;
     args: string[];
@@ -285,13 +353,16 @@ export async function captureGitWorkspaceArtifact(input: {
 
     const fullPatch = [trackedPatch.value.stdout, ...untrackedPatches].filter((value) => value.length > 0).join('\n');
     const patchesByPath = parsePatchSections(fullPatch);
+    const filesWithStats = applyLineStats(files, patchesByPath);
     const artifact: GitDiffArtifact = {
         kind: 'git',
         workspaceRootPath: input.workspaceRootPath,
         workspaceLabel: input.workspaceLabel,
         baseRef: 'HEAD',
         fileCount: files.length,
-        files,
+        totalAddedLines: filesWithStats.totalAddedLines,
+        totalDeletedLines: filesWithStats.totalDeletedLines,
+        files: filesWithStats.files,
         fullPatch,
         patchesByPath,
     };

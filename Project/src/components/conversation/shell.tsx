@@ -300,6 +300,7 @@ export function ConversationShell({
                           },
                       }
                     : {})}
+                {...(queries.runDiffsQuery.data?.overview ? { runDiffOverview: queries.runDiffsQuery.data.overview } : {})}
                 providerOptions={runTargetStateWithRuns.providerOptions}
                 modelOptions={runTargetStateWithRuns.modelOptions}
                 runErrorMessage={composer.runSubmitError}

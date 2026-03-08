@@ -516,6 +516,21 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
                       detail: string;
                   };
         }>;
+        overview?:
+            | {
+                  kind: 'git';
+                  fileCount: number;
+                  statusCounts: {
+                      added: number;
+                  };
+                  highlightedFiles: Array<{
+                      path: string;
+                  }>;
+              }
+            | {
+                  kind: 'unsupported';
+                  detail: string;
+              };
     }>();
     expectTypeOf<Outputs['checkpoint']['list']>().toExtend<{
         checkpoints: Array<{
