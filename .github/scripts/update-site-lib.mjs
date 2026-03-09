@@ -1,50 +1,12 @@
-import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 
 export const CHANNELS = ["stable", "beta", "alpha"];
 const SITE_ROOT_PATH = "/NeonConductor/";
-
-function resolveProjectPackageJson() {
-  const candidates = [
-    path.resolve(process.cwd(), "Project/package.json"),
-    path.resolve(process.cwd(), "package.json"),
-  ];
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
-
-  throw new Error(
-    "Unable to resolve Project/package.json for workflow script dependencies.",
-  );
-}
-
-const projectRequire = createRequire(resolveProjectPackageJson());
+const projectRequire = createRequire(
+  new URL("../../Project/package.json", import.meta.url),
+);
 const { parse, stringify } = projectRequire("yaml");
-
-export function listMetadataFiles(inputDir) {
-  const found = [];
-
-  function walk(currentDir) {
-    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        walk(fullPath);
-        continue;
-      }
-
-      if (entry.isFile() && /\.(ya?ml)$/i.test(entry.name)) {
-        found.push(fullPath);
-      }
-    }
-  }
-
-  walk(inputDir);
-  return found.sort((a, b) => a.localeCompare(b));
-}
 
 export function basenameFromReference(value) {
   const normalized = String(value).trim().replaceAll("\\", "/");
@@ -122,6 +84,25 @@ export function extractReferencedAssetNames(source) {
   const referenced = new Set();
   collectAssetNames(parsed, null, referenced);
   return referenced;
+}
+
+export function extractManifestVersion(source) {
+  const parsed = typeof source === "string" ? parse(source) : source;
+  const version = parsed?.version;
+  if (typeof version === "string" || typeof version === "number") {
+    return String(version);
+  }
+  return null;
+}
+
+export function summarizeManifests(manifests) {
+  return manifests
+    .filter((manifest) => /\.(ya?ml)$/i.test(manifest.name))
+    .map((manifest) => ({
+      name: manifest.name,
+      version: extractManifestVersion(manifest.content),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function makeReleaseAssetUrl(owner, repo, tagName, assetName) {
@@ -597,14 +578,14 @@ function renderDocument(title, description, body, options = {}) {
 </html>`;
 }
 
-function createUpdatesRedirectHtml() {
+export function createUpdatesRedirectHtml() {
   return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="0; url=${SITE_ROOT_PATH}">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Redirecting…</title>
+  <title>Redirecting...</title>
   <script>window.location.replace(${JSON.stringify(SITE_ROOT_PATH)});</script>
   <style>
     :root { color-scheme: dark; }
@@ -639,31 +620,11 @@ function createUpdatesRedirectHtml() {
 </head>
 <body>
   <main>
-    <h1>Redirecting to update home…</h1>
+    <h1>Redirecting to update home...</h1>
     <p>If the redirect does not happen automatically, <a href="${SITE_ROOT_PATH}">open the root page</a>.</p>
   </main>
 </body>
 </html>`;
-}
-
-function readChannelMetadata(siteDir, channel) {
-  const channelDir = path.join(siteDir, "updates", channel);
-  if (!fs.existsSync(channelDir)) {
-    return [];
-  }
-
-  return fs
-    .readdirSync(channelDir)
-    .filter((name) => /\.(ya?ml)$/i.test(name))
-    .sort((a, b) => a.localeCompare(b))
-    .map((name) => {
-      const fullPath = path.join(channelDir, name);
-      const parsed = parse(fs.readFileSync(fullPath, "utf8"));
-      return {
-        name,
-        version: parsed?.version ?? null,
-      };
-    });
 }
 
 export function createRootIndexHtml({ owner, repo }) {
@@ -751,38 +712,35 @@ export function createNotFoundHtml() {
     </div>
   </section>`;
 
-  return renderDocument("Page not found", "NeonConductor updates", body, {
-    pageTag: "404",
-  });
+  return renderDocument(
+    "Page not found",
+    "NeonConductor updates",
+    body,
+    {
+      pageTag: "404",
+    },
+  );
 }
 
-export function writeSitePages(siteDir, owner, repo) {
-  fs.mkdirSync(path.join(siteDir, "updates"), { recursive: true });
-  fs.writeFileSync(path.join(siteDir, ".nojekyll"), "\n", "utf8");
-  fs.writeFileSync(
-    path.join(siteDir, "index.html"),
-    createRootIndexHtml({ owner, repo }),
-    "utf8",
-  );
-  fs.writeFileSync(
-    path.join(siteDir, "updates", "index.html"),
-    createUpdatesRedirectHtml(),
-    "utf8",
-  );
-  fs.writeFileSync(
-    path.join(siteDir, "404.html"),
-    createNotFoundHtml(),
-    "utf8",
-  );
+export function createSiteFiles({ owner, repo, channelManifests }) {
+  const pages = [
+    { path: ".nojekyll", content: "\n" },
+    { path: "index.html", content: createRootIndexHtml({ owner, repo }) },
+    { path: "updates/index.html", content: createUpdatesRedirectHtml() },
+    { path: "404.html", content: createNotFoundHtml() },
+  ];
 
   for (const channel of CHANNELS) {
-    const channelDir = path.join(siteDir, "updates", channel);
-    fs.mkdirSync(channelDir, { recursive: true });
-    const files = readChannelMetadata(siteDir, channel);
-    fs.writeFileSync(
-      path.join(channelDir, "index.html"),
-      createChannelIndexHtml({ channel, files, owner, repo }),
-      "utf8",
-    );
+    pages.push({
+      path: `updates/${channel}/index.html`,
+      content: createChannelIndexHtml({
+        channel,
+        files: summarizeManifests(channelManifests[channel] || []),
+        owner,
+        repo,
+      }),
+    });
   }
+
+  return pages;
 }

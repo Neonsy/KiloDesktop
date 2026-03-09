@@ -1,165 +1,172 @@
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { execFileSync } from "node:child_process";
-
 import {
   basenameFromReference,
   CHANNELS,
-  listMetadataFiles,
+  createSiteFiles,
   makeReleaseAssetUrl,
   rewriteManifestSource,
-  writeSitePages,
 } from "./update-site-lib.mjs";
 
-const REQUIRED_ENV = [
-  "CHANNEL",
-  "TAG_NAME",
-  "REPO_OWNER",
-  "REPO_NAME",
-  "PAGES_BOT_NAME",
-  "PAGES_BOT_EMAIL",
-];
-
-function readEnv(name) {
-  const value = (process.env[name] || "").trim();
-  if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
-
-function runGit(args, cwd) {
-  execFileSync("git", args, {
-    cwd,
-    stdio: ["ignore", "pipe", "pipe"],
-    encoding: "utf8",
-  });
-}
-
-function configureGitIdentity(repoDir, botName, botEmail) {
-  runGit(["config", "user.name", botName], repoDir);
-  runGit(["config", "user.email", botEmail], repoDir);
-}
-
-function ensurePagesRepo(repoDir, remoteUrl, branch, botName, botEmail) {
-  try {
-    runGit(
-      ["clone", "--depth", "1", "--branch", branch, remoteUrl, repoDir],
-      process.cwd(),
-    );
-  } catch {
-    fs.mkdirSync(repoDir, { recursive: true });
-    runGit(["init"], repoDir);
-    runGit(["checkout", "-b", branch], repoDir);
-    runGit(["remote", "add", "origin", remoteUrl], repoDir);
+function ensureManifestEntries(value, label) {
+  if (!Array.isArray(value) || value.length === 0) {
+    throw new Error(`Expected at least one manifest entry in ${label}.`);
   }
 
-  configureGitIdentity(repoDir, botName, botEmail);
-}
-
-function rewriteManifestFile(sourcePath, owner, repo, tagName) {
-  const source = fs.readFileSync(sourcePath, "utf8");
-  return rewriteManifestSource(source, (value) => {
-    const assetName = basenameFromReference(value);
-    if (!assetName) {
-      return value;
+  const manifests = value.map((entry, index) => {
+    if (!entry || typeof entry !== "object") {
+      throw new Error(`Invalid manifest entry at ${label}[${index}].`);
     }
 
-    return makeReleaseAssetUrl(owner, repo, tagName, assetName);
-  });
-}
+    const name = String(entry.name || "").trim();
+    const content = typeof entry.content === "string" ? entry.content : "";
 
-function writeChannelFiles(
-  siteDir,
-  channel,
-  metadataFiles,
-  owner,
-  repo,
-  tagName,
-) {
-  const channelDir = path.join(siteDir, "updates", channel);
-  fs.rmSync(channelDir, { recursive: true, force: true });
-  fs.mkdirSync(channelDir, { recursive: true });
+    if (!name) {
+      throw new Error(`Manifest entry at ${label}[${index}] is missing a name.`);
+    }
+    if (!/\.(ya?ml)$/i.test(name)) {
+      throw new Error(`Manifest entry ${name} in ${label} is not a YAML file.`);
+    }
+    if (!content) {
+      throw new Error(`Manifest entry ${name} in ${label} is missing content.`);
+    }
+
+    return { name, content };
+  });
 
   const seenNames = new Set();
-  for (const filePath of metadataFiles) {
-    const filename = path.basename(filePath);
-    if (seenNames.has(filename)) {
-      throw new Error(`Duplicate metadata filename detected: ${filename}`);
+  for (const manifest of manifests) {
+    if (seenNames.has(manifest.name)) {
+      throw new Error(`Duplicate metadata filename detected: ${manifest.name}`);
     }
-
-    seenNames.add(filename);
-    fs.writeFileSync(
-      path.join(channelDir, filename),
-      rewriteManifestFile(filePath, owner, repo, tagName),
-      "utf8",
-    );
-  }
-}
-
-function hasChanges(repoDir) {
-  const status = execFileSync("git", ["status", "--short"], {
-    cwd: repoDir,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  }).trim();
-  return status.length > 0;
-}
-
-function main() {
-  for (const name of REQUIRED_ENV) {
-    readEnv(name);
+    seenNames.add(manifest.name);
   }
 
-  const channel = readEnv("CHANNEL");
+  return manifests.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function normalizeExistingChannels(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("existingChannels must be an object keyed by update channel.");
+  }
+
+  return Object.fromEntries(
+    CHANNELS.map((channel) => {
+      const manifests = value[channel] || [];
+      if (!Array.isArray(manifests)) {
+        throw new Error(`existingChannels.${channel} must be an array.`);
+      }
+
+      const normalized = manifests.map((entry, index) => {
+        if (!entry || typeof entry !== "object") {
+          throw new Error(
+            `Invalid manifest entry at existingChannels.${channel}[${index}].`,
+          );
+        }
+
+        const name = String(entry.name || "").trim();
+        const content = typeof entry.content === "string" ? entry.content : "";
+
+        if (!name) {
+          throw new Error(
+            `Manifest entry at existingChannels.${channel}[${index}] is missing a name.`,
+          );
+        }
+        if (!/\.(ya?ml)$/i.test(name)) {
+          throw new Error(
+            `Manifest entry ${name} in existingChannels.${channel} is not a YAML file.`,
+          );
+        }
+        if (!content) {
+          throw new Error(
+            `Manifest entry ${name} in existingChannels.${channel} is missing content.`,
+          );
+        }
+
+        return { name, content };
+      });
+
+      return [channel, normalized.sort((a, b) => a.name.localeCompare(b.name))];
+    }),
+  );
+}
+
+async function readJsonFromStdin() {
+  let source = "";
+  for await (const chunk of process.stdin) {
+    source += chunk;
+  }
+
+  if (!source.trim()) {
+    throw new Error("Expected publish payload JSON on stdin.");
+  }
+
+  return JSON.parse(source);
+}
+
+export function publishSiteData(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Publish payload must be an object.");
+  }
+
+  const channel = String(payload.channel || "").trim();
   if (!CHANNELS.includes(channel)) {
     throw new Error(`Unsupported channel: ${channel}`);
   }
 
-  const tagName = readEnv("TAG_NAME");
-  const owner = readEnv("REPO_OWNER");
-  const repo = readEnv("REPO_NAME");
-  const botName = readEnv("PAGES_BOT_NAME");
-  const botEmail = readEnv("PAGES_BOT_EMAIL");
-  const token = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
-  const inputDir = path.resolve(process.env.INPUT_DIR || "dist-assets");
-  const branch = (process.env.PAGES_BRANCH || "gh-pages").trim();
+  const owner = String(payload.owner || "").trim();
+  const repo = String(payload.repo || "").trim();
+  const tagName = String(payload.tagName || "").trim();
 
-  if (!token) {
-    throw new Error("Missing GITHUB_TOKEN/GH_TOKEN for Pages publish.");
-  }
-  if (!fs.existsSync(inputDir)) {
-    throw new Error(`Input directory does not exist: ${inputDir}`);
+  if (!owner || !repo || !tagName) {
+    throw new Error("Publish payload is missing owner, repo, or tagName.");
   }
 
-  const metadataFiles = listMetadataFiles(inputDir);
-  if (metadataFiles.length === 0) {
-    throw new Error(`No updater metadata files found in ${inputDir}.`);
-  }
-
-  const tempRoot = fs.mkdtempSync(
-    path.join(os.tmpdir(), "neonconductor-pages-"),
+  const inputManifests = ensureManifestEntries(
+    payload.inputManifests,
+    "inputManifests",
   );
-  const siteDir = path.join(tempRoot, "site");
-  const remoteUrl = `https://x-access-token:${token}@github.com/${owner}/${repo}.git`;
+  const existingChannels = normalizeExistingChannels(payload.existingChannels);
+  const rewrittenManifests = inputManifests.map((manifest) => ({
+    name: manifest.name,
+    content: rewriteManifestSource(manifest.content, (value) => {
+      const assetName = basenameFromReference(value);
+      if (!assetName) {
+        return value;
+      }
 
-  ensurePagesRepo(siteDir, remoteUrl, branch, botName, botEmail);
-  writeChannelFiles(siteDir, channel, metadataFiles, owner, repo, tagName);
-  writeSitePages(siteDir, owner, repo);
+      return makeReleaseAssetUrl(owner, repo, tagName, assetName);
+    }),
+  }));
 
-  runGit(["add", "."], siteDir);
-  if (!hasChanges(siteDir)) {
-    console.log(`No Pages changes detected for ${channel} ${tagName}.`);
-    return;
-  }
+  const channelManifests = {
+    ...existingChannels,
+    [channel]: rewrittenManifests,
+  };
 
-  runGit(
-    ["commit", "-m", `docs(updates): publish ${channel} feed for ${tagName}`],
-    siteDir,
-  );
-  runGit(["push", "origin", branch], siteDir);
-  console.log(`Published ${channel} updater feed for ${tagName} to ${branch}.`);
+  return {
+    channel,
+    manifests: rewrittenManifests,
+    pages: createSiteFiles({ owner, repo, channelManifests }),
+  };
 }
 
-main();
+export async function main() {
+  const payload = await readJsonFromStdin();
+  process.stdout.write(JSON.stringify(publishSiteData(payload)));
+}
+
+async function runCli() {
+  try {
+    await main();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
+if (
+  (process.argv[1] || "")
+    .replaceAll("\\", "/")
+    .endsWith("/publish-update-site.mjs")
+) {
+  await runCli();
+}
