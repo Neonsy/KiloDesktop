@@ -235,6 +235,7 @@ export interface ThreadsTable {
     top_level_tab: string;
     parent_thread_id: string | null;
     root_thread_id: string;
+    is_favorite: 0 | 1;
     execution_environment_mode: string;
     execution_branch: string | null;
     base_branch: string | null;

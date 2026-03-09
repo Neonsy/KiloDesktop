@@ -307,6 +307,7 @@ export interface ThreadRecord {
     topLevelTab: 'chat' | 'agent' | 'orchestrator';
     parentThreadId?: string;
     rootThreadId: string;
+    isFavorite: boolean;
     executionEnvironmentMode: ExecutionEnvironmentMode;
     executionBranch?: string;
     baseBranch?: string;

@@ -8,8 +8,17 @@ export interface ConversationSidebarModel {
     selectedThread: ThreadListRecord | undefined;
     groupedThreadRows: Array<{
         label: string;
+        workspaceFingerprint?: string;
+        favoriteCount: number;
         rows: ThreadRenderRow[];
     }>;
+}
+
+interface GroupedThreadRowsSection {
+    label: string;
+    workspaceFingerprint?: string;
+    favoriteCount: number;
+    rows: ThreadRenderRow[];
 }
 
 export function buildConversationSidebarModel(input: {
@@ -34,12 +43,14 @@ export function buildConversationSidebarModel(input: {
         ? input.threads.find((thread) => thread.id === input.selectedThreadId)
         : undefined;
 
-    const grouped = new Map<string, { label: string; rows: ThreadRenderRow[] }>();
+    const grouped = new Map<string, GroupedThreadRowsSection>();
     for (const thread of input.threads) {
         const anchorKey = thread.anchorKind === 'workspace' ? `ws:${thread.anchorId ?? ''}` : 'playground';
         if (!grouped.has(anchorKey)) {
             grouped.set(anchorKey, {
                 label: thread.anchorKind === 'workspace' ? `Workspace: ${thread.anchorId ?? 'Unknown'}` : 'Playground',
+                ...(thread.anchorKind === 'workspace' && thread.anchorId ? { workspaceFingerprint: thread.anchorId } : {}),
+                favoriteCount: 0,
                 rows: [],
             });
         }
@@ -54,6 +65,7 @@ export function buildConversationSidebarModel(input: {
             input.groupView === 'branch'
                 ? buildBranchRows(anchorThreads)
                 : anchorThreads.map((thread) => ({ thread, depth: 0 }));
+        group.favoriteCount = anchorThreads.filter((thread) => thread.isFavorite).length;
     }
 
     return {

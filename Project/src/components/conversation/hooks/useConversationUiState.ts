@@ -15,7 +15,7 @@ interface StoredConversationUiState {
     selectedThreadId?: string;
     selectedSessionId?: string;
     selectedRunId?: string;
-    selectedTagId?: string;
+    selectedTagIds?: string[];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -42,6 +42,15 @@ function parseOptionalString(value: unknown): string | undefined {
     return typeof value === 'string' ? value : undefined;
 }
 
+function parseOptionalStringArray(value: unknown): string[] | undefined {
+    if (!Array.isArray(value)) {
+        return undefined;
+    }
+
+    const strings = value.filter((item): item is string => typeof item === 'string' && item.length > 0);
+    return strings.length > 0 ? [...new Set(strings)] : [];
+}
+
 function parseStoredState(value: unknown): StoredConversationUiState {
     if (!isRecord(value)) {
         return {};
@@ -55,7 +64,7 @@ function parseStoredState(value: unknown): StoredConversationUiState {
     const selectedThreadId = parseOptionalString(value['selectedThreadId']);
     const selectedSessionId = parseOptionalString(value['selectedSessionId']);
     const selectedRunId = parseOptionalString(value['selectedRunId']);
-    const selectedTagId = parseOptionalString(value['selectedTagId']);
+    const selectedTagIds = parseOptionalStringArray(value['selectedTagIds']);
 
     return {
         ...(scopeFilter ? { scopeFilter } : {}),
@@ -66,7 +75,7 @@ function parseStoredState(value: unknown): StoredConversationUiState {
         ...(selectedThreadId ? { selectedThreadId } : {}),
         ...(selectedSessionId ? { selectedSessionId } : {}),
         ...(selectedRunId ? { selectedRunId } : {}),
-        ...(selectedTagId ? { selectedTagId } : {}),
+        ...(selectedTagIds ? { selectedTagIds } : {}),
     };
 }
 
@@ -79,7 +88,7 @@ export interface ConversationUiState {
     selectedThreadId: string | undefined;
     selectedSessionId: string | undefined;
     selectedRunId: string | undefined;
-    selectedTagId: string | undefined;
+    selectedTagIds: string[];
     setScopeFilter: Dispatch<SetStateAction<ScopeFilter>>;
     setWorkspaceFilter: Dispatch<SetStateAction<string | undefined>>;
     setSort: Dispatch<SetStateAction<ThreadSort | null>>;
@@ -88,7 +97,7 @@ export interface ConversationUiState {
     setSelectedThreadId: Dispatch<SetStateAction<string | undefined>>;
     setSelectedSessionId: Dispatch<SetStateAction<string | undefined>>;
     setSelectedRunId: Dispatch<SetStateAction<string | undefined>>;
-    setSelectedTagId: Dispatch<SetStateAction<string | undefined>>;
+    setSelectedTagIds: Dispatch<SetStateAction<string[]>>;
 }
 
 function readStoredState(profileId: string): StoredConversationUiState {
@@ -129,7 +138,7 @@ export function useConversationUiState(profileId: string): ConversationUiState {
     const [selectedThreadId, setSelectedThreadId] = useState<string | undefined>(stored.selectedThreadId);
     const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>(stored.selectedSessionId);
     const [selectedRunId, setSelectedRunId] = useState<string | undefined>(stored.selectedRunId);
-    const [selectedTagId, setSelectedTagId] = useState<string | undefined>(stored.selectedTagId);
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(stored.selectedTagIds ?? []);
     const [hydratedProfileId, setHydratedProfileId] = useState(profileId);
 
     useEffect(() => {
@@ -146,7 +155,7 @@ export function useConversationUiState(profileId: string): ConversationUiState {
         setSelectedThreadId(nextStored.selectedThreadId);
         setSelectedSessionId(nextStored.selectedSessionId);
         setSelectedRunId(nextStored.selectedRunId);
-        setSelectedTagId(nextStored.selectedTagId);
+        setSelectedTagIds(nextStored.selectedTagIds ?? []);
         setHydratedProfileId(profileId);
     }, [hydratedProfileId, profileId]);
 
@@ -164,7 +173,7 @@ export function useConversationUiState(profileId: string): ConversationUiState {
             ...(selectedThreadId ? { selectedThreadId } : {}),
             ...(selectedSessionId ? { selectedSessionId } : {}),
             ...(selectedRunId ? { selectedRunId } : {}),
-            ...(selectedTagId ? { selectedTagId } : {}),
+            selectedTagIds,
         });
     }, [
         profileId,
@@ -176,7 +185,7 @@ export function useConversationUiState(profileId: string): ConversationUiState {
         selectedThreadId,
         selectedSessionId,
         selectedRunId,
-        selectedTagId,
+        selectedTagIds,
         hydratedProfileId,
     ]);
 
@@ -189,7 +198,7 @@ export function useConversationUiState(profileId: string): ConversationUiState {
         selectedThreadId,
         selectedSessionId,
         selectedRunId,
-        selectedTagId,
+        selectedTagIds,
         setScopeFilter,
         setWorkspaceFilter,
         setSort,
@@ -198,6 +207,6 @@ export function useConversationUiState(profileId: string): ConversationUiState {
         setSelectedThreadId,
         setSelectedSessionId,
         setSelectedRunId,
-        setSelectedTagId,
+        setSelectedTagIds,
     };
 }

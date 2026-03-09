@@ -1,3 +1,4 @@
+import { Star, Trash2 } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { useConversationSidebarState } from '@/web/components/conversation/hooks/useConversationSidebarState';
@@ -20,7 +21,7 @@ interface ConversationSidebarProps {
     threadTagIdsByThread: Map<string, string[]>;
     topLevelTab: TopLevelTab;
     selectedThreadId?: string;
-    selectedTagId?: string;
+    selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
     workspaceFilter?: string;
     sort: 'latest' | 'alphabetical';
@@ -30,6 +31,8 @@ interface ConversationSidebarProps {
     isAddingTag: boolean;
     onSelectThread: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
+    onToggleThreadFavorite: (threadId: string, nextFavorite: boolean) => void;
+    onRequestWorkspaceDelete: (workspaceFingerprint: string, workspaceLabel: string) => void;
     onScopeFilterChange: (scope: 'all' | 'workspace' | 'detached') => void;
     onWorkspaceFilterChange: (workspaceFingerprint?: string) => void;
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
@@ -66,7 +69,7 @@ export function ConversationSidebar({
     threadTagIdsByThread,
     topLevelTab,
     selectedThreadId,
-    selectedTagId,
+    selectedTagIds,
     scopeFilter,
     workspaceFilter,
     sort,
@@ -76,6 +79,8 @@ export function ConversationSidebar({
     isAddingTag,
     onSelectThread,
     onToggleTagFilter,
+    onToggleThreadFavorite,
+    onRequestWorkspaceDelete,
     onScopeFilterChange,
     onWorkspaceFilterChange,
     onSortChange,
@@ -251,7 +256,7 @@ export function ConversationSidebar({
                             key={tag.id}
                             type='button'
                             className={`rounded-md border px-2 py-1 text-xs ${
-                                selectedTagId === tag.id
+                                selectedTagIds.includes(tag.id)
                                     ? 'bg-primary text-primary-foreground border-primary'
                                     : 'border-border bg-background text-foreground'
                             }`}
@@ -287,11 +292,27 @@ export function ConversationSidebar({
             </div>
 
             <div className='min-h-0 flex-1 overflow-y-auto p-2'>
-                {groupedThreadRows.map((group) => (
+                {groupedThreadRows.map((group) => {
+                    const workspaceFingerprint = group.workspaceFingerprint;
+
+                    return (
                     <section key={group.label} className='mb-3'>
-                        <p className='text-muted-foreground px-1 pb-1 text-[11px] font-semibold tracking-wide uppercase'>
-                            {group.label}
-                        </p>
+                        <div className='text-muted-foreground flex items-center justify-between gap-2 px-1 pb-1'>
+                            <p className='min-w-0 truncate text-[11px] font-semibold tracking-wide uppercase'>
+                                {group.label}
+                            </p>
+                            {workspaceFingerprint ? (
+                                <button
+                                    type='button'
+                                    className='hover:bg-destructive/10 hover:text-destructive rounded-md p-1 transition-colors'
+                                    aria-label={`Clear threads for ${group.label}`}
+                                    onClick={() => {
+                                        onRequestWorkspaceDelete(workspaceFingerprint, group.label);
+                                    }}>
+                                    <Trash2 className='h-3.5 w-3.5' />
+                                </button>
+                            ) : null}
+                        </div>
                         <div className='space-y-1'>
                             {group.rows.map(({ thread, depth }) => {
                                 const tagIds = threadTagIdsByThread.get(thread.id) ?? [];
@@ -304,51 +325,74 @@ export function ConversationSidebar({
                                                 style={{ left: `${String(depth * 14 - 7)}px` }}
                                             />
                                         ) : null}
-                                        <button
-                                            type='button'
-                                            className={`w-full rounded-lg border p-2 text-left ${
+                                        <div
+                                            className={`border-border bg-background hover:bg-accent flex items-start gap-2 rounded-lg border p-2 ${
                                                 selectedThreadId === thread.id
                                                     ? 'border-primary bg-primary/10'
-                                                    : 'border-border bg-background hover:bg-accent'
+                                                    : ''
                                             }`}
-                                            style={{ paddingLeft: `${String(depth * 14 + 8)}px` }}
-                                            onClick={() => {
-                                                onSelectThread(thread.id);
-                                            }}>
-                                            <div className='flex items-center justify-between gap-2'>
-                                                <p className='truncate text-sm font-medium'>{thread.title}</p>
-                                                {showAllModes ? (
-                                                    <span
-                                                        className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${modeBadgeClass(
-                                                            thread.topLevelTab
-                                                        )}`}>
-                                                        {modeLabel(thread.topLevelTab)}
-                                                    </span>
-                                                ) : null}
-                                            </div>
-                                            <p className='text-muted-foreground mt-0.5 text-xs'>
-                                                {thread.anchorKind === 'workspace'
-                                                    ? `${thread.topLevelTab === 'chat' ? 'workspace conversation branch' : thread.worktreeId ? 'managed worktree execution' : thread.executionEnvironmentMode === 'new_worktree' ? 'queued worktree execution' : 'local workspace execution'} · ${thread.anchorId ?? 'unknown'}`
-                                                    : 'playground conversation branch'}
-                                            </p>
-                                            {tagIds.length > 0 ? (
-                                                <div className='mt-1 flex flex-wrap gap-1'>
-                                                    {tagIds.map((tagId) => (
+                                            style={{ paddingLeft: `${String(depth * 14 + 8)}px` }}>
+                                            <button
+                                                type='button'
+                                                className='min-w-0 flex-1 text-left'
+                                                onClick={() => {
+                                                    onSelectThread(thread.id);
+                                                }}>
+                                                <div className='flex items-center justify-between gap-2'>
+                                                    <p className='truncate text-sm font-medium'>{thread.title}</p>
+                                                    {showAllModes ? (
                                                         <span
-                                                            key={tagId}
-                                                            className='bg-secondary text-secondary-foreground rounded px-1.5 py-0.5 text-[10px]'>
-                                                            {tagLabelById.get(tagId) ?? tagId}
+                                                            className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${modeBadgeClass(
+                                                                thread.topLevelTab
+                                                            )}`}>
+                                                            {modeLabel(thread.topLevelTab)}
                                                         </span>
-                                                    ))}
+                                                    ) : null}
                                                 </div>
-                                            ) : null}
-                                        </button>
+                                                <p className='text-muted-foreground mt-0.5 text-xs'>
+                                                    {thread.anchorKind === 'workspace'
+                                                        ? `${thread.topLevelTab === 'chat' ? 'workspace conversation branch' : thread.worktreeId ? 'managed worktree execution' : thread.executionEnvironmentMode === 'new_worktree' ? 'queued worktree execution' : 'local workspace execution'} · ${thread.anchorId ?? 'unknown'}`
+                                                        : 'playground conversation branch'}
+                                                </p>
+                                                {tagIds.length > 0 ? (
+                                                    <div className='mt-1 flex flex-wrap gap-1'>
+                                                        {tagIds.map((tagId) => (
+                                                            <span
+                                                                key={tagId}
+                                                                className='bg-secondary text-secondary-foreground rounded px-1.5 py-0.5 text-[10px]'>
+                                                                {tagLabelById.get(tagId) ?? tagId}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                ) : null}
+                                            </button>
+                                            <button
+                                                type='button'
+                                                className={`mt-0.5 rounded-md p-1 transition-colors ${
+                                                    thread.isFavorite
+                                                        ? 'text-amber-400 hover:text-amber-300'
+                                                        : 'text-muted-foreground hover:text-foreground'
+                                                }`}
+                                                aria-label={
+                                                    thread.isFavorite
+                                                        ? `Remove ${thread.title} from favorites`
+                                                        : `Add ${thread.title} to favorites`
+                                                }
+                                                onClick={() => {
+                                                    onToggleThreadFavorite(thread.id, !thread.isFavorite);
+                                                }}>
+                                                <Star
+                                                    className={`h-4 w-4 ${thread.isFavorite ? 'fill-current' : ''}`}
+                                                />
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
                         </div>
                     </section>
-                ))}
+                    );
+                })}
             </div>
         </aside>
     );

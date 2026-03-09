@@ -53,14 +53,15 @@ export function useConversationSync(input: ConversationSyncInput): void {
     }, [input.threads?.groupView, input.uiState]);
 
     useEffect(() => {
-        const selectedTagId = input.uiState.selectedTagId;
-        if (!selectedTagId) {
+        const selectedTagIds = input.uiState.selectedTagIds;
+        if (selectedTagIds.length === 0) {
             return;
         }
 
-        const tagExists = (input.tags ?? []).some((tag) => tag.id === selectedTagId);
-        if (!tagExists) {
-            input.uiState.setSelectedTagId(undefined);
+        const availableTagIds = new Set((input.tags ?? []).map((tag) => tag.id));
+        const nextSelectedTagIds = selectedTagIds.filter((tagId) => availableTagIds.has(tagId));
+        if (nextSelectedTagIds.length !== selectedTagIds.length) {
+            input.uiState.setSelectedTagIds(nextSelectedTagIds);
         }
     }, [input.tags, input.uiState]);
 

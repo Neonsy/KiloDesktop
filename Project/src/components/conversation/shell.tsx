@@ -75,7 +75,7 @@ export function ConversationShell({
     const sidebarState = useThreadSidebarState({
         threads: queries.listThreadsQuery.data?.threads ?? [],
         threadTags: queries.shellBootstrapQuery.data?.threadTags ?? [],
-        selectedTagId: uiState.selectedTagId,
+        selectedTagIds: uiState.selectedTagIds,
         selectedThreadId: uiState.selectedThreadId,
         onSelectedThreadInvalid: () => {
             uiState.setSelectedThreadId(undefined);
@@ -256,7 +256,7 @@ export function ConversationShell({
                 tags={queries.listTagsQuery.data?.tags ?? []}
                 threadTagIdsByThread={sidebarState.threadTagIdsByThread}
                 selectedThreadId={uiState.selectedThreadId}
-                selectedTagId={uiState.selectedTagId}
+                selectedTagIds={uiState.selectedTagIds}
                 scopeFilter={uiState.scopeFilter}
                 workspaceFilter={uiState.workspaceFilter}
                 sort={uiState.sort ?? 'latest'}
@@ -264,12 +264,13 @@ export function ConversationShell({
                 groupView={uiState.groupView}
                 isCreatingThread={mutations.createThreadMutation.isPending}
                 isAddingTag={mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending}
+                isDeletingWorkspaceThreads={mutations.deleteWorkspaceThreadsMutation.isPending}
                 onTopLevelTabChange={onTopLevelTabChange}
                 onSetTabSwitchNotice={setTabSwitchNotice}
                 onSelectThreadId={uiState.setSelectedThreadId}
                 onSelectSessionId={uiState.setSelectedSessionId}
                 onSelectRunId={uiState.setSelectedRunId}
-                onSelectTagId={uiState.setSelectedTagId}
+                onSelectTagIds={uiState.setSelectedTagIds}
                 onScopeFilterChange={uiState.setScopeFilter}
                 onWorkspaceFilterChange={uiState.setWorkspaceFilter}
                 onSortChange={uiState.setSort}
@@ -278,10 +279,13 @@ export function ConversationShell({
                 createThread={mutations.createThreadMutation.mutateAsync}
                 upsertTag={mutations.upsertTagMutation.mutateAsync}
                 setThreadTags={mutations.setThreadTagsMutation.mutateAsync}
+                setThreadFavorite={mutations.setThreadFavoriteMutation.mutateAsync}
+                deleteWorkspaceThreads={mutations.deleteWorkspaceThreadsMutation.mutateAsync}
                 refetchBuckets={queries.listBucketsQuery.refetch}
                 refetchThreads={queries.listThreadsQuery.refetch}
                 refetchTags={queries.listTagsQuery.refetch}
                 refetchShellBootstrap={queries.shellBootstrapQuery.refetch}
+                refetchSessions={queries.sessionsQuery.refetch}
             />
 
             <ConversationWorkspaceSection

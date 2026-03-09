@@ -27,10 +27,13 @@ import type {
     ConversationListTagsInput,
     ConversationListThreadsInput,
     ConversationRenameThreadInput,
+    ConversationSetThreadFavoriteInput,
     ConversationSetThreadExecutionEnvironmentInput,
     ConversationSetEditPreferenceInput,
     ConversationSetThreadTitlePreferenceInput,
     ConversationSetThreadTagsInput,
+    ConversationWorkspaceThreadDeletePreviewInput,
+    ConversationDeleteWorkspaceThreadsInput,
     ConversationUpsertTagInput,
 } from '@/app/backend/runtime/contracts/types';
 
@@ -121,6 +124,16 @@ export function parseConversationRenameThreadInput(input: unknown): Conversation
     };
 }
 
+export function parseConversationSetThreadFavoriteInput(input: unknown): ConversationSetThreadFavoriteInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        threadId: readEntityId(source.threadId, 'threadId', 'thr'),
+        isFavorite: readBoolean(source.isFavorite, 'isFavorite'),
+    };
+}
+
 export function parseConversationSetThreadExecutionEnvironmentInput(
     input: unknown
 ): ConversationSetThreadExecutionEnvironmentInput {
@@ -172,6 +185,34 @@ export function parseConversationSetThreadTagsInput(input: unknown): Conversatio
     };
 }
 
+export function parseConversationWorkspaceThreadDeletePreviewInput(
+    input: unknown
+): ConversationWorkspaceThreadDeletePreviewInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        workspaceFingerprint: readString(source.workspaceFingerprint, 'workspaceFingerprint'),
+        ...(source.includeFavorites !== undefined
+            ? { includeFavorites: readBoolean(source.includeFavorites, 'includeFavorites') }
+            : {}),
+    };
+}
+
+export function parseConversationDeleteWorkspaceThreadsInput(
+    input: unknown
+): ConversationDeleteWorkspaceThreadsInput {
+    const source = readObject(input, 'input');
+
+    return {
+        profileId: readProfileId(source),
+        workspaceFingerprint: readString(source.workspaceFingerprint, 'workspaceFingerprint'),
+        ...(source.includeFavorites !== undefined
+            ? { includeFavorites: readBoolean(source.includeFavorites, 'includeFavorites') }
+            : {}),
+    };
+}
+
 export function parseConversationGetEditPreferenceInput(input: unknown): ConversationGetEditPreferenceInput {
     return parseProfileInput(input);
 }
@@ -216,12 +257,17 @@ export const conversationListBucketsInputSchema = createParser(parseConversation
 export const conversationListThreadsInputSchema = createParser(parseConversationListThreadsInput);
 export const conversationCreateThreadInputSchema = createParser(parseConversationCreateThreadInput);
 export const conversationRenameThreadInputSchema = createParser(parseConversationRenameThreadInput);
+export const conversationSetThreadFavoriteInputSchema = createParser(parseConversationSetThreadFavoriteInput);
 export const conversationSetThreadExecutionEnvironmentInputSchema = createParser(
     parseConversationSetThreadExecutionEnvironmentInput
 );
 export const conversationListTagsInputSchema = createParser(parseConversationListTagsInput);
 export const conversationUpsertTagInputSchema = createParser(parseConversationUpsertTagInput);
 export const conversationSetThreadTagsInputSchema = createParser(parseConversationSetThreadTagsInput);
+export const conversationWorkspaceThreadDeletePreviewInputSchema = createParser(
+    parseConversationWorkspaceThreadDeletePreviewInput
+);
+export const conversationDeleteWorkspaceThreadsInputSchema = createParser(parseConversationDeleteWorkspaceThreadsInput);
 export const conversationGetEditPreferenceInputSchema = createParser(parseConversationGetEditPreferenceInput);
 export const conversationSetEditPreferenceInputSchema = createParser(parseConversationSetEditPreferenceInput);
 export const conversationGetThreadTitlePreferenceInputSchema = createParser(

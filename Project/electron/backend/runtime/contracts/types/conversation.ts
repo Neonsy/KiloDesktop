@@ -37,6 +37,11 @@ export interface ConversationRenameThreadInput extends ProfileInput {
     title: string;
 }
 
+export interface ConversationSetThreadFavoriteInput extends ProfileInput {
+    threadId: EntityId<'thr'>;
+    isFavorite: boolean;
+}
+
 export interface ConversationSetThreadExecutionEnvironmentInput extends ProfileInput {
     threadId: EntityId<'thr'>;
     mode: ExecutionEnvironmentMode;
@@ -54,6 +59,16 @@ export interface ConversationUpsertTagInput extends ProfileInput {
 export interface ConversationSetThreadTagsInput extends ProfileInput {
     threadId: EntityId<'thr'>;
     tagIds: string[];
+}
+
+export interface ConversationWorkspaceThreadDeletePreviewInput extends ProfileInput {
+    workspaceFingerprint: string;
+    includeFavorites?: boolean;
+}
+
+export interface ConversationDeleteWorkspaceThreadsInput extends ProfileInput {
+    workspaceFingerprint: string;
+    includeFavorites?: boolean;
 }
 
 export type ConversationGetEditPreferenceInput = ProfileInput;

@@ -10,6 +10,7 @@ export interface ThreadRow {
     top_level_tab: string;
     parent_thread_id: string | null;
     root_thread_id: string;
+    is_favorite: 0 | 1;
     execution_environment_mode: string;
     execution_branch: string | null;
     base_branch: string | null;
@@ -35,6 +36,7 @@ export function mapThreadRecord(row: ThreadRow): ThreadRecord {
         topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
         ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
         rootThreadId: row.root_thread_id,
+        isFavorite: row.is_favorite === 1,
         executionEnvironmentMode: parseEnumValue(
             row.execution_environment_mode,
             'threads.execution_environment_mode',
@@ -58,6 +60,7 @@ export function mapThreadListRecord(row: ThreadListRow): ThreadListRecord {
         topLevelTab: parseEnumValue(row.top_level_tab, 'threads.top_level_tab', topLevelTabs),
         ...(row.parent_thread_id ? { parentThreadId: row.parent_thread_id } : {}),
         rootThreadId: row.root_thread_id,
+        isFavorite: row.is_favorite === 1,
         executionEnvironmentMode: parseEnumValue(
             row.execution_environment_mode,
             'threads.execution_environment_mode',

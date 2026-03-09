@@ -12,6 +12,7 @@ import {
     tagStore,
     threadStore,
 } from '@/app/backend/persistence/__tests__/stores.shared';
+import { parseEntityId } from '@/app/backend/persistence/stores/shared/rowParsers';
 
 registerPersistenceStoreHooks();
 
@@ -231,5 +232,122 @@ describe('persistence stores: conversation domain', () => {
         ).toBe(true);
         expect(diffs.some((item) => item.id === diff.id)).toBe(true);
         expect(checkpoints.some((item) => item.id === checkpoint.id)).toBe(true);
+    });
+
+    it('supports favorites and workspace thread deletion with favorite protection', async () => {
+        const profileId = getDefaultProfileId();
+        const workspaceFingerprint = 'wsf_workspace_bulk_delete';
+        const conversation = await conversationStore.createOrGetBucket({
+            profileId,
+            scope: 'workspace',
+            workspaceFingerprint,
+            title: 'Workspace Delete',
+        });
+        if (conversation.isErr()) {
+            throw new Error(conversation.error.message);
+        }
+
+        const removableThread = await threadStore.create({
+            profileId,
+            conversationId: conversation.value.id,
+            title: 'Removable',
+            topLevelTab: 'chat',
+        });
+        const favoriteThread = await threadStore.create({
+            profileId,
+            conversationId: conversation.value.id,
+            title: 'Favorite',
+            topLevelTab: 'chat',
+        });
+        if (removableThread.isErr()) {
+            throw new Error(removableThread.error.message);
+        }
+        if (favoriteThread.isErr()) {
+            throw new Error(favoriteThread.error.message);
+        }
+
+        const favoriteUpdate = await threadStore.setFavorite(
+            profileId,
+            parseEntityId(favoriteThread.value.id, 'threads.id', 'thr'),
+            true
+        );
+        if (favoriteUpdate.isErr()) {
+            throw new Error(favoriteUpdate.error.message);
+        }
+
+        const removableTag = await tagStore.upsert(profileId, 'remove-me');
+        const favoriteTag = await tagStore.upsert(profileId, 'keep-me');
+        if (removableTag.isErr()) {
+            throw new Error(removableTag.error.message);
+        }
+        if (favoriteTag.isErr()) {
+            throw new Error(favoriteTag.error.message);
+        }
+
+        const removableTagLink = await tagStore.setThreadTags(profileId, removableThread.value.id, [removableTag.value.id]);
+        if (removableTagLink.isErr()) {
+            throw new Error(removableTagLink.error.message);
+        }
+        const favoriteTagLink = await tagStore.setThreadTags(profileId, favoriteThread.value.id, [favoriteTag.value.id]);
+        if (favoriteTagLink.isErr()) {
+            throw new Error(favoriteTagLink.error.message);
+        }
+
+        const previewWithoutFavorites = await threadStore.getWorkspaceDeletePreview({
+            profileId,
+            workspaceFingerprint,
+            includeFavorites: false,
+        });
+        expect(previewWithoutFavorites.totalThreadCount).toBe(2);
+        expect(previewWithoutFavorites.favoriteThreadCount).toBe(1);
+        expect(previewWithoutFavorites.deletableThreadCount).toBe(1);
+
+        const deletedWithoutFavorites = await threadStore.deleteWorkspaceThreads({
+            profileId,
+            workspaceFingerprint,
+            includeFavorites: false,
+        });
+        expect(deletedWithoutFavorites.deletedThreadIds).toEqual([removableThread.value.id]);
+
+        const remainingThreads = await threadStore.list({
+            profileId,
+            activeTab: 'chat',
+            showAllModes: true,
+            groupView: 'workspace',
+            scope: 'workspace',
+            workspaceFingerprint,
+            sort: 'latest',
+        });
+        expect(remainingThreads.map((thread) => thread.id)).toEqual([favoriteThread.value.id]);
+        expect(remainingThreads[0]?.isFavorite).toBe(true);
+
+        const remainingTags = await tagStore.listByProfile(profileId);
+        expect(remainingTags.some((tag) => tag.id === removableTag.value.id)).toBe(false);
+        expect(remainingTags.some((tag) => tag.id === favoriteTag.value.id)).toBe(true);
+
+        const previewWithFavorites = await threadStore.getWorkspaceDeletePreview({
+            profileId,
+            workspaceFingerprint,
+            includeFavorites: true,
+        });
+        expect(previewWithFavorites.deletableThreadCount).toBe(1);
+
+        const deletedWithFavorites = await threadStore.deleteWorkspaceThreads({
+            profileId,
+            workspaceFingerprint,
+            includeFavorites: true,
+        });
+        expect(deletedWithFavorites.deletedThreadIds).toEqual([favoriteThread.value.id]);
+
+        const finalThreads = await threadStore.list({
+            profileId,
+            activeTab: 'chat',
+            showAllModes: true,
+            groupView: 'workspace',
+            scope: 'workspace',
+            workspaceFingerprint,
+            sort: 'latest',
+        });
+        expect(finalThreads).toEqual([]);
     });
 });

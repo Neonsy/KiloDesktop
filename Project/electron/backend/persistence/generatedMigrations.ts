@@ -949,4 +949,11 @@ CREATE INDEX idx_model_limit_overrides_provider_updated_at
     ON model_limit_overrides(provider_id, updated_at DESC);
 `,
     },
+    {
+        name: '015_thread_favorites.sql',
+        sql: `
+ALTER TABLE "threads"
+    ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0 CHECK (is_favorite IN (0, 1));
+`,
+    },
 ];

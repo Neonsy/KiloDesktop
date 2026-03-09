@@ -1,19 +1,22 @@
 import { conversationStore, settingsStore, tagStore, threadStore, workspaceRootStore } from '@/app/backend/persistence/stores';
 import {
     conversationCreateThreadInputSchema,
+    conversationDeleteWorkspaceThreadsInputSchema,
     conversationGetEditPreferenceInputSchema,
     conversationGetThreadTitlePreferenceInputSchema,
     conversationListBucketsInputSchema,
-    conversationSetEditPreferenceInputSchema,
-    conversationSetThreadTitlePreferenceInputSchema,
     conversationListTagsInputSchema,
     conversationListThreadsInputSchema,
     conversationRenameThreadInputSchema,
+    conversationSetEditPreferenceInputSchema,
+    conversationSetThreadFavoriteInputSchema,
+    conversationSetThreadTitlePreferenceInputSchema,
     conversationSetThreadTagsInputSchema,
     conversationUpsertTagInputSchema,
+    conversationWorkspaceThreadDeletePreviewInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
-import { runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
+import { runtimeRemoveEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
@@ -203,6 +206,44 @@ export const conversationRouter = router({
             thread: thread.value,
         };
     }),
+    setThreadFavorite: publicProcedure
+        .input(conversationSetThreadFavoriteInputSchema)
+        .mutation(async ({ input, ctx }) => {
+            const updated = await threadStore.setFavorite(input.profileId, input.threadId, input.isFavorite);
+            if (updated.isErr()) {
+                throw toTrpcError(updated.error);
+            }
+            if (!updated.value) {
+                return {
+                    updated: false as const,
+                    reason: 'not_found' as const,
+                };
+            }
+
+            await runtimeEventLogService.append(
+                runtimeUpsertEvent({
+                    entityType: 'thread',
+                    domain: 'thread',
+                    entityId: updated.value.id,
+                    eventType: 'conversation.thread.favorite.updated',
+                    payload: {
+                        profileId: input.profileId,
+                        threadId: updated.value.id,
+                        isFavorite: updated.value.isFavorite,
+                    },
+                    ...eventMetadata({
+                        requestId: ctx.requestId,
+                        correlationId: ctx.correlationId,
+                        origin: 'trpc.conversation.setThreadFavorite',
+                    }),
+                })
+            );
+
+            return {
+                updated: true as const,
+                thread: updated.value,
+            };
+        }),
     listTags: publicProcedure.input(conversationListTagsInputSchema).query(async ({ input }) => {
         return {
             tags: await tagStore.listByProfile(input.profileId),
@@ -246,6 +287,54 @@ export const conversationRouter = router({
             threadTags,
         };
     }),
+    getWorkspaceThreadDeletePreview: publicProcedure
+        .input(conversationWorkspaceThreadDeletePreviewInputSchema)
+        .query(async ({ input }) => {
+            return threadStore.getWorkspaceDeletePreview({
+                profileId: input.profileId,
+                workspaceFingerprint: input.workspaceFingerprint,
+                includeFavorites: input.includeFavorites ?? false,
+            });
+        }),
+    deleteWorkspaceThreads: publicProcedure
+        .input(conversationDeleteWorkspaceThreadsInputSchema)
+        .mutation(async ({ input, ctx }) => {
+            const result = await threadStore.deleteWorkspaceThreads({
+                profileId: input.profileId,
+                workspaceFingerprint: input.workspaceFingerprint,
+                includeFavorites: input.includeFavorites ?? false,
+            });
+
+            if (result.deletedThreadIds.length > 0) {
+                const primaryThreadId = result.deletedThreadIds[0] ?? input.workspaceFingerprint;
+                await runtimeEventLogService.append(
+                    runtimeRemoveEvent({
+                        entityType: 'thread',
+                        domain: 'thread',
+                        entityId: primaryThreadId,
+                        eventType: 'conversation.workspace.threads.cleared',
+                        payload: {
+                            profileId: input.profileId,
+                            threadId: primaryThreadId,
+                            workspaceFingerprint: input.workspaceFingerprint,
+                            deletedThreadIds: result.deletedThreadIds,
+                            tagIds: result.deletedTagIds,
+                            includeFavorites: input.includeFavorites ?? false,
+                            totalThreadCount: result.totalThreadCount,
+                            favoriteThreadCount: result.favoriteThreadCount,
+                            deletableThreadCount: result.deletableThreadCount,
+                        },
+                        ...eventMetadata({
+                            requestId: ctx.requestId,
+                            correlationId: ctx.correlationId,
+                            origin: 'trpc.conversation.deleteWorkspaceThreads',
+                        }),
+                    })
+                );
+            }
+
+            return result;
+        }),
     getEditPreference: publicProcedure.input(conversationGetEditPreferenceInputSchema).query(async ({ input }) => {
         const value = await settingsStore.getString(
             input.profileId,

@@ -5,7 +5,7 @@ import type { ThreadListRecord, ThreadTagRecord } from '@/app/backend/persistenc
 interface UseThreadSidebarStateInput {
     threads: ThreadListRecord[];
     threadTags: ThreadTagRecord[];
-    selectedTagId: string | undefined;
+    selectedTagIds: string[];
     selectedThreadId: string | undefined;
     onSelectedThreadInvalid: () => void;
     onSelectFallbackThread: (threadId: string) => void;
@@ -16,9 +16,22 @@ export interface ThreadSidebarState {
     visibleThreads: ThreadListRecord[];
 }
 
-export function useThreadSidebarState(input: UseThreadSidebarStateInput): ThreadSidebarState {
-    const selectedTagId = input.selectedTagId;
+export function filterThreadsBySelectedTagIds(input: {
+    threads: ThreadListRecord[];
+    threadTagIdsByThread: Map<string, string[]>;
+    selectedTagIds: string[];
+}): ThreadListRecord[] {
+    if (input.selectedTagIds.length === 0) {
+        return input.threads;
+    }
 
+    return input.threads.filter((thread) => {
+        const tagIds = new Set(input.threadTagIdsByThread.get(thread.id) ?? []);
+        return input.selectedTagIds.every((tagId) => tagIds.has(tagId));
+    });
+}
+
+export function useThreadSidebarState(input: UseThreadSidebarStateInput): ThreadSidebarState {
     const threadTagIdsByThread = useMemo(() => {
         const map = new Map<string, string[]>();
         for (const relation of input.threadTags) {
@@ -31,12 +44,12 @@ export function useThreadSidebarState(input: UseThreadSidebarStateInput): Thread
     }, [input.threadTags]);
 
     const visibleThreads = useMemo(() => {
-        if (!selectedTagId) {
-            return input.threads;
-        }
-
-        return input.threads.filter((thread) => (threadTagIdsByThread.get(thread.id) ?? []).includes(selectedTagId));
-    }, [input.threads, selectedTagId, threadTagIdsByThread]);
+        return filterThreadsBySelectedTagIds({
+            threads: input.threads,
+            threadTagIdsByThread,
+            selectedTagIds: input.selectedTagIds,
+        });
+    }, [input.selectedTagIds, input.threads, threadTagIdsByThread]);
 
     useEffect(() => {
         if (visibleThreads.length === 0) {

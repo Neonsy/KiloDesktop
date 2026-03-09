@@ -33,6 +33,7 @@ const threads: ThreadListRecord[] = [
         title: 'Root Thread',
         topLevelTab: 'chat',
         rootThreadId: 'thr_root',
+        isFavorite: true,
         executionEnvironmentMode: 'local',
         scope: 'workspace',
         workspaceFingerprint: 'ws_b',
@@ -50,6 +51,7 @@ const threads: ThreadListRecord[] = [
         topLevelTab: 'chat',
         parentThreadId: 'thr_root',
         rootThreadId: 'thr_root',
+        isFavorite: false,
         executionEnvironmentMode: 'local',
         scope: 'workspace',
         workspaceFingerprint: 'ws_b',
@@ -85,6 +87,8 @@ describe('buildConversationSidebarModel', () => {
         expect(model.selectedThread?.id).toBe('thr_child');
         expect(model.tagLabelById.get('tag_1')).toBe('Pinned');
         expect(model.groupedThreadRows).toHaveLength(1);
+        expect(model.groupedThreadRows[0]?.workspaceFingerprint).toBe('ws_b');
+        expect(model.groupedThreadRows[0]?.favoriteCount).toBe(1);
         expect(model.groupedThreadRows[0]?.rows.map((row) => row.thread.id)).toEqual(['thr_root', 'thr_child']);
     });
 

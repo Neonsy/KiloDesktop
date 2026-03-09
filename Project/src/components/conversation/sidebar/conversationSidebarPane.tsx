@@ -1,6 +1,10 @@
+import { useMemo, useState } from 'react';
+
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
+import { ConfirmDialog } from '@/web/components/ui/confirmDialog';
+import { trpc } from '@/web/trpc/client';
 
 import type { ConversationRecord, TagRecord, ThreadListRecord } from '@/app/backend/persistence/types';
 import type { EntityId, TopLevelTab } from '@/app/backend/runtime/contracts';
@@ -13,7 +17,7 @@ interface ConversationSidebarPaneProps {
     tags: TagRecord[];
     threadTagIdsByThread: Map<string, string[]>;
     selectedThreadId: string | undefined;
-    selectedTagId: string | undefined;
+    selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
     workspaceFilter: string | undefined;
     sort: 'latest' | 'alphabetical';
@@ -21,12 +25,13 @@ interface ConversationSidebarPaneProps {
     groupView: 'workspace' | 'branch';
     isCreatingThread: boolean;
     isAddingTag: boolean;
+    isDeletingWorkspaceThreads: boolean;
     onTopLevelTabChange: (nextTab: TopLevelTab) => void;
     onSetTabSwitchNotice: (nextNotice: string | undefined) => void;
     onSelectThreadId: (threadId: string | undefined) => void;
     onSelectSessionId: (sessionId: string | undefined) => void;
     onSelectRunId: (runId: string | undefined) => void;
-    onSelectTagId: (tagId: string | undefined | ((current: string | undefined) => string | undefined)) => void;
+    onSelectTagIds: (tagIds: string[] | ((current: string[]) => string[])) => void;
     onScopeFilterChange: (scope: 'all' | 'workspace' | 'detached') => void;
     onWorkspaceFilterChange: (workspaceFingerprint?: string) => void;
     onSortChange: (sort: 'latest' | 'alphabetical') => void;
@@ -41,10 +46,21 @@ interface ConversationSidebarPaneProps {
     }) => Promise<{ thread: { id: string } }>;
     upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: { id: string } }>;
     setThreadTags: (input: { profileId: string; threadId: EntityId<'thr'>; tagIds: EntityId<'tag'>[] }) => Promise<unknown>;
+    setThreadFavorite: (input: {
+        profileId: string;
+        threadId: EntityId<'thr'>;
+        isFavorite: boolean;
+    }) => Promise<unknown>;
+    deleteWorkspaceThreads: (input: {
+        profileId: string;
+        workspaceFingerprint: string;
+        includeFavorites?: boolean;
+    }) => Promise<{ deletedThreadIds: string[] }>;
     refetchBuckets: () => Promise<unknown>;
     refetchThreads: () => Promise<unknown>;
     refetchTags: () => Promise<unknown>;
     refetchShellBootstrap: () => Promise<unknown>;
+    refetchSessions: () => Promise<unknown>;
 }
 
 export function ConversationSidebarPane({
@@ -55,7 +71,7 @@ export function ConversationSidebarPane({
     tags,
     threadTagIdsByThread,
     selectedThreadId,
-    selectedTagId,
+    selectedTagIds,
     scopeFilter,
     workspaceFilter,
     sort,
@@ -63,12 +79,13 @@ export function ConversationSidebarPane({
     groupView,
     isCreatingThread,
     isAddingTag,
+    isDeletingWorkspaceThreads,
     onTopLevelTabChange,
     onSetTabSwitchNotice,
     onSelectThreadId,
     onSelectSessionId,
     onSelectRunId,
-    onSelectTagId,
+    onSelectTagIds,
     onScopeFilterChange,
     onWorkspaceFilterChange,
     onSortChange,
@@ -77,84 +94,224 @@ export function ConversationSidebarPane({
     createThread,
     upsertTag,
     setThreadTags,
+    setThreadFavorite,
+    deleteWorkspaceThreads,
     refetchBuckets,
     refetchThreads,
     refetchTags,
     refetchShellBootstrap,
+    refetchSessions,
 }: ConversationSidebarPaneProps) {
+    const [workspaceDeleteTarget, setWorkspaceDeleteTarget] = useState<
+        | {
+              workspaceFingerprint: string;
+              workspaceLabel: string;
+          }
+        | undefined
+    >(undefined);
+    const [includeFavoriteThreads, setIncludeFavoriteThreads] = useState(false);
+    const selectedThread = useMemo(
+        () => threads.find((thread) => thread.id === selectedThreadId),
+        [selectedThreadId, threads]
+    );
+    const workspaceDeletePreviewQuery = trpc.conversation.getWorkspaceThreadDeletePreview.useQuery(
+        {
+            profileId,
+            workspaceFingerprint: workspaceDeleteTarget?.workspaceFingerprint ?? '',
+            includeFavorites: includeFavoriteThreads,
+        },
+        {
+            enabled: Boolean(workspaceDeleteTarget),
+            refetchOnWindowFocus: false,
+        }
+    );
+
     return (
-        <ConversationSidebar
-            buckets={buckets}
-            threads={threads}
-            tags={tags}
-            threadTagIdsByThread={threadTagIdsByThread}
-            topLevelTab={topLevelTab}
-            {...(selectedThreadId ? { selectedThreadId } : {})}
-            {...(selectedTagId ? { selectedTagId } : {})}
-            scopeFilter={scopeFilter}
-            {...(workspaceFilter ? { workspaceFilter } : {})}
-            sort={sort}
-            showAllModes={showAllModes}
-            groupView={groupView}
-            isCreatingThread={isCreatingThread}
-            isAddingTag={isAddingTag}
-            onSelectThread={(threadId) => {
-                const targetThread = threads.find((thread) => thread.id === threadId);
-                const nextTab = targetThread?.topLevelTab ?? topLevelTab;
-                const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
-                if (switchState.shouldSwitch) {
-                    onTopLevelTabChange(nextTab);
-                    onSetTabSwitchNotice(switchState.notice);
-                    window.setTimeout(() => {
+        <>
+            <ConversationSidebar
+                buckets={buckets}
+                threads={threads}
+                tags={tags}
+                threadTagIdsByThread={threadTagIdsByThread}
+                topLevelTab={topLevelTab}
+                {...(selectedThreadId ? { selectedThreadId } : {})}
+                selectedTagIds={selectedTagIds}
+                scopeFilter={scopeFilter}
+                {...(workspaceFilter ? { workspaceFilter } : {})}
+                sort={sort}
+                showAllModes={showAllModes}
+                groupView={groupView}
+                isCreatingThread={isCreatingThread}
+                isAddingTag={isAddingTag}
+                onSelectThread={(threadId) => {
+                    const targetThread = threads.find((thread) => thread.id === threadId);
+                    const nextTab = targetThread?.topLevelTab ?? topLevelTab;
+                    const switchState = resolveTabSwitchNotice(topLevelTab, nextTab);
+                    if (switchState.shouldSwitch) {
+                        onTopLevelTabChange(nextTab);
+                        onSetTabSwitchNotice(switchState.notice);
+                        window.setTimeout(() => {
+                            onSetTabSwitchNotice(undefined);
+                        }, 2200);
+                    } else {
                         onSetTabSwitchNotice(undefined);
-                    }, 2200);
-                } else {
-                    onSetTabSwitchNotice(undefined);
-                }
-                onSelectThreadId(threadId);
-            }}
-            onToggleTagFilter={(tagId) => {
-                onSelectTagId((current) => (current === tagId ? undefined : tagId));
-            }}
-            onScopeFilterChange={onScopeFilterChange}
-            onWorkspaceFilterChange={onWorkspaceFilterChange}
-            onSortChange={onSortChange}
-            onShowAllModesChange={onShowAllModesChange}
-            onGroupViewChange={onGroupViewChange}
-            onCreateThread={async (input) => {
-                const result = await createThread({
-                    profileId,
-                    topLevelTab,
-                    ...input,
-                });
-                onSelectThreadId(result.thread.id);
-                onSelectSessionId(undefined);
-                onSelectRunId(undefined);
-                await Promise.all([refetchBuckets(), refetchThreads()]);
-            }}
-            onAddTagToThread={async (threadId, label) => {
-                if (!isEntityId(threadId, 'thr')) {
-                    return;
-                }
+                    }
+                    onSelectThreadId(threadId);
+                }}
+                onToggleTagFilter={(tagId) => {
+                    onSelectTagIds((current) =>
+                        current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
+                    );
+                }}
+                onToggleThreadFavorite={(threadId, nextFavorite) => {
+                    if (!isEntityId(threadId, 'thr')) {
+                        return;
+                    }
 
-                const upserted = await upsertTag({
-                    profileId,
-                    label,
-                });
-                const existing = threadTagIdsByThread.get(threadId) ?? [];
-                const nextTagIds = [...new Set([...existing, upserted.tag.id])];
-                const validTagIds = nextTagIds.filter((tagId): tagId is EntityId<'tag'> => isEntityId(tagId, 'tag'));
-                if (validTagIds.length !== nextTagIds.length) {
-                    return;
-                }
+                    void (async () => {
+                        await setThreadFavorite({
+                            profileId,
+                            threadId,
+                            isFavorite: nextFavorite,
+                        });
+                        await refetchThreads();
+                    })();
+                }}
+                onRequestWorkspaceDelete={(workspaceFingerprint, workspaceLabel) => {
+                    setIncludeFavoriteThreads(false);
+                    setWorkspaceDeleteTarget({
+                        workspaceFingerprint,
+                        workspaceLabel,
+                    });
+                }}
+                onScopeFilterChange={onScopeFilterChange}
+                onWorkspaceFilterChange={onWorkspaceFilterChange}
+                onSortChange={onSortChange}
+                onShowAllModesChange={onShowAllModesChange}
+                onGroupViewChange={onGroupViewChange}
+                onCreateThread={async (input) => {
+                    const result = await createThread({
+                        profileId,
+                        topLevelTab,
+                        ...input,
+                    });
+                    onSelectThreadId(result.thread.id);
+                    onSelectSessionId(undefined);
+                    onSelectRunId(undefined);
+                    await Promise.all([refetchBuckets(), refetchThreads()]);
+                }}
+                onAddTagToThread={async (threadId, label) => {
+                    if (!isEntityId(threadId, 'thr')) {
+                        return;
+                    }
 
-                await setThreadTags({
-                    profileId,
-                    threadId,
-                    tagIds: validTagIds,
-                });
-                await Promise.all([refetchTags(), refetchShellBootstrap()]);
-            }}
-        />
+                    const upserted = await upsertTag({
+                        profileId,
+                        label,
+                    });
+                    const existing = threadTagIdsByThread.get(threadId) ?? [];
+                    const nextTagIds = [...new Set([...existing, upserted.tag.id])];
+                    const validTagIds = nextTagIds.filter((tagId): tagId is EntityId<'tag'> => isEntityId(tagId, 'tag'));
+                    if (validTagIds.length !== nextTagIds.length) {
+                        return;
+                    }
+
+                    await setThreadTags({
+                        profileId,
+                        threadId,
+                        tagIds: validTagIds,
+                    });
+                    await Promise.all([refetchTags(), refetchShellBootstrap()]);
+                }}
+            />
+            <ConfirmDialog
+                open={Boolean(workspaceDeleteTarget)}
+                title='Clear workspace threads'
+                message={
+                    workspaceDeleteTarget
+                        ? `Delete threads for ${workspaceDeleteTarget.workspaceLabel}. Favorites are protected unless you explicitly include them.`
+                        : ''
+                }
+                confirmLabel='Delete threads'
+                destructive
+                busy={isDeletingWorkspaceThreads || workspaceDeletePreviewQuery.isLoading}
+                confirmDisabled={(workspaceDeletePreviewQuery.data?.deletableThreadCount ?? 0) === 0}
+                onCancel={() => {
+                    setWorkspaceDeleteTarget(undefined);
+                    setIncludeFavoriteThreads(false);
+                }}
+                onConfirm={() => {
+                    if (!workspaceDeleteTarget) {
+                        return;
+                    }
+
+                    void (async () => {
+                        try {
+                            const result = await deleteWorkspaceThreads({
+                                profileId,
+                                workspaceFingerprint: workspaceDeleteTarget.workspaceFingerprint,
+                                includeFavorites: includeFavoriteThreads,
+                            });
+                            if (selectedThreadId && result.deletedThreadIds.includes(selectedThreadId)) {
+                                onSelectThreadId(undefined);
+                                onSelectSessionId(undefined);
+                                onSelectRunId(undefined);
+                            } else if (
+                                selectedThread &&
+                                selectedThread.workspaceFingerprint === workspaceDeleteTarget.workspaceFingerprint &&
+                                result.deletedThreadIds.length > 0
+                            ) {
+                                onSelectSessionId(undefined);
+                                onSelectRunId(undefined);
+                            }
+
+                            setWorkspaceDeleteTarget(undefined);
+                            setIncludeFavoriteThreads(false);
+                            await Promise.all([
+                                refetchBuckets(),
+                                refetchThreads(),
+                                refetchTags(),
+                                refetchShellBootstrap(),
+                                refetchSessions(),
+                            ]);
+                        } catch {
+                            // keep the dialog open so the mutation error can be surfaced by the existing mutation state
+                        }
+                    })();
+                }}>
+                <div className='space-y-3 text-sm'>
+                    <div className='rounded-lg border border-amber-500/20 bg-amber-500/5 p-3'>
+                        <p className='font-medium text-foreground'>
+                            {workspaceDeletePreviewQuery.data?.deletableThreadCount ?? 0} thread
+                            {(workspaceDeletePreviewQuery.data?.deletableThreadCount ?? 0) === 1 ? '' : 's'} will be
+                            deleted.
+                        </p>
+                        <p className='text-muted-foreground mt-1 text-xs'>
+                            {workspaceDeletePreviewQuery.data?.favoriteThreadCount ?? 0} favorite
+                            {(workspaceDeletePreviewQuery.data?.favoriteThreadCount ?? 0) === 1 ? '' : 's'} detected out
+                            of {workspaceDeletePreviewQuery.data?.totalThreadCount ?? 0} total workspace threads.
+                        </p>
+                    </div>
+                    {(workspaceDeletePreviewQuery.data?.favoriteThreadCount ?? 0) > 0 ? (
+                        <label className='flex items-start gap-2'>
+                            <input
+                                type='checkbox'
+                                className='mt-0.5'
+                                checked={includeFavoriteThreads}
+                                onChange={(event) => {
+                                    setIncludeFavoriteThreads(event.target.checked);
+                                }}
+                            />
+                            <span>
+                                Also delete favorite threads
+                                <span className='text-muted-foreground block text-xs'>
+                                    Default is safe: favorites stay unless you check this.
+                                </span>
+                            </span>
+                        </label>
+                    ) : null}
+                </div>
+            </ConfirmDialog>
+        </>
     );
 }

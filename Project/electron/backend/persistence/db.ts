@@ -145,6 +145,30 @@ function ensureParentDirectory(dbPath: string): void {
     mkdirSync(directory, { recursive: true });
 }
 
+function getTableColumns(sqlite: DatabaseSync, tableName: string): Set<string> {
+    const statement = sqlite.prepare(`PRAGMA table_info("${tableName.replaceAll('"', '""')}")`);
+    const rows = statement.all() as Array<{ name?: unknown }>;
+    return new Set(
+        rows
+            .map((row) => (typeof row.name === 'string' ? row.name : null))
+            .filter((columnName): columnName is string => columnName !== null)
+    );
+}
+
+function isMigrationAlreadySatisfied(sqlite: DatabaseSync, migrationSql: string): boolean {
+    const normalizedSql = migrationSql.trim().replace(/\s+/g, ' ');
+    const addColumnMatch = /^ALTER TABLE "?([^"\s]+)"? ADD COLUMN "?([^"\s]+)"? /i.exec(normalizedSql);
+    if (!addColumnMatch) {
+        return false;
+    }
+
+    const [, tableName, columnName] = addColumnMatch;
+    if (!tableName || !columnName) {
+        return false;
+    }
+    return getTableColumns(sqlite, tableName).has(columnName);
+}
+
 function applySqlMigrations(sqlite: DatabaseSync): void {
     sqlite.exec(`
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -159,6 +183,10 @@ function applySqlMigrations(sqlite: DatabaseSync): void {
     for (const migration of runtimeSqlMigrations) {
         const wasApplied = isAppliedStatement.get(migration.name);
         if (wasApplied) {
+            continue;
+        }
+        if (isMigrationAlreadySatisfied(sqlite, migration.sql)) {
+            recordAppliedStatement.run(migration.name, new Date().toISOString());
             continue;
         }
 
