@@ -70,7 +70,10 @@ Expected promotion path: `dev` -> `prev` -> `main`.
 - The app database uses built-in `node:sqlite`, so normal desktop startup no longer depends on rebuilding a native SQLite addon.
 - Provider secrets are stored in the local app database and never exposed to renderer contracts.
 - No Electron-native rebuild is required for database or auth storage during normal dev startup.
-- `pnpm doctor:desktop` reports the current runtime root, log path, database path, and provider secret table state.
+- Local development uses an isolated Electron `userData` root at `<default-userData>-dev`, so dev never shares storage with packaged installs.
+- Local development always writes runtime state under `runtime/development/neonconductor.db`.
+- Packaged installs continue to use `runtime/stable`, `runtime/beta`, or `runtime/alpha` under the normal packaged `userData` root.
+- `pnpm doctor:desktop` inspects packaged storage by default, and `pnpm doctor:desktop:dev` inspects the isolated development storage root.
 
 ## Direct Access Contributor Rules
 

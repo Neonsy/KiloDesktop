@@ -7,7 +7,7 @@ import {
 } from '@/app/backend/runtime/contracts';
 import { worktreeService } from '@/app/backend/runtime/services/worktree/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
+import { toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
 
 export const worktreeRouter = router({
     list: publicProcedure.input(worktreeListInputSchema).query(async ({ input }) => {
@@ -17,12 +17,8 @@ export const worktreeRouter = router({
     }),
     create: publicProcedure.input(worktreeCreateInputSchema).mutation(async ({ input }) => {
         const result = await worktreeService.create(input);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
         return {
-            worktree: result.value,
+            worktree: unwrapResultOrThrow(result, toTrpcError),
         };
     }),
     refresh: publicProcedure.input(worktreeByIdInputSchema).mutation(async ({ input }) => {
@@ -36,12 +32,8 @@ export const worktreeRouter = router({
     }),
     configureThread: publicProcedure.input(worktreeConfigureThreadInputSchema).mutation(async ({ input }) => {
         const result = await worktreeService.configureThread(input);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
         return {
-            thread: result.value,
+            thread: unwrapResultOrThrow(result, toTrpcError),
         };
     }),
 });

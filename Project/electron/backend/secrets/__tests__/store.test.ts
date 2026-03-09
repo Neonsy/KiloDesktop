@@ -69,4 +69,21 @@ describe('secret store', () => {
         await secretStore.delete(`provider/${profileId}/openai/api_key`);
         await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBeNull();
     });
+
+    it('rejects invalid provider secret keys without mutating the database store', async () => {
+        process.env['NODE_ENV'] = 'production';
+        delete process.env['VITEST'];
+
+        vi.resetModules();
+        const { providerSecretStore } = await import('@/app/backend/persistence/stores');
+        const { getSecretStore, initializeSecretStore } = await import('@/app/backend/secrets/store');
+        const profileId = getDefaultProfileId();
+        initializeSecretStore();
+
+        const secretStore = getSecretStore();
+        await expect(secretStore.get(`provider/${profileId}/unsupported/api_key`)).resolves.toBeNull();
+        await expect(secretStore.set(`provider/${profileId}/unsupported/api_key`, 'ignored')).resolves.toBeUndefined();
+        await expect(secretStore.delete(`provider/${profileId}/unsupported/api_key`)).resolves.toBeUndefined();
+        await expect(providerSecretStore.getValue(profileId, 'openai', 'api_key')).resolves.toBeNull();
+    });
 });

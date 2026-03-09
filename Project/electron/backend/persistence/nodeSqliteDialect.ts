@@ -1,7 +1,13 @@
 import type { SqliteDatabase, SqliteStatement } from 'kysely';
-import type { DatabaseSync, StatementSync } from 'node:sqlite';
+import type { DatabaseSync, SQLInputValue, StatementSync } from 'node:sqlite';
 
-type NodeSqliteInputValue = null | number | bigint | string | NodeJS.ArrayBufferView;
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
+
+type NodeSqliteInputValue = SQLInputValue;
+
+function isInvalidStateError(error: unknown): error is { code: 'ERR_INVALID_STATE' } {
+    return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ERR_INVALID_STATE';
+}
 
 function toNodeSqliteParameter(value: unknown): NodeSqliteInputValue {
     if (
@@ -14,10 +20,10 @@ function toNodeSqliteParameter(value: unknown): NodeSqliteInputValue {
     }
 
     if (ArrayBuffer.isView(value)) {
-        return value as NodeSqliteInputValue;
+        return value instanceof Uint8Array ? value : new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
     }
 
-    throw new Error(`Unsupported SQLite parameter type: ${typeof value}`);
+    throw new InvariantError(`Unsupported SQLite parameter type: ${typeof value}`);
 }
 
 function normalizeParameters(parameters: ReadonlyArray<unknown>): NodeSqliteInputValue[] {
@@ -43,7 +49,11 @@ class NodeSqliteStatement implements SqliteStatement {
     }
 
     iterate(parameters: ReadonlyArray<unknown>): IterableIterator<unknown> {
-        return this.statement.iterate(...normalizeParameters(parameters)) as IterableIterator<unknown>;
+        return this.iterateRows(parameters);
+    }
+
+    private *iterateRows(parameters: ReadonlyArray<unknown>): IterableIterator<unknown> {
+        yield* this.statement.iterate(...normalizeParameters(parameters));
     }
 }
 
@@ -54,12 +64,7 @@ export class NodeSqliteDatabase implements SqliteDatabase {
         try {
             this.database.close();
         } catch (error) {
-            if (
-                typeof error === 'object' &&
-                error !== null &&
-                'code' in error &&
-                (error as { code?: string }).code === 'ERR_INVALID_STATE'
-            ) {
+            if (isInvalidStateError(error)) {
                 return;
             }
 

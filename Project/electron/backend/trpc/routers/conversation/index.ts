@@ -19,7 +19,7 @@ import { eventMetadata } from '@/app/backend/runtime/services/common/logContext'
 import { runtimeRemoveEvent, runtimeUpsertEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
 import { runtimeEventLogService } from '@/app/backend/runtime/services/runtimeEventLog';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
+import { raiseTrpcError, toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
 
 const THREAD_SORT_SETTING_KEY = 'conversation_thread_sort';
 const DEFAULT_THREAD_SORT = 'latest' as const;
@@ -113,7 +113,7 @@ export const conversationRouter = router({
     createThread: publicProcedure.input(conversationCreateThreadInputSchema).mutation(async ({ input, ctx }) => {
         const topLevelTab = input.topLevelTab ?? 'chat';
         if (input.scope === 'detached' && topLevelTab !== 'chat') {
-            throw toTrpcError({
+            raiseTrpcError({
                 code: 'unsupported_tab',
                 message: 'Playground threads are chat-only.',
             });
@@ -130,12 +130,10 @@ export const conversationRouter = router({
                   }
                 : {}),
         });
-        if (bucket.isErr()) {
-            throw toTrpcError(bucket.error);
-        }
+        const resolvedBucket = unwrapResultOrThrow(bucket, toTrpcError);
         const thread = await threadStore.create({
             profileId: input.profileId,
-            conversationId: bucket.value.id,
+            conversationId: resolvedBucket.id,
             title: input.title,
             topLevelTab,
             ...(input.executionEnvironmentMode ? { executionEnvironmentMode: input.executionEnvironmentMode } : {}),
@@ -143,40 +141,36 @@ export const conversationRouter = router({
             ...(input.baseBranch ? { baseBranch: input.baseBranch } : {}),
             ...(input.worktreeId ? { worktreeId: input.worktreeId } : {}),
         });
-        if (thread.isErr()) {
-            throw toTrpcError(thread.error);
-        }
+        const createdThread = unwrapResultOrThrow(thread, toTrpcError);
 
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
-            entityType: 'thread',
-            domain: 'thread',
-            entityId: thread.value.id,
-            eventType: 'conversation.thread.created',
-            payload: {
-                profileId: input.profileId,
-                bucket: bucket.value,
-                thread: thread.value,
-            },
-            ...eventMetadata({
-                requestId: ctx.requestId,
-                correlationId: ctx.correlationId,
-                origin: 'trpc.conversation.createThread',
-            }),
+                entityType: 'thread',
+                domain: 'thread',
+                entityId: createdThread.id,
+                eventType: 'conversation.thread.created',
+                payload: {
+                    profileId: input.profileId,
+                    bucket: resolvedBucket,
+                    thread: createdThread,
+                },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.conversation.createThread',
+                }),
             })
         );
 
         return {
-            bucket: bucket.value,
-            thread: thread.value,
+            bucket: resolvedBucket,
+            thread: createdThread,
         };
     }),
     renameThread: publicProcedure.input(conversationRenameThreadInputSchema).mutation(async ({ input, ctx }) => {
         const thread = await threadStore.rename(input.profileId, input.threadId, input.title);
-        if (thread.isErr()) {
-            throw toTrpcError(thread.error);
-        }
-        if (!thread.value) {
+        const renamedThread = unwrapResultOrThrow(thread, toTrpcError);
+        if (!renamedThread) {
             return {
                 renamed: false as const,
                 reason: 'not_found' as const,
@@ -185,35 +179,33 @@ export const conversationRouter = router({
 
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
-            entityType: 'thread',
-            domain: 'thread',
-            entityId: thread.value.id,
-            eventType: 'conversation.thread.renamed',
-            payload: {
-                profileId: input.profileId,
-                thread: thread.value,
-            },
-            ...eventMetadata({
-                requestId: ctx.requestId,
-                correlationId: ctx.correlationId,
-                origin: 'trpc.conversation.renameThread',
-            }),
+                entityType: 'thread',
+                domain: 'thread',
+                entityId: renamedThread.id,
+                eventType: 'conversation.thread.renamed',
+                payload: {
+                    profileId: input.profileId,
+                    thread: renamedThread,
+                },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.conversation.renameThread',
+                }),
             })
         );
 
         return {
             renamed: true as const,
-            thread: thread.value,
+            thread: renamedThread,
         };
     }),
     setThreadFavorite: publicProcedure
         .input(conversationSetThreadFavoriteInputSchema)
         .mutation(async ({ input, ctx }) => {
             const updated = await threadStore.setFavorite(input.profileId, input.threadId, input.isFavorite);
-            if (updated.isErr()) {
-                throw toTrpcError(updated.error);
-            }
-            if (!updated.value) {
+            const updatedThread = unwrapResultOrThrow(updated, toTrpcError);
+            if (!updatedThread) {
                 return {
                     updated: false as const,
                     reason: 'not_found' as const,
@@ -224,12 +216,12 @@ export const conversationRouter = router({
                 runtimeUpsertEvent({
                     entityType: 'thread',
                     domain: 'thread',
-                    entityId: updated.value.id,
+                    entityId: updatedThread.id,
                     eventType: 'conversation.thread.favorite.updated',
                     payload: {
                         profileId: input.profileId,
-                        threadId: updated.value.id,
-                        isFavorite: updated.value.isFavorite,
+                        threadId: updatedThread.id,
+                        isFavorite: updatedThread.isFavorite,
                     },
                     ...eventMetadata({
                         requestId: ctx.requestId,
@@ -241,7 +233,7 @@ export const conversationRouter = router({
 
             return {
                 updated: true as const,
-                thread: updated.value,
+                thread: updatedThread,
             };
         }),
     listTags: publicProcedure.input(conversationListTagsInputSchema).query(async ({ input }) => {
@@ -251,35 +243,27 @@ export const conversationRouter = router({
     }),
     upsertTag: publicProcedure.input(conversationUpsertTagInputSchema).mutation(async ({ input }) => {
         const result = await tagStore.upsert(input.profileId, input.label);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
-        return { tag: result.value };
+        return { tag: unwrapResultOrThrow(result, toTrpcError) };
     }),
     setThreadTags: publicProcedure.input(conversationSetThreadTagsInputSchema).mutation(async ({ input, ctx }) => {
         const result = await tagStore.setThreadTags(input.profileId, input.threadId, input.tagIds);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
-        const threadTags = result.value;
+        const threadTags = unwrapResultOrThrow(result, toTrpcError);
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
-            entityType: 'thread',
-            domain: 'thread',
-            entityId: input.threadId,
-            eventType: 'conversation.thread.tags.updated',
-            payload: {
-                profileId: input.profileId,
-                threadId: input.threadId,
-                tagIds: threadTags.map((item) => item.tagId),
-            },
-            ...eventMetadata({
-                requestId: ctx.requestId,
-                correlationId: ctx.correlationId,
-                origin: 'trpc.conversation.setThreadTags',
-            }),
+                entityType: 'thread',
+                domain: 'thread',
+                entityId: input.threadId,
+                eventType: 'conversation.thread.tags.updated',
+                payload: {
+                    profileId: input.profileId,
+                    threadId: input.threadId,
+                    tagIds: threadTags.map((item) => item.tagId),
+                },
+                ...eventMetadata({
+                    requestId: ctx.requestId,
+                    correlationId: ctx.correlationId,
+                    origin: 'trpc.conversation.setThreadTags',
+                }),
             })
         );
 
@@ -368,13 +352,13 @@ export const conversationRouter = router({
         .mutation(async ({ input }) => {
             await settingsStore.setString(input.profileId, THREAD_TITLE_GENERATION_MODE_SETTING_KEY, input.mode);
             if (input.mode === 'ai_optional') {
-                const aiModel = input.aiModel?.trim();
-                if (!aiModel) {
-                    throw toTrpcError({
+                if (!input.aiModel) {
+                    raiseTrpcError({
                         code: 'invalid_input',
                         message: 'Invalid "aiModel": required when mode is "ai_optional".',
                     });
                 }
+                const aiModel = input.aiModel.trim();
                 await settingsStore.setString(input.profileId, THREAD_TITLE_AI_MODEL_SETTING_KEY, aiModel);
             } else {
                 await settingsStore.setString(input.profileId, THREAD_TITLE_AI_MODEL_SETTING_KEY, '');

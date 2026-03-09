@@ -2,6 +2,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import type { MessagePartsTable, MessagesTable, RunUsageTable, RunsTable, SessionsTable } from '@/app/backend/persistence/schema';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import { createEntityId } from '@/app/backend/runtime/contracts';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 import type { Selectable } from 'kysely';
 
@@ -211,7 +212,7 @@ export class SessionHistoryStore {
                         sourceGraph.runUsage.map((usage) => {
                             const clonedRunId = clonedRunIdsBySourceId.get(usage.run_id);
                             if (!clonedRunId) {
-                                throw new Error(`Missing cloned run id for usage row "${usage.run_id}".`);
+                                throw new InvariantError(`Missing cloned run id for usage row "${usage.run_id}".`);
                             }
 
                             return {
@@ -241,7 +242,7 @@ export class SessionHistoryStore {
                         sourceGraph.messages.map((message) => {
                             const clonedRunId = clonedRunIdsBySourceId.get(message.run_id);
                             if (!clonedRunId) {
-                                throw new Error(`Missing cloned run id for message row "${message.id}".`);
+                                throw new InvariantError(`Missing cloned run id for message row "${message.id}".`);
                             }
 
                             const clonedMessageId = createEntityId('msg');
@@ -275,7 +276,7 @@ export class SessionHistoryStore {
                         sourceGraph.messageParts.map((part) => {
                             const clonedMessageId = clonedMessageIdsBySourceId.get(part.message_id);
                             if (!clonedMessageId) {
-                                throw new Error(`Missing cloned message id for part row "${part.id}".`);
+                                throw new InvariantError(`Missing cloned message id for part row "${part.id}".`);
                             }
 
                             return {

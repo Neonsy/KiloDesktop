@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 
 import type { ThreadListRecord, ThreadTagRecord } from '@/app/backend/persistence/types';
 
@@ -32,24 +32,18 @@ export function filterThreadsBySelectedTagIds(input: {
 }
 
 export function useThreadSidebarState(input: UseThreadSidebarStateInput): ThreadSidebarState {
-    const threadTagIdsByThread = useMemo(() => {
-        const map = new Map<string, string[]>();
-        for (const relation of input.threadTags) {
-            const existing = map.get(relation.threadId) ?? [];
-            existing.push(relation.tagId);
-            map.set(relation.threadId, existing);
-        }
+    const threadTagIdsByThread = new Map<string, string[]>();
+    for (const relation of input.threadTags) {
+        const existing = threadTagIdsByThread.get(relation.threadId) ?? [];
+        existing.push(relation.tagId);
+        threadTagIdsByThread.set(relation.threadId, existing);
+    }
 
-        return map;
-    }, [input.threadTags]);
-
-    const visibleThreads = useMemo(() => {
-        return filterThreadsBySelectedTagIds({
-            threads: input.threads,
-            threadTagIdsByThread,
-            selectedTagIds: input.selectedTagIds,
-        });
-    }, [input.selectedTagIds, input.threads, threadTagIdsByThread]);
+    const visibleThreads = filterThreadsBySelectedTagIds({
+        threads: input.threads,
+        threadTagIdsByThread,
+        selectedTagIds: input.selectedTagIds,
+    });
 
     useEffect(() => {
         if (visibleThreads.length === 0) {

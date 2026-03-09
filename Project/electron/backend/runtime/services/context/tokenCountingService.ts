@@ -1,4 +1,4 @@
-import { encoding_for_model, get_encoding, type TiktokenModel } from 'tiktoken';
+import { get_encoding } from 'tiktoken';
 
 import { resolveEndpointProfile } from '@/app/backend/providers/service/endpointProfiles';
 import type {
@@ -31,12 +31,20 @@ const ZAI_GENERAL_BASE_URL = process.env['ZAI_GENERAL_BASE_URL']?.trim() || 'htt
 
 function resolveEncoding(modelId: string) {
     const normalizedModelId = modelId.includes('/') ? (modelId.split('/').at(-1) ?? modelId) : modelId;
+    const normalizedLookup = normalizedModelId.toLowerCase();
+    const encodingName =
+        normalizedLookup.startsWith('gpt-3.5') ||
+        normalizedLookup.startsWith('gpt-4') ||
+        normalizedLookup.startsWith('text-embedding-3') ||
+        normalizedLookup.startsWith('text-embedding-ada')
+            ? 'cl100k_base'
+            : DEFAULT_ENCODING;
 
-    try {
-        return encoding_for_model(normalizedModelId as TiktokenModel);
-    } catch {
-        return get_encoding(DEFAULT_ENCODING);
-    }
+    return get_encoding(encodingName);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function buildEstimatedPart(modelId: string, message: RunContextMessage): TokenCountEstimatePart {
@@ -74,11 +82,10 @@ function buildEndpoint(baseUrl: string, path: string): string {
 }
 
 function readTokenCount(payload: unknown): number | null {
-    if (!payload || typeof payload !== 'object') {
+    if (!isRecord(payload)) {
         return null;
     }
-
-    const record = payload as Record<string, unknown>;
+    const record = payload;
     const directCandidates = ['token_count', 'tokens', 'count', 'total_tokens'];
     for (const key of directCandidates) {
         const value = record[key];
@@ -116,6 +123,13 @@ async function countZaiMessageTokens(input: {
         providerId: 'zai',
     });
     if (authResult.isErr()) {
+        appLog.debug({
+            tag: 'context.token-count',
+            message: 'Z.AI token counting skipped because auth resolution failed.',
+            providerId: 'zai',
+            profileId: input.profileId,
+            modelId: input.modelId,
+        });
         return null;
     }
 
@@ -125,6 +139,13 @@ async function countZaiMessageTokens(input: {
     const tokenizerUrl = buildEndpoint(baseUrl, '/tokenizer');
     const token = authResult.value.accessToken ?? authResult.value.apiKey;
     if (!token) {
+        appLog.debug({
+            tag: 'context.token-count',
+            message: 'Z.AI token counting skipped because no token was available.',
+            providerId: 'zai',
+            profileId: input.profileId,
+            modelId: input.modelId,
+        });
         return null;
     }
 
@@ -155,6 +176,14 @@ async function countZaiMessageTokens(input: {
 
         const payload = (await response.json()) as unknown;
         const tokenCount = readTokenCount(payload);
+        if (tokenCount === null) {
+            appLog.warn({
+                tag: 'context.token-count',
+                message: 'Z.AI tokenizer response did not include a readable token count.',
+                providerId: 'zai',
+                modelId: input.modelId,
+            });
+        }
         return tokenCount === null ? null : tokenCount + MESSAGE_OVERHEAD_TOKENS;
     } catch (error) {
         appLog.warn({
@@ -243,6 +272,14 @@ class TokenCountingService {
             if (exactEstimate) {
                 return exactEstimate;
             }
+
+            appLog.debug({
+                tag: 'context.token-count',
+                message: 'Falling back to estimated token counting after exact counting was unavailable.',
+                providerId: input.providerId,
+                modelId: input.modelId,
+                hasProfileId: Boolean(input.profileId),
+            });
         }
 
         return buildEstimatedCount(input);

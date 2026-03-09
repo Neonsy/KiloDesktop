@@ -27,4 +27,17 @@ describe('tokenCountingService', () => {
             })
         ).toBe('exact');
     });
+
+    it('falls back to the default encoding for unknown model ids', async () => {
+        const estimate = await tokenCountingService.estimate({
+            profileId: 'profile_test',
+            providerId: 'openai',
+            modelId: 'openai/not-a-real-model',
+            messages: [{ role: 'user', text: 'Count these tokens.' }],
+        });
+
+        expect(estimate.mode).toBe('estimated');
+        expect(estimate.totalTokens).toBeGreaterThan(0);
+        expect(estimate.parts).toHaveLength(1);
+    });
 });

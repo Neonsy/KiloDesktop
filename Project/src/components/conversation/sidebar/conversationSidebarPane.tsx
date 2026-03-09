@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
@@ -110,10 +110,7 @@ export function ConversationSidebarPane({
         | undefined
     >(undefined);
     const [includeFavoriteThreads, setIncludeFavoriteThreads] = useState(false);
-    const selectedThread = useMemo(
-        () => threads.find((thread) => thread.id === selectedThreadId),
-        [selectedThreadId, threads]
-    );
+    const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
     const workspaceDeletePreviewQuery = trpc.conversation.getWorkspaceThreadDeletePreview.useQuery(
         {
             profileId,

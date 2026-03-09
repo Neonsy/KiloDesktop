@@ -11,6 +11,7 @@ import {
     resolveTemplateProfileId,
 } from '@/app/backend/persistence/stores/profile/profileStoreHelpers';
 import type { ActiveProfileState, ProfileDeletionGuardResult, ProfileRecord } from '@/app/backend/persistence/types';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 export class ProfileStore {
     async list(): Promise<ProfileRecord[]> {
@@ -73,7 +74,7 @@ export class ProfileStore {
 
         const activated = activatedResult.value;
         if (!activated) {
-            throw new Error(`Failed to activate fallback profile "${fallback.id}".`);
+            throw new InvariantError(`Failed to activate fallback profile "${fallback.id}".`);
         }
 
         return okProfileStore({
@@ -157,7 +158,7 @@ export class ProfileStore {
                 .executeTakeFirst();
 
             if (!created) {
-                throw new Error(`Failed to create profile "${profileId}".`);
+                throw new InvariantError(`Failed to create profile "${profileId}".`);
             }
 
             return okProfileStore(mapProfile(created));
@@ -226,7 +227,7 @@ export class ProfileStore {
                 .executeTakeFirst();
 
             if (!duplicate) {
-                throw new Error(`Failed to duplicate profile "${source.id}".`);
+                throw new InvariantError(`Failed to duplicate profile "${source.id}".`);
             }
 
             return mapProfile(duplicate);

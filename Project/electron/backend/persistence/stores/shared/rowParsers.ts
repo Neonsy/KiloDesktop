@@ -1,4 +1,5 @@
-import type { EntityId, EntityIdPrefix } from '@/app/backend/runtime/contracts';
+import { isEntityId, type EntityId, type EntityIdPrefix } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -17,17 +18,16 @@ export function parseEnumValue<const T extends readonly string[]>(
         return value;
     }
 
-    throw new Error(`Invalid "${field}" in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid "${field}" in persistence row: "${value}".`);
 }
 
 export function parseEntityId<P extends EntityIdPrefix>(value: string, field: string, prefix: P): EntityId<P> {
     const normalized = value.trim();
-    const expectedPrefix = `${prefix}_`;
-    if (!normalized.startsWith(expectedPrefix)) {
-        throw new Error(`Invalid "${field}" in persistence row: expected "${expectedPrefix}..." ID.`);
+    if (!isEntityId(normalized, prefix)) {
+        throw new DataCorruptionError(`Invalid "${field}" in persistence row: expected "${prefix}_..." ID.`);
     }
 
-    return normalized as EntityId<P>;
+    return normalized;
 }
 
 export function parseJsonRecord(value: string): Record<string, unknown> {

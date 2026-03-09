@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 
 import type {
     MessagePartRecord,
@@ -29,15 +29,11 @@ export interface SessionRunSelectionState {
 }
 
 export function useSessionRunSelection(input: UseSessionRunSelectionInput): SessionRunSelectionState {
-    const sessions = useMemo(() => {
-        if (!input.selectedThreadId) {
-            return [];
-        }
-
-        return input.allSessions
-            .filter((session) => session.threadId === input.selectedThreadId)
-            .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-    }, [input.allSessions, input.selectedThreadId]);
+    const sessions = !input.selectedThreadId
+        ? []
+        : input.allSessions
+              .filter((session) => session.threadId === input.selectedThreadId)
+              .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 
     useEffect(() => {
         if (sessions.length === 0) {
@@ -55,15 +51,11 @@ export function useSessionRunSelection(input: UseSessionRunSelectionInput): Sess
         }
     }, [input.onSelectFallbackSession, input.onSelectedSessionInvalid, input.selectedSessionId, sessions]);
 
-    const runs = useMemo(() => {
-        if (!input.selectedSessionId) {
-            return [];
-        }
-
-        return input.allRuns
-            .filter((run) => run.sessionId === input.selectedSessionId)
-            .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-    }, [input.allRuns, input.selectedSessionId]);
+    const runs = !input.selectedSessionId
+        ? []
+        : input.allRuns
+              .filter((run) => run.sessionId === input.selectedSessionId)
+              .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
     useEffect(() => {
         if (runs.length === 0) {
@@ -81,38 +73,29 @@ export function useSessionRunSelection(input: UseSessionRunSelectionInput): Sess
         }
     }, [input.onSelectFallbackRun, input.onSelectedRunInvalid, input.selectedRunId, runs]);
 
-    const messages = useMemo(() => {
-        if (!input.selectedSessionId) {
-            return [];
+    const messages = !input.selectedSessionId
+        ? []
+        : input.allMessages
+              .filter((message) => message.sessionId === input.selectedSessionId)
+              .filter((message) => (input.selectedRunId ? message.runId === input.selectedRunId : true))
+              .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+
+    const partsByMessageId = new Map<string, MessagePartRecord[]>();
+    const selectedMessageIds = new Set(messages.map((message) => message.id));
+
+    for (const part of input.allMessageParts) {
+        if (!selectedMessageIds.has(part.messageId)) {
+            continue;
         }
 
-        return input.allMessages
-            .filter((message) => message.sessionId === input.selectedSessionId)
-            .filter((message) => (input.selectedRunId ? message.runId === input.selectedRunId : true))
-            .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-    }, [input.allMessages, input.selectedRunId, input.selectedSessionId]);
+        const existing = partsByMessageId.get(part.messageId) ?? [];
+        existing.push(part);
+        partsByMessageId.set(part.messageId, existing);
+    }
 
-    const partsByMessageId = useMemo(() => {
-        const map = new Map<string, MessagePartRecord[]>();
-        const selectedMessageIds = new Set(messages.map((message) => message.id));
-
-        for (const part of input.allMessageParts) {
-            if (!selectedMessageIds.has(part.messageId)) {
-                continue;
-            }
-
-            const existing = map.get(part.messageId) ?? [];
-            existing.push(part);
-            map.set(part.messageId, existing);
-        }
-
-        for (const [messageId, parts] of map.entries()) {
-            parts.sort((left, right) => left.sequence - right.sequence);
-            map.set(messageId, parts);
-        }
-
-        return map;
-    }, [input.allMessageParts, messages]);
+    for (const parts of partsByMessageId.values()) {
+        parts.sort((left, right) => left.sequence - right.sequence);
+    }
 
     return {
         sessions,

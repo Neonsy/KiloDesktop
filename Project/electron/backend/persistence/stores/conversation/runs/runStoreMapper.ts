@@ -10,6 +10,7 @@ import {
     runtimeReasoningSummaries,
 } from '@/app/backend/runtime/contracts';
 import type { ProviderAuthMethod, RunStatus, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
     return allowed.some((candidate) => candidate === value);
@@ -20,7 +21,7 @@ function parseRunStatus(value: string): RunStatus {
         return value;
     }
 
-    throw new Error(`Invalid run status in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run status in persistence row: "${value}".`);
 }
 
 function parseAuthMethod(value: string | null): ProviderAuthMethod | 'none' | undefined {
@@ -36,7 +37,7 @@ function parseAuthMethod(value: string | null): ProviderAuthMethod | 'none' | un
         return value;
     }
 
-    throw new Error(`Invalid run auth method in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run auth method in persistence row: "${value}".`);
 }
 
 function parseProviderId(value: string | null): RuntimeProviderId | undefined {
@@ -56,7 +57,7 @@ function parseReasoningEffort(value: string | null) {
         return value;
     }
 
-    throw new Error(`Invalid run reasoning effort in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run reasoning effort in persistence row: "${value}".`);
 }
 
 function parseReasoningSummary(value: string | null) {
@@ -68,7 +69,7 @@ function parseReasoningSummary(value: string | null) {
         return value;
     }
 
-    throw new Error(`Invalid run reasoning summary in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run reasoning summary in persistence row: "${value}".`);
 }
 
 function parseCacheStrategy(value: string | null): 'auto' | 'manual' | undefined {
@@ -80,7 +81,7 @@ function parseCacheStrategy(value: string | null): 'auto' | 'manual' | undefined
         return value;
     }
 
-    throw new Error(`Invalid run cache strategy in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run cache strategy in persistence row: "${value}".`);
 }
 
 function parseOpenAITransport(value: string | null) {
@@ -92,7 +93,7 @@ function parseOpenAITransport(value: string | null) {
         return value;
     }
 
-    throw new Error(`Invalid run OpenAI transport preference in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run OpenAI transport preference in persistence row: "${value}".`);
 }
 
 function parseSelectedTransport(value: string | null): 'responses' | 'chat_completions' | undefined {
@@ -104,7 +105,7 @@ function parseSelectedTransport(value: string | null): 'responses' | 'chat_compl
         return value;
     }
 
-    throw new Error(`Invalid run selected transport in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid run selected transport in persistence row: "${value}".`);
 }
 
 function parseOptionalBoolean(value: number | null): boolean | undefined {
@@ -120,7 +121,7 @@ function parseOptionalBoolean(value: number | null): boolean | undefined {
         return true;
     }
 
-    throw new Error(`Invalid boolean integer in persistence row: "${String(value)}".`);
+    throw new DataCorruptionError(`Invalid boolean integer in persistence row: "${String(value)}".`);
 }
 
 export interface RunRow {

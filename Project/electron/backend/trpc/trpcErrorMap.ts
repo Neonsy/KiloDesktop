@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server';
+import type { Result } from 'neverthrow';
 
 import type { OperationalErrorCode } from '@/app/backend/runtime/services/common/operationalError';
 import { isOperationalError } from '@/app/backend/runtime/services/common/operationalError';
@@ -89,6 +90,25 @@ export function toTrpcError(error: unknown): TRPCError {
         code: 'INTERNAL_SERVER_ERROR',
         message: typeof error === 'string' ? error : 'Unknown tRPC error',
     });
+}
+
+export function raiseTrpcError(error: unknown): never {
+    throw toTrpcError(error);
+}
+
+export function raiseMappedTrpcError<TError>(error: TError, mapError: (error: TError) => TRPCError): never {
+    throw mapError(error);
+}
+
+export function unwrapResultOrThrow<TValue, TError>(
+    result: Result<TValue, TError>,
+    mapError: (error: TError) => TRPCError
+): TValue {
+    if (result.isErr()) {
+        return raiseMappedTrpcError(result.error, mapError);
+    }
+
+    return result.value;
 }
 
 export function extractErrorCode(error: unknown): OperationalErrorCode | undefined {

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { getPersistence } from '@/app/backend/persistence/db';
 import { isJsonString, nowIso, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 export class SettingsStore {
     async getStringOptional(profileId: string, key: string): Promise<string | undefined> {
@@ -29,7 +30,7 @@ export class SettingsStore {
     async getStringRequired(profileId: string, key: string): Promise<string> {
         const value = await this.getStringOptional(profileId, key);
         if (!value) {
-            throw new Error(`Missing required setting "${key}" for profile "${profileId}".`);
+            throw new InvariantError(`Missing required setting "${key}" for profile "${profileId}".`);
         }
 
         return value;

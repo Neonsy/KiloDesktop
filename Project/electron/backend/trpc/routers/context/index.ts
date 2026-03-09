@@ -10,7 +10,7 @@ import { sessionContextService } from '@/app/backend/runtime/services/context/se
 import { buildSessionSystemPrelude } from '@/app/backend/runtime/services/runExecution/contextPrelude';
 import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
+import { toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
 
 export const contextRouter = router({
     getGlobalSettings: publicProcedure.query(async () => {
@@ -48,27 +48,23 @@ export const contextRouter = router({
             modeKey: input.modeKey,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
         });
-        if (resolvedModeResult.isErr()) {
-            throw toTrpcError(resolvedModeResult.error);
-        }
+        const resolvedMode = unwrapResultOrThrow(resolvedModeResult, toTrpcError);
 
         const systemPreludeResult = await buildSessionSystemPrelude({
             profileId: input.profileId,
             sessionId: input.sessionId,
             topLevelTab: input.topLevelTab,
             ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
-            resolvedMode: resolvedModeResult.value,
+            resolvedMode,
         });
-        if (systemPreludeResult.isErr()) {
-            throw toTrpcError(systemPreludeResult.error);
-        }
+        const systemPrelude = unwrapResultOrThrow(systemPreludeResult, toTrpcError);
 
         return sessionContextService.getResolvedState({
             profileId: input.profileId,
             sessionId: input.sessionId,
             providerId: input.providerId,
             modelId: input.modelId,
-            systemMessages: systemPreludeResult.value,
+            systemMessages: systemPrelude,
         });
     }),
     compactSession: publicProcedure.input(compactSessionInputSchema).mutation(async ({ input }) => {
@@ -79,10 +75,6 @@ export const contextRouter = router({
             modelId: input.modelId,
             source: 'manual',
         });
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
-        return result.value;
+        return unwrapResultOrThrow(result, toTrpcError);
     }),
 });

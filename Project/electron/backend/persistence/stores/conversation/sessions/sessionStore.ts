@@ -6,6 +6,7 @@ import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { SessionSummaryRecord } from '@/app/backend/persistence/types';
 import { createEntityId, runStatuses, sessionKinds } from '@/app/backend/runtime/contracts';
 import type { EntityId, RunStatus, SessionKind } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
 
 import type { Selectable } from 'kysely';
@@ -23,7 +24,7 @@ function parseRunStatus(value: string): RunStatus {
         return value;
     }
 
-    throw new Error(`Invalid session run status in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid session run status in persistence row: "${value}".`);
 }
 
 function mapSessionSummary(row: SessionRow, turnCount: number): SessionSummaryRecord {

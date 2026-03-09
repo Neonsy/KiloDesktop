@@ -1,8 +1,8 @@
 import { app, dialog } from 'electron';
-import path from 'node:path';
 
 import { closePersistence } from '@/app/backend/persistence/db';
 import { appLog, flushAppLogger } from '@/app/main/logging';
+import { resolveDesktopStoragePaths, resolveRuntimeNamespaceFromEnv } from '@/app/main/runtime/storage';
 
 function getErrorMessage(error: unknown): string {
     if (error instanceof Error && error.message.trim().length > 0) {
@@ -18,10 +18,15 @@ function resolveKnownPaths(): { dbPath?: string; logsPath?: string } {
         return {};
     }
 
-    const persistenceChannel = process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']?.trim() || 'stable';
+    const storagePaths = resolveDesktopStoragePaths({
+        userDataPath,
+        runtimeNamespace: resolveRuntimeNamespaceFromEnv(),
+        isDevIsolatedStorage: false,
+    });
+
     return {
-        dbPath: path.join(userDataPath, 'runtime', persistenceChannel, 'neonconductor.db'),
-        logsPath: path.join(userDataPath, 'logs'),
+        dbPath: storagePaths.dbPath,
+        logsPath: storagePaths.logsPath,
     };
 }
 

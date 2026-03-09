@@ -5,6 +5,7 @@ const {
     appOnSpy,
     appQuitSpy,
     appExitSpy,
+    appSetPathSpy,
     setApplicationMenuSpy,
     initializePersistenceSpy,
     closePersistenceSpy,
@@ -19,10 +20,14 @@ const {
     createMainWindowSpy,
     createIPCHandlerInputSpy,
     attachWindowSpy,
+    runtimeEnvState,
+    appState,
+    defaultUserDataPath,
 } = vi.hoisted(() => ({
     appOnSpy: vi.fn(),
     appQuitSpy: vi.fn(),
     appExitSpy: vi.fn(),
+    appSetPathSpy: vi.fn(),
     setApplicationMenuSpy: vi.fn(),
     initializePersistenceSpy: vi.fn(),
     closePersistenceSpy: vi.fn(),
@@ -40,6 +45,14 @@ const {
     createMainWindowSpy: vi.fn(() => ({ id: 'window-main' })),
     createIPCHandlerInputSpy: vi.fn((input: unknown) => input),
     attachWindowSpy: vi.fn(),
+    runtimeEnvState: {
+        isDev: true,
+        devServerUrl: 'http://localhost:5173' as string | undefined,
+    },
+    defaultUserDataPath: 'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor',
+    appState: {
+        userDataPath: 'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor',
+    },
 }));
 
 const appEventHandlers = new Map<string, Array<(...arguments_: unknown[]) => unknown>>();
@@ -48,8 +61,13 @@ vi.mock('electron', () => ({
     app: {
         whenReady: () => Promise.resolve(),
         getVersion: () => '0.0.1',
-        getPath: (pathName: string) =>
-            pathName === 'userData' ? 'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor' : 'unknown',
+        getPath: (pathName: string) => (pathName === 'userData' ? appState.userDataPath : 'unknown'),
+        setPath: (pathName: string, nextValue: string) => {
+            appSetPathSpy(pathName, nextValue);
+            if (pathName === 'userData') {
+                appState.userDataPath = nextValue;
+            }
+        },
         on: (eventName: string, handler: (...arguments_: unknown[]) => unknown) => {
             const handlers = appEventHandlers.get(eventName) ?? [];
             handlers.push(handler);
@@ -105,8 +123,12 @@ vi.mock('@/app/main/logging', () => ({
 }));
 
 vi.mock('@/app/main/runtime/env', () => ({
-    isDev: true,
-    devServerUrl: 'http://localhost:5173',
+    get isDev() {
+        return runtimeEnvState.isDev;
+    },
+    get devServerUrl() {
+        return runtimeEnvState.devServerUrl;
+    },
     getMainDirname: () => 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
 }));
 
@@ -122,13 +144,20 @@ describe('bootstrapMainProcess', () => {
     beforeEach(() => {
         appEventHandlers.clear();
         vi.clearAllMocks();
+        vi.resetModules();
+        appState.userDataPath = defaultUserDataPath;
+        runtimeEnvState.isDev = true;
+        runtimeEnvState.devServerUrl = 'http://localhost:5173';
         getSecretStoreInfoSpy.mockReturnValue({
             backend: 'database',
             available: true,
         });
+        delete process.env['NEONCONDUCTOR_USER_DATA_PATH'];
+        delete process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE'];
+        delete process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'];
     });
 
-    it('boots persistence, secrets, IPC, and window wiring through the Electron main path', async () => {
+    it('isolates dev startup under a dedicated development userData root', async () => {
         const { bootstrapMainProcess } = await import('@/app/main/bootstrap');
 
         const createContext = vi.fn(() => Promise.resolve({} as never));
@@ -148,16 +177,16 @@ describe('bootstrapMainProcess', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        const expectedDbPath = path.join(
-            'C:\\Users\\Neon\\AppData\\Roaming\\neon-conductor',
-            'runtime',
-            'stable',
-            'neonconductor.db'
-        );
+        const expectedUserDataPath = `${defaultUserDataPath}-dev`;
+        const expectedDbPath = path.join(expectedUserDataPath, 'runtime', 'development', 'neonconductor.db');
 
+        expect(appSetPathSpy).toHaveBeenCalledWith('userData', expectedUserDataPath);
         expect(initializePersistenceSpy).toHaveBeenCalledWith({
             dbPath: expectedDbPath,
         });
+        expect(process.env['NEONCONDUCTOR_USER_DATA_PATH']).toBe(expectedUserDataPath);
+        expect(process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE']).toBe('development');
+        expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('development');
         expect(initializeSecretStoreSpy).toHaveBeenCalled();
         expect(attachCspHeadersSpy).toHaveBeenCalled();
         expect(createMainWindowSpy).toHaveBeenCalled();
@@ -183,5 +212,32 @@ describe('bootstrapMainProcess', () => {
         expect(closePersistenceSpy).toHaveBeenCalled();
         expect(flushAppLoggerSpy).toHaveBeenCalled();
         expect(handleStartupFailureSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps packaged startup under the selected release channel namespace', async () => {
+        runtimeEnvState.isDev = false;
+        runtimeEnvState.devServerUrl = undefined;
+        const { bootstrapMainProcess } = await import('@/app/main/bootstrap');
+
+        bootstrapMainProcess(
+            {
+                createContext: vi.fn(() => Promise.resolve({} as never)),
+                appRouter: {} as never,
+                initAutoUpdater: vi.fn(),
+                resolvePersistenceChannel: () => 'beta',
+            },
+            'file:///M:/Neonsy/Projects/NeonConductor/Project/electron/main/index.ts'
+        );
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(appSetPathSpy).not.toHaveBeenCalled();
+        expect(initializePersistenceSpy).toHaveBeenCalledWith({
+            dbPath: path.join(defaultUserDataPath, 'runtime', 'beta', 'neonconductor.db'),
+        });
+        expect(process.env['NEONCONDUCTOR_USER_DATA_PATH']).toBe(defaultUserDataPath);
+        expect(process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE']).toBe('beta');
+        expect(process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL']).toBe('beta');
     });
 });

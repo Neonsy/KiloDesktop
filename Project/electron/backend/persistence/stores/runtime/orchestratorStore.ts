@@ -4,6 +4,7 @@ import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { OrchestratorRunRecord, OrchestratorStepRecord } from '@/app/backend/persistence/types';
 import { createEntityId, orchestratorRunStatuses, planItemStatuses } from '@/app/backend/runtime/contracts';
 import type { EntityId, OrchestratorRunStatus } from '@/app/backend/runtime/contracts';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 function mapOrchestratorRunRecord(row: {
     id: string;
@@ -109,7 +110,7 @@ export class OrchestratorStore {
 
         const run = await this.getRunById(input.profileId, id);
         if (!run) {
-            throw new Error(`Failed to create orchestrator run "${id}".`);
+            throw new InvariantError(`Failed to create orchestrator run "${id}".`);
         }
         const steps = await this.listSteps(id);
 

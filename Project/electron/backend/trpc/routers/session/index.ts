@@ -19,7 +19,7 @@ import { sessionEditService } from '@/app/backend/runtime/services/sessionEdit/s
 import { sessionHistoryService } from '@/app/backend/runtime/services/sessionHistory/service';
 import { getAttachedSkills, setAttachedSkills } from '@/app/backend/runtime/services/sessionSkills/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
+import { toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
 
 export const sessionRouter = router({
     create: publicProcedure.input(sessionCreateInputSchema).mutation(async ({ input, ctx }) => {
@@ -57,17 +57,11 @@ export const sessionRouter = router({
     }),
     getAttachedSkills: publicProcedure.input(sessionGetAttachedSkillsInputSchema).query(async ({ input }) => {
         const result = await getAttachedSkills(input);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-        return result.value;
+        return unwrapResultOrThrow(result, toTrpcError);
     }),
     setAttachedSkills: publicProcedure.input(sessionSetAttachedSkillsInputSchema).mutation(async ({ input, ctx }) => {
         const result = await setAttachedSkills(input);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-        const attachedSkills = result.value;
+        const attachedSkills = unwrapResultOrThrow(result, toTrpcError);
         await runtimeEventLogService.append(
             runtimeUpsertEvent({
                 entityType: 'session',

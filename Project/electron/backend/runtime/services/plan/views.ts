@@ -1,6 +1,7 @@
 import { planStore } from '@/app/backend/persistence/stores';
 import type { PlanQuestionRecord } from '@/app/backend/persistence/types';
 import type { PlanRecordView } from '@/app/backend/runtime/contracts';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 export function createDefaultQuestions(prompt: string): PlanQuestionRecord[] {
     const normalized = prompt.trim();
@@ -67,7 +68,7 @@ export function requirePlanView(
 ): PlanRecordView {
     const view = toPlanView(plan, items);
     if (!view) {
-        throw new Error(`Invariant violation: expected plan view during ${context}.`);
+        throw new InvariantError(`Expected plan view during ${context}.`);
     }
 
     return view;

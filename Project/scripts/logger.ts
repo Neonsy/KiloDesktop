@@ -33,7 +33,9 @@ function ensureInitialized(): void {
 }
 
 function createScriptLogMethod(level: 'info' | 'warn' | 'error' | 'debug'): ScriptLogMethod {
-    return ((...args: [string, string] | [Record<string, unknown>]) => {
+    function scriptLogMethod(tag: string, message: string): void;
+    function scriptLogMethod(event: Record<string, unknown>): void;
+    function scriptLogMethod(...args: [string, string] | [Record<string, unknown>]): void {
         if (!isEnabled()) {
             return;
         }
@@ -46,7 +48,9 @@ function createScriptLogMethod(level: 'info' | 'warn' | 'error' | 'debug'): Scri
         }
 
         target(args[0]);
-    }) as ScriptLogMethod;
+    }
+
+    return scriptLogMethod;
 }
 
 export const scriptLog = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 interface MessageEditDialogProps {
     open: boolean;
@@ -58,12 +58,10 @@ export function MessageEditDialog({
 
     const modeSelectionVisible = preferredResolution === 'ask' && !forcedMode;
     const rememberChoiceVisible = preferredResolution === 'ask' && !forcedMode;
-    const modeHelpText = useMemo(() => {
-        if (editMode === 'branch') {
-            return 'Branch mode creates a new session and keeps current session untouched.';
-        }
-        return 'Truncate mode removes this turn and all turns after it in the target session.';
-    }, [editMode]);
+    const modeHelpText =
+        editMode === 'branch'
+            ? 'Branch mode creates a new session and keeps current session untouched.'
+            : 'Truncate mode removes this turn and all turns after it in the target session.';
 
     if (!open) {
         return null;

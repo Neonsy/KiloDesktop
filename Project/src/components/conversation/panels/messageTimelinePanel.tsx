@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { MessageTimelineEmptyState, MessageTimelineItem } from '@/web/components/conversation/messages/messageTimeline';
 import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/conversation/messages/messageTimelineModel';
@@ -21,7 +21,7 @@ export function MessageTimelinePanel({
     onEditMessage,
     onBranchFromMessage,
 }: MessageTimelinePanelProps) {
-    const entries = useMemo(() => buildTimelineEntries(messages, partsByMessageId), [messages, partsByMessageId]);
+    const entries = buildTimelineEntries(messages, partsByMessageId);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [isAutoStickEnabled, setIsAutoStickEnabled] = useState(true);
     const [isNearBottom, setIsNearBottom] = useState(true);

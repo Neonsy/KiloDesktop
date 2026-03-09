@@ -2,7 +2,7 @@ import { Kysely, SqliteDialect } from 'kysely';
 import { mkdirSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, type SQLOutputValue } from 'node:sqlite';
 
 import { seedRuntimeData } from '@/app/backend/persistence/bootstrap/runtimeSeed';
 import { runtimeSqlMigrations } from '@/app/backend/persistence/generatedMigrations';
@@ -145,9 +145,30 @@ function ensureParentDirectory(dbPath: string): void {
     mkdirSync(directory, { recursive: true });
 }
 
-function getTableColumns(sqlite: DatabaseSync, tableName: string): Set<string> {
+function readPragmaTableInfoRows(sqlite: DatabaseSync, tableName: string): Array<{ name?: SQLOutputValue }> {
     const statement = sqlite.prepare(`PRAGMA table_info("${tableName.replaceAll('"', '""')}")`);
-    const rows = statement.all() as Array<{ name?: unknown }>;
+    const rows = statement.all();
+
+    if (!Array.isArray(rows)) {
+        return [];
+    }
+
+    const tableInfoRows: Array<{ name?: SQLOutputValue }> = [];
+    for (const row of rows) {
+        if (typeof row !== 'object' || row === null) {
+            continue;
+        }
+
+        tableInfoRows.push({
+            ...('name' in row ? { name: row.name } : {}),
+        });
+    }
+
+    return tableInfoRows;
+}
+
+function getTableColumns(sqlite: DatabaseSync, tableName: string): Set<string> {
+    const rows = readPragmaTableInfoRows(sqlite, tableName);
     return new Set(
         rows
             .map((row) => (typeof row.name === 'string' ? row.name : null))

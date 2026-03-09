@@ -4,6 +4,7 @@ import { getPersistence } from '@/app/backend/persistence/db';
 import { nowIso } from '@/app/backend/persistence/stores/shared/utils';
 import type { WorkspaceRootRecord } from '@/app/backend/persistence/types';
 import { createEntityId } from '@/app/backend/runtime/contracts';
+import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 function canonicalizeWorkspacePath(inputPath: string): string {
     return path.resolve(inputPath.trim());
@@ -88,7 +89,7 @@ export class WorkspaceRootStore {
 
             const refreshed = await this.getByFingerprint(profileId, existing.fingerprint);
             if (!refreshed) {
-                throw new Error('Workspace root disappeared after update.');
+                throw new InvariantError('Workspace root disappeared after update.');
             }
             return refreshed;
         }

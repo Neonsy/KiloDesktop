@@ -11,6 +11,7 @@ import type {
     RuntimeProviderId,
 } from '@/app/backend/runtime/contracts';
 import { providerAuthFlowStatuses, providerAuthFlowTypes, providerAuthMethods } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 type FlowAuthMethod = Extract<ProviderAuthMethod, 'device_code' | 'oauth_pkce' | 'oauth_device'>;
 const flowAuthMethods = ['device_code', 'oauth_pkce', 'oauth_device'] as const;
@@ -28,7 +29,7 @@ function parseFlowType(value: string): ProviderAuthFlowType {
         return value;
     }
 
-    throw new Error(`Invalid provider auth flow type in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid provider auth flow type in persistence row: "${value}".`);
 }
 
 function parseFlowStatus(value: string): ProviderAuthFlowStatus {
@@ -36,19 +37,19 @@ function parseFlowStatus(value: string): ProviderAuthFlowStatus {
         return value;
     }
 
-    throw new Error(`Invalid provider auth flow status in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid provider auth flow status in persistence row: "${value}".`);
 }
 
 function parseFlowAuthMethod(value: string): FlowAuthMethod {
     if (!isOneOf(value, providerAuthMethods)) {
-        throw new Error(`Invalid provider auth method in persistence row: "${value}".`);
+        throw new DataCorruptionError(`Invalid provider auth method in persistence row: "${value}".`);
     }
 
     if (isOneOf(value, flowAuthMethods)) {
         return value;
     }
 
-    throw new Error(`Invalid provider auth flow method in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid provider auth flow method in persistence row: "${value}".`);
 }
 
 function mapProviderAuthFlow(row: {

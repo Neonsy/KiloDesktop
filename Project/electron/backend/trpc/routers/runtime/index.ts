@@ -13,7 +13,7 @@ import { runtimeResetService } from '@/app/backend/runtime/services/runtimeReset
 import { runtimeShellBootstrapService } from '@/app/backend/runtime/services/runtimeShellBootstrap';
 import { runtimeSnapshotService } from '@/app/backend/runtime/services/runtimeSnapshot';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
-import { toTrpcError } from '@/app/backend/trpc/trpcErrorMap';
+import { toTrpcError, unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
 
 function waitForNextRuntimeEvent(cursor: number, signal: AbortSignal): Promise<RuntimeEventRecordV1 | null> {
     return new Promise((resolve) => {
@@ -44,11 +44,7 @@ export const runtimeRouter = router({
     // Diagnostic-only whole-runtime inspection. Normal app rendering should use scoped reads.
     getDiagnosticSnapshot: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         const result = await runtimeSnapshotService.getSnapshot(input.profileId);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
-        return result.value;
+        return unwrapResultOrThrow(result, toTrpcError);
     }),
     getShellBootstrap: publicProcedure.input(profileInputSchema).query(async ({ input }) => {
         return runtimeShellBootstrapService.getShellBootstrap(input.profileId);
@@ -90,11 +86,7 @@ export const runtimeRouter = router({
     }),
     factoryReset: publicProcedure.input(runtimeFactoryResetInputSchema).mutation(async ({ input }) => {
         const result = await runtimeFactoryResetService.reset(input);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-
-        const factoryResetResult = result.value;
+        const factoryResetResult = unwrapResultOrThrow(result, toTrpcError);
         await runtimeEventLogService.append(
             runtimeResetEvent({
                 entityType: 'runtime',
@@ -115,10 +107,7 @@ export const runtimeRouter = router({
     }),
     reset: publicProcedure.input(runtimeResetInputSchema).mutation(async ({ input }) => {
         const result = await runtimeResetService.reset(input);
-        if (result.isErr()) {
-            throw toTrpcError(result.error);
-        }
-        const resetResult = result.value;
+        const resetResult = unwrapResultOrThrow(result, toTrpcError);
 
         if (resetResult.applied) {
             await runtimeEventLogService.append(

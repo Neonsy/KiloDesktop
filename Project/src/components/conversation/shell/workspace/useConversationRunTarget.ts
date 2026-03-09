@@ -1,5 +1,3 @@
-import { useMemo } from 'react';
-
 import {
     isProviderId,
     isProviderRunnable,
@@ -26,46 +24,45 @@ interface UseConversationRunTargetInput {
 }
 
 export function useConversationRunTarget(input: UseConversationRunTargetInput) {
-    const providerById = useMemo(() => {
-        return new Map(input.providers.map((provider) => [provider.id, provider]));
-    }, [input.providers]);
+    const providerById = new Map(input.providers.map((provider) => [provider.id, provider]));
 
-    const modelsByProvider = useMemo(() => {
-        const map = new Map<RuntimeProviderId, ProviderModelRecord[]>();
-        for (const model of input.providerModels) {
-            const existing = map.get(model.providerId) ?? [];
-            existing.push(model);
-            map.set(model.providerId, existing);
-        }
-        return map;
-    }, [input.providerModels]);
+    const modelsByProvider = new Map<RuntimeProviderId, ProviderModelRecord[]>();
+    for (const model of input.providerModels) {
+        const existing = modelsByProvider.get(model.providerId) ?? [];
+        existing.push(model);
+        modelsByProvider.set(model.providerId, existing);
+    }
 
-    const resolvedRunTarget = useMemo<RunTargetSelection | undefined>(() => {
-        if (input.sessionOverride?.providerId && input.sessionOverride.modelId) {
-            if (modelExists(modelsByProvider, input.sessionOverride.providerId, input.sessionOverride.modelId)) {
-                return {
-                    providerId: input.sessionOverride.providerId,
-                    modelId: input.sessionOverride.modelId,
-                };
-            }
-        }
-
-        const fromLatestRun = resolveLatestRunTarget(input.runs, modelsByProvider);
-        if (fromLatestRun) {
-            return fromLatestRun;
-        }
-
-        if (
-            input.defaults &&
-            isProviderId(input.defaults.providerId) &&
-            modelExists(modelsByProvider, input.defaults.providerId, input.defaults.modelId)
-        ) {
-            return {
-                providerId: input.defaults.providerId,
-                modelId: input.defaults.modelId,
+    let resolvedRunTarget: RunTargetSelection | undefined;
+    if (input.sessionOverride?.providerId && input.sessionOverride.modelId) {
+        if (modelExists(modelsByProvider, input.sessionOverride.providerId, input.sessionOverride.modelId)) {
+            resolvedRunTarget = {
+                providerId: input.sessionOverride.providerId,
+                modelId: input.sessionOverride.modelId,
             };
         }
+    }
 
+    if (!resolvedRunTarget) {
+        const fromLatestRun = resolveLatestRunTarget(input.runs, modelsByProvider);
+        if (fromLatestRun) {
+            resolvedRunTarget = fromLatestRun;
+        }
+    }
+
+    if (
+        !resolvedRunTarget &&
+        input.defaults &&
+        isProviderId(input.defaults.providerId) &&
+        modelExists(modelsByProvider, input.defaults.providerId, input.defaults.modelId)
+    ) {
+        resolvedRunTarget = {
+            providerId: input.defaults.providerId,
+            modelId: input.defaults.modelId,
+        };
+    }
+
+    if (!resolvedRunTarget) {
         for (const provider of input.providers) {
             const models = modelsByProvider.get(provider.id) ?? [];
             if (models.length === 0) {
@@ -77,13 +74,16 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
                 if (!firstModel) {
                     continue;
                 }
-                return {
+                resolvedRunTarget = {
                     providerId: provider.id,
                     modelId: firstModel.id,
                 };
+                break;
             }
         }
+    }
 
+    if (!resolvedRunTarget) {
         for (const provider of input.providers) {
             const models = modelsByProvider.get(provider.id) ?? [];
             if (models.length === 0) {
@@ -94,41 +94,34 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
             if (!firstModel) {
                 continue;
             }
-            return {
+            resolvedRunTarget = {
                 providerId: provider.id,
                 modelId: firstModel.id,
             };
+            break;
         }
-
-        return undefined;
-    }, [input.defaults, input.providers, input.runs, input.sessionOverride, modelsByProvider]);
+    }
 
     const selectedProviderIdForComposer = input.sessionOverride?.providerId ?? resolvedRunTarget?.providerId;
     const selectedModelIdForComposer = input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId;
 
-    const providerOptions = useMemo(() => {
-        return input.providers
-            .filter((provider) => (modelsByProvider.get(provider.id) ?? []).length > 0)
-            .map((provider) => ({
-                id: provider.id,
-                label: provider.label,
-                authState: provider.authState,
-            }));
-    }, [input.providers, modelsByProvider]);
-
-    const modelOptions = useMemo(() => {
-        if (!selectedProviderIdForComposer) {
-            return [];
-        }
-
-        return (modelsByProvider.get(selectedProviderIdForComposer) ?? []).map((model) => ({
-            id: model.id,
-            label: model.label,
-            ...(model.price !== undefined ? { price: model.price } : {}),
-            ...(model.latency !== undefined ? { latency: model.latency } : {}),
-            ...(model.tps !== undefined ? { tps: model.tps } : {}),
+    const providerOptions = input.providers
+        .filter((provider) => (modelsByProvider.get(provider.id) ?? []).length > 0)
+        .map((provider) => ({
+            id: provider.id,
+            label: provider.label,
+            authState: provider.authState,
         }));
-    }, [modelsByProvider, selectedProviderIdForComposer]);
+
+    const modelOptions = !selectedProviderIdForComposer
+        ? []
+        : (modelsByProvider.get(selectedProviderIdForComposer) ?? []).map((model) => ({
+              id: model.id,
+              label: model.label,
+              ...(model.price !== undefined ? { price: model.price } : {}),
+              ...(model.latency !== undefined ? { latency: model.latency } : {}),
+              ...(model.tps !== undefined ? { tps: model.tps } : {}),
+          }));
 
     return {
         providerById,

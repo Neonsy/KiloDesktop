@@ -1,5 +1,6 @@
 import { providerSecretStore } from '@/app/backend/persistence/stores';
 import { tryParseProviderSecretKey } from '@/app/backend/secrets/providerSecretKeys';
+import { appLog } from '@/app/main/logging';
 
 export interface SecretStore {
     get(key: string): Promise<string | null>;
@@ -31,10 +32,25 @@ export class InMemorySecretStore implements SecretStore {
 }
 
 class DatabaseSecretStore implements SecretStore {
-    async get(key: string): Promise<string | null> {
+    private tryResolveSecretKey(key: string, operation: 'get' | 'set' | 'delete') {
         const parsedSecretKey = tryParseProviderSecretKey(key);
+        if (parsedSecretKey) {
+            return parsedSecretKey;
+        }
+
+        appLog.warn({
+            tag: 'secrets.store',
+            message: 'Rejected invalid provider secret key.',
+            key,
+            operation,
+        });
+        return null;
+    }
+
+    async get(key: string): Promise<string | null> {
+        const parsedSecretKey = this.tryResolveSecretKey(key, 'get');
         if (!parsedSecretKey) {
-            throw new Error(`Unsupported provider secret key "${key}".`);
+            return null;
         }
 
         return providerSecretStore.getValue(
@@ -45,9 +61,9 @@ class DatabaseSecretStore implements SecretStore {
     }
 
     async set(key: string, value: string): Promise<void> {
-        const parsedSecretKey = tryParseProviderSecretKey(key);
+        const parsedSecretKey = this.tryResolveSecretKey(key, 'set');
         if (!parsedSecretKey) {
-            throw new Error(`Unsupported provider secret key "${key}".`);
+            return;
         }
 
         await providerSecretStore.upsertValue({
@@ -59,9 +75,9 @@ class DatabaseSecretStore implements SecretStore {
     }
 
     async delete(key: string): Promise<void> {
-        const parsedSecretKey = tryParseProviderSecretKey(key);
+        const parsedSecretKey = this.tryResolveSecretKey(key, 'delete');
         if (!parsedSecretKey) {
-            throw new Error(`Unsupported provider secret key "${key}".`);
+            return;
         }
 
         await providerSecretStore.deleteByProfileProviderAndKind(
@@ -93,6 +109,11 @@ export function initializeSecretStore(nextStore?: SecretStore): SecretStore {
             backend: 'memory',
             available: true,
         };
+        appLog.debug({
+            tag: 'secrets.store',
+            message: 'Initialized override secret store.',
+            backend: storeInfo.backend,
+        });
         return store;
     }
 
@@ -101,6 +122,11 @@ export function initializeSecretStore(nextStore?: SecretStore): SecretStore {
         backend: 'database',
         available: true,
     };
+    appLog.info({
+        tag: 'secrets.store',
+        message: 'Initialized database-backed secret store.',
+        backend: storeInfo.backend,
+    });
 
     return store;
 }

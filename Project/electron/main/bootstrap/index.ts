@@ -1,6 +1,5 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import { createIPCHandler, type CreateContextOptions } from 'electron-trpc-experimental/main';
-import path from 'node:path';
 
 import { closePersistence, initializePersistence } from '@/app/backend/persistence/db';
 import { getSecretStoreInfo, initializeSecretStore } from '@/app/backend/secrets/store';
@@ -10,6 +9,7 @@ import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/win
 import { handleStartupFailure } from '@/app/main/bootstrap/startupFailure';
 import { appLog, flushAppLogger, initAppLogger } from '@/app/main/logging';
 import { devServerUrl, getMainDirname, isDev } from '@/app/main/runtime/env';
+import { resolveDesktopStorage, resolveDesktopStoragePaths } from '@/app/main/runtime/storage';
 import { attachCspHeaders } from '@/app/main/security/cspHeaders';
 import { createMainWindow } from '@/app/main/window/factory';
 
@@ -23,6 +23,16 @@ interface BootstrapDeps {
 export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string): void {
     const { createContext, appRouter, initAutoUpdater, resolvePersistenceChannel } = deps;
     const mainDirname = getMainDirname(importMetaUrl);
+    const defaultUserDataPath = app.getPath('userData');
+    const initialStorage = resolveDesktopStorage({
+        defaultUserDataPath,
+        isDev,
+        packagedRuntimeNamespace: 'stable',
+    });
+
+    if (initialStorage.isDevIsolatedStorage) {
+        app.setPath('userData', initialStorage.userDataPath);
+    }
 
     let mainWindow: BrowserWindow | null = null;
     let ipcHandler: ReturnType<typeof createIPCHandler> | null = null;
@@ -44,20 +54,26 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
                 version: app.getVersion(),
             });
 
-            const persistenceChannel = resolvePersistenceChannel();
-            const userDataPath = app.getPath('userData');
-            process.env['NEONCONDUCTOR_USER_DATA_PATH'] = userDataPath;
-            process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'] = persistenceChannel;
-            const persistenceDbPath = path.join(userDataPath, 'runtime', persistenceChannel, 'neonconductor.db');
+            const resolvedStorage = resolveDesktopStorage({
+                defaultUserDataPath,
+                isDev,
+                packagedRuntimeNamespace: isDev ? 'stable' : resolvePersistenceChannel(),
+            });
+            const storagePaths = resolveDesktopStoragePaths(resolvedStorage);
+            process.env['NEONCONDUCTOR_USER_DATA_PATH'] = resolvedStorage.userDataPath;
+            process.env['NEONCONDUCTOR_RUNTIME_NAMESPACE'] = resolvedStorage.runtimeNamespace;
+            process.env['NEONCONDUCTOR_PERSISTENCE_CHANNEL'] = resolvedStorage.runtimeNamespace;
             appLog.info({
                 tag: 'runtime',
-                message: 'Persistence channel resolved.',
-                channel: persistenceChannel,
-                dbPath: persistenceDbPath,
+                message: 'Runtime storage resolved.',
+                runtimeNamespace: resolvedStorage.runtimeNamespace,
+                userDataPath: resolvedStorage.userDataPath,
+                dbPath: storagePaths.dbPath,
+                isDevIsolatedStorage: resolvedStorage.isDevIsolatedStorage,
             });
 
             initializePersistence({
-                dbPath: persistenceDbPath,
+                dbPath: storagePaths.dbPath,
             });
             initializeSecretStore();
             const secretStoreInfo = getSecretStoreInfo();

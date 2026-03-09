@@ -7,7 +7,7 @@ import {
     runtimeReasoningSummaries,
 } from '@/app/backend/runtime/contracts/enums';
 import type { ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts/enums';
-import type { EntityId, EntityIdPrefix } from '@/app/backend/runtime/contracts/ids';
+import { isEntityId, type EntityId, type EntityIdPrefix } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput, RuntimeRunOptions } from '@/app/backend/runtime/contracts/types';
 
 interface RuntimeParser<T> {
@@ -82,14 +82,18 @@ export function readStringArray(value: unknown, field: string): string[] {
     return value.map((item, index) => readString(item, `${field}[${String(index)}]`));
 }
 
+function isAllowedString<const T extends readonly string[]>(value: string, allowedValues: T): value is T[number] {
+    return allowedValues.some((allowedValue) => allowedValue === value);
+}
+
 export function readEnumValue<const T extends readonly string[]>(
     value: unknown,
     field: string,
     allowedValues: T
 ): T[number] {
     const text = readString(value, field);
-    if ((allowedValues as readonly string[]).includes(text)) {
-        return text as T[number];
+    if (isAllowedString(text, allowedValues)) {
+        return text;
     }
 
     throw new Error(`Invalid "${field}": expected one of ${allowedValues.join(', ')}.`);
@@ -97,12 +101,11 @@ export function readEnumValue<const T extends readonly string[]>(
 
 export function readEntityId<P extends EntityIdPrefix>(value: unknown, field: string, prefix: P): EntityId<P> {
     const text = readString(value, field);
-    const expectedPrefix = `${prefix}_`;
-    if (!text.startsWith(expectedPrefix)) {
-        throw new Error(`Invalid "${field}": expected "${expectedPrefix}..." ID.`);
+    if (!isEntityId(text, prefix)) {
+        throw new Error(`Invalid "${field}": expected "${prefix}_..." ID.`);
     }
 
-    return text as EntityId<P>;
+    return text;
 }
 
 export function readProfileId(source: Record<string, unknown>): ProfileInput['profileId'] {

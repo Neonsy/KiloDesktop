@@ -10,14 +10,12 @@ import {
 import { planService } from '@/app/backend/runtime/services/plan/service';
 import { publicProcedure, router } from '@/app/backend/trpc/init';
 import { toPlanTrpcError } from '@/app/backend/trpc/routers/plan/errors';
+import { unwrapResultOrThrow } from '@/app/backend/trpc/trpcErrorMap';
 
 export const planRouter = router({
     start: publicProcedure.input(planStartInputSchema).mutation(async ({ input }) => {
         const result = await planService.start(input);
-        if (result.isErr()) {
-            throw toPlanTrpcError(result.error);
-        }
-        return result.value;
+        return unwrapResultOrThrow(result, toPlanTrpcError);
     }),
     get: publicProcedure.input(planGetInputSchema).query(async ({ input }) => {
         return planService.getById(input.profileId, input.planId);
@@ -33,16 +31,10 @@ export const planRouter = router({
     }),
     approve: publicProcedure.input(planApproveInputSchema).mutation(async ({ input }) => {
         const result = await planService.approve(input.profileId, input.planId);
-        if (result.isErr()) {
-            throw toPlanTrpcError(result.error);
-        }
-        return result.value;
+        return unwrapResultOrThrow(result, toPlanTrpcError);
     }),
     implement: publicProcedure.input(planImplementInputSchema).mutation(async ({ input }) => {
         const result = await planService.implement(input);
-        if (result.isErr()) {
-            throw toPlanTrpcError(result.error);
-        }
-        return result.value;
+        return unwrapResultOrThrow(result, toPlanTrpcError);
     }),
 });

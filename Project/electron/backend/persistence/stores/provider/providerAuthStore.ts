@@ -4,6 +4,7 @@ import type { ProviderAuthStateRecord } from '@/app/backend/persistence/types';
 import { assertSupportedProviderId } from '@/app/backend/providers/registry';
 import { providerAuthMethods, providerAuthStates } from '@/app/backend/runtime/contracts';
 import type { ProviderAuthMethod, ProviderAuthState, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import { DataCorruptionError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 function isOneOf<T extends string>(value: string, allowed: readonly T[]): value is T {
     return allowed.some((candidate) => candidate === value);
@@ -22,7 +23,7 @@ function parseAuthMethod(value: string): ProviderAuthMethod | 'none' {
         return value;
     }
 
-    throw new Error(`Invalid provider auth method in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid provider auth method in persistence row: "${value}".`);
 }
 
 function parseAuthState(value: string): ProviderAuthState {
@@ -30,7 +31,7 @@ function parseAuthState(value: string): ProviderAuthState {
         return value;
     }
 
-    throw new Error(`Invalid provider auth state in persistence row: "${value}".`);
+    throw new DataCorruptionError(`Invalid provider auth state in persistence row: "${value}".`);
 }
 
 function mapAuthState(row: {

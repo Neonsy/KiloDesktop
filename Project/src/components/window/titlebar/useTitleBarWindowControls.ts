@@ -1,5 +1,3 @@
-import { useCallback } from 'react';
-
 import { useWindowStateStreamStore } from '@/web/lib/window/stateStream';
 import { trpc } from '@/web/trpc/client';
 
@@ -24,17 +22,17 @@ export function useTitleBarWindowControls(): TitleBarWindowControls {
     const toggleMaximizeMutation = trpc.system.toggleMaximizeWindow.useMutation();
     const closeMutation = trpc.system.closeWindow.useMutation();
 
-    const minimizeWindow = useCallback(() => {
+    function minimizeWindow(): void {
         minimizeMutation.mutate();
-    }, [minimizeMutation]);
+    }
 
-    const toggleMaximizeWindow = useCallback(() => {
+    function toggleMaximizeWindow(): void {
         toggleMaximizeMutation.mutate();
-    }, [toggleMaximizeMutation]);
+    }
 
-    const closeWindow = useCallback(() => {
+    function closeWindow(): void {
         closeMutation.mutate();
-    }, [closeMutation]);
+    }
 
     const platform: TitleBarWindowControls['platform'] =
         windowState.platform === 'darwin' || windowState.platform === 'win32' ? windowState.platform : 'linux';

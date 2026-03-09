@@ -5,6 +5,7 @@ import type { KiloModelRoutingPreferenceRecord } from '@/app/backend/persistence
 import { kiloDynamicSorts, kiloRoutingModes } from '@/app/backend/runtime/contracts';
 import type { KiloModelRoutingPreference } from '@/app/backend/runtime/contracts';
 import { errOp, okOp, type OperationalResult } from '@/app/backend/runtime/services/common/operationalError';
+import { DataCorruptionError, InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 
 interface KiloRoutingPreferenceRow {
     profile_id: string;
@@ -18,7 +19,7 @@ interface KiloRoutingPreferenceRow {
 
 function mapKiloRoutingPreference(row: KiloRoutingPreferenceRow): KiloModelRoutingPreferenceRecord {
     if (row.provider_id !== 'kilo') {
-        throw new Error(`Invalid provider_id in kilo routing preference row: "${row.provider_id}".`);
+        throw new DataCorruptionError(`Invalid provider_id in kilo routing preference row: "${row.provider_id}".`);
     }
 
     const routingMode = parseEnumValue(
@@ -29,10 +30,12 @@ function mapKiloRoutingPreference(row: KiloRoutingPreferenceRow): KiloModelRouti
 
     if (routingMode === 'dynamic') {
         if (!row.sort) {
-            throw new Error('Invalid kilo routing preference row: "sort" is required when routing_mode is "dynamic".');
+            throw new DataCorruptionError(
+                'Invalid kilo routing preference row: "sort" is required when routing_mode is "dynamic".'
+            );
         }
         if (row.pinned_provider_id) {
-            throw new Error(
+            throw new DataCorruptionError(
                 'Invalid kilo routing preference row: "pinned_provider_id" is not allowed when routing_mode is "dynamic".'
             );
         }
@@ -48,12 +51,14 @@ function mapKiloRoutingPreference(row: KiloRoutingPreferenceRow): KiloModelRouti
     }
 
     if (!row.pinned_provider_id) {
-        throw new Error(
+        throw new DataCorruptionError(
             'Invalid kilo routing preference row: "pinned_provider_id" is required when routing_mode is "pinned".'
         );
     }
     if (row.sort) {
-        throw new Error('Invalid kilo routing preference row: "sort" is not allowed when routing_mode is "pinned".');
+        throw new DataCorruptionError(
+            'Invalid kilo routing preference row: "sort" is not allowed when routing_mode is "pinned".'
+        );
     }
 
     return {
@@ -156,7 +161,7 @@ export class KiloRoutingPreferenceStore {
 
         const row = await this.getPreference(input.profileId, input.modelId);
         if (!row) {
-            throw new Error('Failed to read persisted kilo routing preference after upsert.');
+            throw new InvariantError('Failed to read persisted kilo routing preference after upsert.');
         }
         return okOp(row);
     }

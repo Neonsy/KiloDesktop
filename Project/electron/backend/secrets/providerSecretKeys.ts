@@ -1,3 +1,4 @@
+import { isSupportedProviderId } from '@/app/backend/providers/registry';
 import type { RuntimeProviderId } from '@/app/backend/runtime/contracts';
 
 export const providerSecretKinds = ['api_key', 'access_token', 'refresh_token'] as const;
@@ -26,13 +27,13 @@ export function tryParseProviderSecretKey(secretKey: string): ParsedProviderSecr
 
     const [, profileId, providerId, secretKindValue] = parts;
     const secretKind = providerSecretKinds.find((candidate) => candidate === secretKindValue);
-    if (!profileId || !providerId || !secretKind) {
+    if (!profileId || !providerId || !secretKind || !isSupportedProviderId(providerId)) {
         return null;
     }
 
     return {
         profileId,
-        providerId: providerId as RuntimeProviderId,
+        providerId,
         secretKind,
     };
 }

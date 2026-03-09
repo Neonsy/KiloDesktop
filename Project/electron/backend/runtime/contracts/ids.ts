@@ -22,6 +22,10 @@ export type EntityIdPrefix =
 
 export type EntityId<P extends EntityIdPrefix = EntityIdPrefix> = `${P}_${string}`;
 
+export function isEntityId<P extends EntityIdPrefix>(value: string, prefix: P): value is EntityId<P> {
+    return value.startsWith(`${prefix}_`);
+}
+
 export function createEntityId<P extends EntityIdPrefix>(prefix: P): EntityId<P> {
     return `${prefix}_${randomUUID()}`;
 }
