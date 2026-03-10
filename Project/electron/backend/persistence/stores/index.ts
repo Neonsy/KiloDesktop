@@ -6,6 +6,7 @@ export { diffStore } from '@/app/backend/persistence/stores/runtime/diffStore';
 export { kiloRoutingPreferenceStore } from '@/app/backend/persistence/stores/provider/kiloRoutingPreferenceStore';
 export { marketplaceStore } from '@/app/backend/persistence/stores/registry/marketplaceStore';
 export { messageStore } from '@/app/backend/persistence/stores/conversation/messages/messageStore';
+export { messageMediaStore } from '@/app/backend/persistence/stores/conversation/messages/messageMediaStore';
 export { mcpStore } from '@/app/backend/persistence/stores/runtime/mcpStore';
 export { modelLimitOverrideStore } from '@/app/backend/persistence/stores/runtime/modelLimitOverrideStore';
 export { modeStore } from '@/app/backend/persistence/stores/registry/modeStore';

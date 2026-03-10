@@ -1,5 +1,11 @@
 import type { DatabaseSync } from 'node:sqlite';
 
+import {
+    listStaticModelDefinitions,
+    toStaticProviderCatalogModel,
+} from '@/app/backend/providers/metadata/staticCatalog/registry';
+import { getDefaultEndpointProfile } from '@/app/backend/providers/registry';
+
 const DEFAULT_PROVIDER_ID = 'kilo';
 const DEFAULT_MODEL_ID = 'kilo/auto';
 
@@ -10,9 +16,9 @@ const PROVIDER_SEED = [
     { id: 'moonshot', label: 'Moonshot (Kimi)', supportsByok: 1 },
 ] as const;
 
-const MODEL_SEED: Array<{
+const KILO_MODEL_SEED: Array<{
     id: string;
-    providerId: 'kilo' | 'openai' | 'zai' | 'moonshot';
+    providerId: 'kilo';
     label: string;
     supportsTools: boolean;
     supportsReasoning: boolean;
@@ -21,94 +27,21 @@ const MODEL_SEED: Array<{
 }> = [
     { id: 'kilo/auto', providerId: 'kilo', label: 'Kilo Auto', supportsTools: true, supportsReasoning: true },
     { id: 'kilo/code', providerId: 'kilo', label: 'Kilo Code', supportsTools: true, supportsReasoning: true },
-    {
-        id: 'openai/gpt-5',
-        providerId: 'openai',
-        label: 'GPT-5',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 400000,
-        maxOutputTokens: 128000,
-    },
-    {
-        id: 'openai/gpt-5-mini',
-        providerId: 'openai',
-        label: 'GPT-5 Mini',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 400000,
-        maxOutputTokens: 128000,
-    },
-    {
-        id: 'openai/gpt-5-codex',
-        providerId: 'openai',
-        label: 'GPT-5 Codex',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 400000,
-        maxOutputTokens: 128000,
-    },
-    {
-        id: 'openai/codex-mini',
-        providerId: 'openai',
-        label: 'Codex Mini',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 400000,
-        maxOutputTokens: 128000,
-    },
-    {
-        id: 'zai/glm-4.5',
-        providerId: 'zai',
-        label: 'GLM 4.5',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 128000,
-        maxOutputTokens: 96000,
-    },
-    {
-        id: 'zai/glm-4.5-air',
-        providerId: 'zai',
-        label: 'GLM 4.5 Air',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 128000,
-        maxOutputTokens: 96000,
-    },
-    {
-        id: 'zai/glm-4.5-flash',
-        providerId: 'zai',
-        label: 'GLM 4.5 Flash',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 128000,
-        maxOutputTokens: 96000,
-    },
-    {
-        id: 'moonshot/kimi-k2',
-        providerId: 'moonshot',
-        label: 'Kimi K2',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 262144,
-    },
-    {
-        id: 'moonshot/kimi-for-coding',
-        providerId: 'moonshot',
-        label: 'Kimi for Coding',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 262144,
-    },
-    {
-        id: 'moonshot/kimi-latest',
-        providerId: 'moonshot',
-        label: 'Kimi Latest',
-        supportsTools: true,
-        supportsReasoning: true,
-        contextLength: 128000,
-    },
 ] as const;
+
+function listDefaultStaticCatalogModels() {
+    return (['openai', 'zai', 'moonshot'] as const).flatMap((providerId) => {
+        const endpointProfile = getDefaultEndpointProfile(providerId);
+        return listStaticModelDefinitions(providerId, endpointProfile).map((definition) => ({
+            providerId,
+            endpointProfile,
+            definition,
+            catalogModel: toStaticProviderCatalogModel(definition, endpointProfile),
+        }));
+    });
+}
+
+const STATIC_MODEL_SEED = listDefaultStaticCatalogModels();
 
 const TOOL_SEED = [
     {
@@ -246,13 +179,19 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
                     is_free,
                     supports_tools,
                     supports_reasoning,
+                    supports_vision,
+                    supports_audio_input,
+                    supports_audio_output,
+                    input_modalities_json,
+                    output_modalities_json,
+                    prompt_family,
                     context_length,
                     pricing_json,
                     raw_json,
                     source,
                     updated_at
                 )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `
     );
     const insertProviderAuthState = sqlite.prepare(
@@ -356,7 +295,7 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
         );
     }
 
-    for (const model of MODEL_SEED) {
+    for (const model of KILO_MODEL_SEED) {
         insertModel.run(model.id, model.providerId, model.label, now, now);
         insertCatalogModel.run(
             defaultProfileId,
@@ -367,9 +306,40 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
             0,
             model.supportsTools ? 1 : 0,
             model.supportsReasoning ? 1 : 0,
+            0,
+            0,
+            0,
+            JSON.stringify(['text']),
+            JSON.stringify(['text']),
+            null,
             model.contextLength ?? null,
             '{}',
             JSON.stringify(model.maxOutputTokens !== undefined ? { max_output_tokens: model.maxOutputTokens } : {}),
+            'seed',
+            now
+        );
+    }
+
+    for (const model of STATIC_MODEL_SEED) {
+        insertModel.run(model.catalogModel.modelId, model.providerId, model.definition.label, now, now);
+        insertCatalogModel.run(
+            defaultProfileId,
+            model.providerId,
+            model.catalogModel.modelId,
+            model.catalogModel.label,
+            model.catalogModel.upstreamProvider ?? model.providerId,
+            model.catalogModel.isFree ? 1 : 0,
+            model.catalogModel.capabilities.supportsTools ? 1 : 0,
+            model.catalogModel.capabilities.supportsReasoning ? 1 : 0,
+            model.catalogModel.capabilities.supportsVision ? 1 : 0,
+            model.catalogModel.capabilities.supportsAudioInput ? 1 : 0,
+            model.catalogModel.capabilities.supportsAudioOutput ? 1 : 0,
+            JSON.stringify(model.catalogModel.capabilities.inputModalities),
+            JSON.stringify(model.catalogModel.capabilities.outputModalities),
+            model.catalogModel.capabilities.promptFamily ?? null,
+            model.catalogModel.contextLength ?? null,
+            JSON.stringify(model.catalogModel.pricing),
+            JSON.stringify(model.catalogModel.raw),
             'seed',
             now
         );

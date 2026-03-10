@@ -91,6 +91,18 @@ export interface MessagePartsTable {
     created_at: string;
 }
 
+export interface MessageMediaTable {
+    media_id: string;
+    message_part_id: string;
+    mime_type: string;
+    width: number;
+    height: number;
+    byte_size: number;
+    sha256: string;
+    bytes_blob: Uint8Array;
+    created_at: string;
+}
+
 export interface RunUsageTable {
     run_id: string;
     provider_id: string;
@@ -568,6 +580,7 @@ export interface DatabaseSchema {
     runs: RunsTable;
     messages: MessagesTable;
     message_parts: MessagePartsTable;
+    message_media: MessageMediaTable;
     run_usage: RunUsageTable;
     permissions: PermissionsTable;
     settings: SettingsTable;

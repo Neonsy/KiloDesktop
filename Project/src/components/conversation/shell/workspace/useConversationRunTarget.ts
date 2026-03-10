@@ -104,6 +104,12 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
 
     const selectedProviderIdForComposer = input.sessionOverride?.providerId ?? resolvedRunTarget?.providerId;
     const selectedModelIdForComposer = input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId;
+    const selectedModelForComposer =
+        selectedProviderIdForComposer && selectedModelIdForComposer
+            ? (modelsByProvider.get(selectedProviderIdForComposer) ?? []).find(
+                  (model) => model.id === selectedModelIdForComposer
+              )
+            : undefined;
 
     const providerOptions = input.providers
         .filter((provider) => (modelsByProvider.get(provider.id) ?? []).length > 0)
@@ -129,6 +135,7 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
         resolvedRunTarget,
         selectedProviderIdForComposer,
         selectedModelIdForComposer,
+        selectedModelForComposer,
         providerOptions,
         modelOptions,
     };

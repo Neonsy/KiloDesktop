@@ -170,18 +170,23 @@ function buildResponsesBody(input: ProviderRuntimeInput, modelPrefix: string): R
     const contextMessages =
         input.contextMessages && input.contextMessages.length > 0
             ? input.contextMessages
-            : [{ role: 'user' as const, text: input.promptText }];
+            : [{ role: 'user' as const, parts: [{ type: 'text' as const, text: input.promptText }] }];
 
     const body: Record<string, unknown> = {
         model: toUpstreamModelId(input.modelId, modelPrefix),
         input: contextMessages.map((message) => ({
             role: message.role,
-            content: [
-                {
-                    type: 'input_text',
-                    text: message.text,
-                },
-            ],
+            content: message.parts.map((part) =>
+                part.type === 'text'
+                    ? {
+                          type: 'input_text',
+                          text: part.text,
+                      }
+                    : {
+                          type: 'input_image',
+                          image_url: part.dataUrl,
+                      }
+            ),
         })),
         reasoning: {
             summary: input.runtimeOptions.reasoning.summary,
@@ -200,13 +205,28 @@ function buildChatCompletionsBody(input: ProviderRuntimeInput, modelPrefix: stri
     const contextMessages =
         input.contextMessages && input.contextMessages.length > 0
             ? input.contextMessages
-            : [{ role: 'user' as const, text: input.promptText }];
+            : [{ role: 'user' as const, parts: [{ type: 'text' as const, text: input.promptText }] }];
 
     return {
         model: toUpstreamModelId(input.modelId, modelPrefix),
         messages: contextMessages.map((message) => ({
             role: message.role,
-            content: message.text,
+            content:
+                message.parts.length === 1 && message.parts[0]?.type === 'text'
+                    ? message.parts[0].text
+                    : message.parts.map((part) =>
+                          part.type === 'text'
+                              ? {
+                                    type: 'text',
+                                    text: part.text,
+                                }
+                              : {
+                                    type: 'image_url',
+                                    image_url: {
+                                        url: part.dataUrl,
+                                    },
+                                }
+                      ),
         })),
         stream: false,
         stream_options: {

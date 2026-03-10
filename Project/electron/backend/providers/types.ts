@@ -1,6 +1,7 @@
 import type { ProviderAdapterResult as AdapterResult } from '@/app/backend/providers/adapters/errors';
 import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type {
+    ComposerImageAttachmentInput,
     KiloDynamicSort,
     ProviderAuthMethod,
     RuntimeMessagePartType,
@@ -168,7 +169,19 @@ export interface ProviderRuntimeInput {
     promptText: string;
     contextMessages?: Array<{
         role: 'system' | 'user' | 'assistant';
-        text: string;
+        parts: Array<
+            | {
+                  type: 'text';
+                  text: string;
+              }
+            | {
+                  type: 'image';
+                  dataUrl: string;
+                  mimeType: ComposerImageAttachmentInput['mimeType'];
+                  width: number;
+                  height: number;
+              }
+        >;
     }>;
     runtimeOptions: {
         reasoning: ProviderRuntimeReasoningOptions;

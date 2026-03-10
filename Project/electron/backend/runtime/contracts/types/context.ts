@@ -51,6 +51,7 @@ export interface TokenCountEstimatePart {
     role: 'system' | 'user' | 'assistant';
     textLength: number;
     tokenCount: number;
+    containsImages?: boolean;
 }
 
 export interface TokenCountEstimate {
@@ -73,7 +74,7 @@ export interface ResolvedContextPolicy {
     thresholdTokens?: number;
     percent?: number;
     fixedInputTokens?: number;
-    disabledReason?: 'missing_model_limits' | 'feature_disabled';
+    disabledReason?: 'missing_model_limits' | 'feature_disabled' | 'multimodal_counting_unavailable';
 }
 
 export interface SessionContextCompactionRecord {
@@ -130,6 +131,11 @@ export interface CompactSessionInput extends ContextPolicyInput {
 
 export interface CompactSessionResult {
     compacted: boolean;
-    reason?: 'not_needed' | 'missing_model_limits' | 'feature_disabled' | 'not_enough_messages';
+    reason?:
+        | 'not_needed'
+        | 'missing_model_limits'
+        | 'feature_disabled'
+        | 'not_enough_messages'
+        | 'multimodal_counting_unavailable';
     state: ResolvedContextState;
 }

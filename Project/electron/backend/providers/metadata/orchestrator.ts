@@ -1,8 +1,13 @@
 import { providerCatalogStore, providerStore } from '@/app/backend/persistence/stores';
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
 import { getProviderMetadataAdapter } from '@/app/backend/providers/metadata/adapters';
+import {
+    listStaticModelDefinitions,
+    toStaticProviderCatalogModel,
+} from '@/app/backend/providers/metadata/staticCatalog/registry';
 import { normalizeCatalogMetadata, toProviderCatalogUpsert } from '@/app/backend/providers/metadata/normalize';
 import { providerAuthExecutionService } from '@/app/backend/providers/providerAuthExecutionService';
+import { resolveEndpointProfile } from '@/app/backend/providers/service/endpointProfiles';
 import {
     errProviderService,
     okProviderService,
@@ -54,6 +59,10 @@ function buildCacheKey(profileId: string, providerId: RuntimeProviderId): string
     return `${profileId}:${providerId}`;
 }
 
+function isStaticProviderId(providerId: RuntimeProviderId): providerId is Exclude<RuntimeProviderId, 'kilo'> {
+    return providerId === 'openai' || providerId === 'zai' || providerId === 'moonshot';
+}
+
 export class ProviderMetadataOrchestrator {
     private readonly metadataCacheTtlMs = readMetadataCacheTtlMs();
     private readonly cache = new Map<string, ProviderMetadataCacheEntry>();
@@ -69,6 +78,9 @@ export class ProviderMetadataOrchestrator {
         }
 
         const supportedProviderId = ensuredProviderResult.value;
+        if (isStaticProviderId(supportedProviderId)) {
+            await this.hydrateStaticCatalog(profileId, supportedProviderId);
+        }
         const key = buildCacheKey(profileId, supportedProviderId);
         const cached = this.cache.get(key);
         const now = Date.now();
@@ -99,6 +111,9 @@ export class ProviderMetadataOrchestrator {
     }
 
     async listModelsByProfile(profileId: string): Promise<ProviderModelRecord[]> {
+        await Promise.all(
+            (['openai', 'zai', 'moonshot'] as const).map((providerId) => this.hydrateStaticCatalog(profileId, providerId))
+        );
         const models = await providerStore.listModelsByProfile(profileId);
         const now = Date.now();
         const byProvider = new Map<RuntimeProviderId, ProviderModelRecord[]>();
@@ -166,6 +181,27 @@ export class ProviderMetadataOrchestrator {
                 error: error instanceof Error ? error.message : String(error),
             });
         });
+    }
+
+    private async hydrateStaticCatalog(
+        profileId: string,
+        providerId: Exclude<RuntimeProviderId, 'kilo'>
+    ): Promise<void> {
+        const endpointProfileResult = await resolveEndpointProfile(profileId, providerId);
+        if (endpointProfileResult.isErr()) {
+            return;
+        }
+
+        const endpointProfile = endpointProfileResult.value;
+        const models = listStaticModelDefinitions(providerId, endpointProfile).map((definition) =>
+            toStaticProviderCatalogModel(definition, endpointProfile)
+        );
+
+        await providerCatalogStore.replaceModels(
+            profileId,
+            providerId,
+            models.map(toProviderCatalogUpsert)
+        );
     }
 
     private async syncSupportedCatalog(

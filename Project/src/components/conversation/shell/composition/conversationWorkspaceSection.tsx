@@ -15,6 +15,7 @@ import type { DiffOverview, ResolvedContextState, RuntimeProviderId } from '@/ap
 import type { ReactNode } from 'react';
 
 interface ConversationWorkspaceSectionProps {
+    profileId: string;
     selectedThread: ThreadListRecord | undefined;
     selectedSessionId: string | undefined;
     selectedRunId: string | undefined;
@@ -57,12 +58,27 @@ interface ConversationWorkspaceSectionProps {
         }
     >;
     prompt: string;
+    pendingImages: Array<{
+        clientId: string;
+        fileName: string;
+        previewUrl: string;
+        status: 'compressing' | 'ready' | 'failed';
+        errorMessage?: string;
+        byteSize?: number;
+        attachment?: {
+            mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+            width: number;
+            height: number;
+        };
+    }>;
     isCreatingSession: boolean;
     isStartingRun: boolean;
     isResolvingPermission: boolean;
     canCreateSession: boolean;
     selectedProviderId: RuntimeProviderId | undefined;
     selectedModelId: string | undefined;
+    canAttachImages: boolean;
+    imageAttachmentBlockedReason?: string;
     routingBadge: string | undefined;
     selectedProviderStatus?:
         | {
@@ -105,6 +121,9 @@ interface ConversationWorkspaceSectionProps {
     onModelChange: (modelId: string) => void;
     onCreateSession: () => void;
     onPromptChange: (prompt: string) => void;
+    onAddImageFiles: (files: FileList | File[]) => void;
+    onRemovePendingImage: (clientId: string) => void;
+    onRetryPendingImage: (clientId: string) => void;
     onSubmitPrompt: () => void;
     onCompactContext?: () => void;
     onResolvePermission: (
@@ -117,6 +136,7 @@ interface ConversationWorkspaceSectionProps {
 }
 
 export function ConversationWorkspaceSection({
+    profileId,
     selectedThread,
     selectedSessionId,
     selectedRunId,
@@ -132,12 +152,15 @@ export function ConversationWorkspaceSection({
     pendingPermissions,
     permissionWorkspaces,
     prompt,
+    pendingImages,
     isCreatingSession,
     isStartingRun,
     isResolvingPermission,
     canCreateSession,
     selectedProviderId,
     selectedModelId,
+    canAttachImages,
+    imageAttachmentBlockedReason,
     routingBadge,
     selectedProviderStatus,
     selectedModelLabel,
@@ -162,6 +185,9 @@ export function ConversationWorkspaceSection({
     onModelChange,
     onCreateSession,
     onPromptChange,
+    onAddImageFiles,
+    onRemovePendingImage,
+    onRetryPendingImage,
     onSubmitPrompt,
     onCompactContext,
     onResolvePermission,
@@ -181,6 +207,7 @@ export function ConversationWorkspaceSection({
             </header>
 
             <SessionWorkspacePanel
+                profileId={profileId}
                 sessions={sessions}
                 runs={runs}
                 messages={messages}
@@ -192,12 +219,15 @@ export function ConversationWorkspaceSection({
                 pendingPermissions={pendingPermissions}
                 {...(permissionWorkspaces ? { permissionWorkspaces } : {})}
                 prompt={prompt}
+                pendingImages={pendingImages}
                 isCreatingSession={isCreatingSession}
                 isStartingRun={isStartingRun}
                 isResolvingPermission={isResolvingPermission}
                 canCreateSession={canCreateSession}
                 selectedProviderId={selectedProviderId}
                 selectedModelId={selectedModelId}
+                canAttachImages={canAttachImages}
+                {...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {})}
                 {...(routingBadge !== undefined ? { routingBadge } : {})}
                 {...(selectedProviderStatus ? { selectedProviderStatus } : {})}
                 {...(selectedModelLabel ? { selectedModelLabel } : {})}
@@ -219,6 +249,9 @@ export function ConversationWorkspaceSection({
                 onModelChange={onModelChange}
                 onCreateSession={onCreateSession}
                 onPromptChange={onPromptChange}
+                onAddImageFiles={onAddImageFiles}
+                onRemovePendingImage={onRemovePendingImage}
+                onRetryPendingImage={onRetryPendingImage}
                 onSubmitPrompt={onSubmitPrompt}
                 {...(onCompactContext ? { onCompactContext } : {})}
                 onResolvePermission={onResolvePermission}

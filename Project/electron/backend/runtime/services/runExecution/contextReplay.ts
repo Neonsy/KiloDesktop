@@ -1,10 +1,11 @@
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
-import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
+import { createTextPart } from '@/app/backend/runtime/services/runExecution/contextParts';
+import type { RunContextMessage, RunContextPart } from '@/app/backend/runtime/services/runExecution/types';
 
 export interface ReplayMessage {
     messageId: MessageRecord['id'];
     role: RunContextMessage['role'];
-    text: string;
+    parts: RunContextPart[];
 }
 
 export function toPartsMap(parts: MessagePartRecord[]): Map<string, MessagePartRecord[]> {
@@ -30,21 +31,39 @@ function mapRole(role: MessageRecord['role']): RunContextMessage['role'] | null 
     return null;
 }
 
-function extractText(parts: MessagePartRecord[]): string {
-    const segments: string[] = [];
+function extractReplayParts(parts: MessagePartRecord[]): RunContextPart[] {
+    const replayParts: RunContextPart[] = [];
     for (const part of parts) {
-        const text = part.payload['text'];
-        if (typeof text !== 'string') {
+        if (part.partType === 'image') {
+            const mediaId = part.payload['mediaId'];
+            const mimeType = part.payload['mimeType'];
+            const width = part.payload['width'];
+            const height = part.payload['height'];
+            if (
+                typeof mediaId === 'string' &&
+                typeof mimeType === 'string' &&
+                typeof width === 'number' &&
+                typeof height === 'number'
+            ) {
+                replayParts.push({
+                    type: 'image',
+                    mediaId,
+                    mimeType: mimeType as 'image/jpeg' | 'image/png' | 'image/webp',
+                    width,
+                    height,
+                });
+            }
             continue;
         }
-        const normalized = text.trim();
-        if (normalized.length === 0) {
-            continue;
+
+        const text = typeof part.payload['text'] === 'string' ? part.payload['text'] : '';
+        const textPart = createTextPart(text);
+        if (textPart) {
+            replayParts.push(textPart);
         }
-        segments.push(normalized);
     }
 
-    return segments.join('\n\n').trim();
+    return replayParts;
 }
 
 export function buildReplayMessages(input: {
@@ -57,14 +76,14 @@ export function buildReplayMessages(input: {
         if (!role) {
             continue;
         }
-        const text = extractText(input.partsByMessageId.get(message.id) ?? []);
-        if (!text) {
+        const parts = extractReplayParts(input.partsByMessageId.get(message.id) ?? []);
+        if (parts.length === 0) {
             continue;
         }
         replay.push({
             messageId: message.id,
             role,
-            text,
+            parts,
         });
     }
 

@@ -9,6 +9,7 @@ import { Button } from '@/web/components/ui/button';
 import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
 
 interface MessageTimelinePanelProps {
+    profileId: string;
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
@@ -16,6 +17,7 @@ interface MessageTimelinePanelProps {
 }
 
 export function MessageTimelinePanel({
+    profileId,
     messages,
     partsByMessageId,
     onEditMessage,
@@ -116,6 +118,7 @@ export function MessageTimelinePanel({
                                     className='absolute top-0 left-0 w-full pb-3'
                                     style={{ transform: `translateY(${String(virtualRow.start)}px)` }}>
                                     <MessageTimelineItem
+                                        profileId={profileId}
                                         entry={entry}
                                         canBranch={Boolean(onBranchFromMessage)}
                                         {...(onEditMessage ? { onEditMessage } : {})}

@@ -82,6 +82,14 @@ export function readStringArray(value: unknown, field: string): string[] {
     return value.map((item, index) => readString(item, `${field}[${String(index)}]`));
 }
 
+export function readArray(value: unknown, field: string): unknown[] {
+    if (!Array.isArray(value)) {
+        throw new Error(`Invalid "${field}": expected array.`);
+    }
+
+    return value;
+}
+
 function isAllowedString<const T extends readonly string[]>(value: string, allowedValues: T): value is T[number] {
     return allowedValues.some((allowedValue) => allowedValue === value);
 }

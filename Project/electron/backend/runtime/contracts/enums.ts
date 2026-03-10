@@ -93,6 +93,7 @@ export type KiloDynamicSort = (typeof kiloDynamicSorts)[number];
 
 export const runtimeMessagePartTypes = [
     'text',
+    'image',
     'reasoning',
     'reasoning_summary',
     'reasoning_encrypted',

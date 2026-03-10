@@ -10,6 +10,7 @@ class ContextPolicyService {
         profileId: string;
         providerId: ResolvedContextPolicy['providerId'];
         modelId: string;
+        hasMultimodalContent?: boolean;
     }): Promise<ResolvedContextPolicy> {
         const [globalSettings, profileSettings, limits] = await Promise.all([
             appContextSettingsStore.get(),
@@ -26,6 +27,18 @@ class ContextPolicyService {
                 limits,
                 mode: 'percent',
                 disabledReason: 'feature_disabled',
+            };
+        }
+
+        if (input.hasMultimodalContent) {
+            return {
+                enabled: true,
+                profileId: input.profileId,
+                providerId: input.providerId,
+                modelId: input.modelId,
+                limits,
+                mode: profileSettings.overrideMode === 'fixed_tokens' ? 'fixed_tokens' : 'percent',
+                disabledReason: 'multimodal_counting_unavailable',
             };
         }
 

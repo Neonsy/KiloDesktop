@@ -7,6 +7,7 @@ import type {
     TokenCountEstimatePart,
     TokenCountMode,
 } from '@/app/backend/runtime/contracts';
+import { extractTextFromParts } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
 import { appLog } from '@/app/main/logging';
@@ -48,13 +49,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function buildEstimatedPart(modelId: string, message: RunContextMessage): TokenCountEstimatePart {
+    const text = extractTextFromParts(message.parts);
     const encoding = resolveEncoding(modelId);
     try {
-        const tokenCount = encoding.encode(message.text).length + MESSAGE_OVERHEAD_TOKENS;
+        const tokenCount = encoding.encode(text).length + MESSAGE_OVERHEAD_TOKENS;
         return {
             role: message.role,
-            textLength: message.text.length,
+            textLength: text.length,
             tokenCount,
+            containsImages: message.parts.some((part) => part.type === 'image'),
         };
     } finally {
         encoding.free();
@@ -159,7 +162,7 @@ async function countZaiMessageTokens(input: {
             },
             body: JSON.stringify({
                 model: input.modelId.startsWith('zai/') ? input.modelId.slice(4) : input.modelId,
-                text: input.message.text,
+                text: extractTextFromParts(input.message.parts),
             }),
         });
 
@@ -228,8 +231,9 @@ const zaiExactCounter: ProviderTokenCounter = {
 
         const parts = input.messages.map<TokenCountEstimatePart>((message, index) => ({
             role: message.role,
-            textLength: message.text.length,
+            textLength: extractTextFromParts(message.parts).length,
             tokenCount: tokenCounts[index] ?? 0,
+            containsImages: message.parts.some((part) => part.type === 'image'),
         }));
 
         return {

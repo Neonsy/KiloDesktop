@@ -112,6 +112,16 @@ export function ConversationShell({
     const contextSessionId = hasSelectedSession ? selectedSessionId : fallbackContextSessionId;
     const contextProviderId = runTargetState.selectedProviderIdForComposer ?? 'openai';
     const contextModelId = runTargetState.selectedModelIdForComposer ?? 'openai/gpt-5';
+    const isPlanningComposerMode = modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator');
+    const canAttachImages =
+        topLevelTab !== 'orchestrator' &&
+        !isPlanningComposerMode &&
+        Boolean(runTargetState.selectedModelForComposer?.supportsVision);
+    const imageAttachmentBlockedReason = isPlanningComposerMode
+        ? 'Image attachments are only available for executable runs.'
+        : runTargetState.selectedModelForComposer?.supportsVision
+          ? undefined
+          : 'Select a vision-capable model to attach images.';
     const contextStateQuery = trpc.context.getResolvedState.useQuery(
         {
             profileId,
@@ -136,7 +146,7 @@ export function ConversationShell({
     const composer = useConversationShellComposer({
         profileId,
         selectedSessionId,
-        isPlanningMode: modeKey === 'plan' && (topLevelTab === 'agent' || topLevelTab === 'orchestrator'),
+        isPlanningMode: isPlanningComposerMode,
         topLevelTab,
         modeKey,
         workspaceFingerprint: shellViewModel.selectedThread?.workspaceFingerprint,
@@ -147,6 +157,8 @@ export function ConversationShell({
         providerById: runTargetState.providerById,
         runtimeOptions: DEFAULT_RUN_OPTIONS,
         isStartingRun: mutations.startRunMutation.isPending,
+        canAttachImages,
+        ...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {}),
         startPlan: mutations.planStartMutation.mutateAsync,
         startRun: mutations.startRunMutation.mutateAsync,
         refetchActivePlan: () => {
@@ -289,6 +301,7 @@ export function ConversationShell({
             />
 
             <ConversationWorkspaceSection
+                profileId={profileId}
                 selectedThread={shellViewModel.selectedThread}
                 selectedSessionId={selectedSessionId}
                 selectedRunId={selectedRunId}
@@ -304,12 +317,15 @@ export function ConversationShell({
                 pendingPermissions={shellViewModel.pendingPermissions}
                 permissionWorkspaces={shellViewModel.permissionWorkspaces}
                 prompt={composer.prompt}
+                pendingImages={composer.pendingImages}
                 isCreatingSession={mutations.createSessionMutation.isPending}
                 isStartingRun={mutations.startRunMutation.isPending || mutations.planStartMutation.isPending}
                 isResolvingPermission={mutations.resolvePermissionMutation.isPending}
                 canCreateSession={Boolean(uiState.selectedThreadId)}
                 selectedProviderId={runTargetState.selectedProviderIdForComposer}
                 selectedModelId={runTargetState.selectedModelIdForComposer}
+                canAttachImages={canAttachImages}
+                {...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {})}
                 routingBadge={routingBadge}
                 {...workspaceSectionState}
                 providerOptions={runTargetState.providerOptions}
@@ -341,6 +357,9 @@ export function ConversationShell({
                 }}
                 onCreateSession={sessionActions.onCreateSession}
                 onPromptChange={composer.onPromptChange}
+                onAddImageFiles={composer.onAddImageFiles}
+                onRemovePendingImage={composer.onRemovePendingImage}
+                onRetryPendingImage={composer.onRetryPendingImage}
                 onSubmitPrompt={composer.onSubmitPrompt}
                 onCompactContext={() => {
                     if (!hasSelectedSession) {

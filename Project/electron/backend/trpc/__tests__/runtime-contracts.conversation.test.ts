@@ -15,6 +15,168 @@ registerRuntimeContractHooks();
 describe('runtime contracts: conversation and runs', () => {
     const profileId = runtimeContractProfileId;
 
+    it('persists image attachments, exposes media reads, and replays multimodal context', async () => {
+        const caller = createCaller();
+        const requestBodies: Array<Record<string, unknown>> = [];
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((_url: string, init?: RequestInit) => {
+                if (typeof init?.body === 'string') {
+                    requestBodies.push(JSON.parse(init.body) as Record<string, unknown>);
+                }
+
+                return Promise.resolve({
+                    ok: true,
+                    status: 200,
+                    statusText: 'OK',
+                    json: () => ({
+                        output: [
+                            {
+                                type: 'message',
+                                content: [
+                                    {
+                                        type: 'output_text',
+                                        text: 'Vision response',
+                                    },
+                                ],
+                            },
+                        ],
+                        usage: {
+                            input_tokens: 14,
+                            output_tokens: 9,
+                            total_tokens: 23,
+                        },
+                    }),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-vision-test-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Vision Thread',
+            kind: 'local',
+        });
+
+        const pngBytesBase64 =
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9s8oFKwAAAAASUVORK5CYII=';
+        const firstRun = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Describe this image',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            attachments: [
+                {
+                    clientId: 'img-test-1',
+                    mimeType: 'image/png',
+                    bytesBase64: pngBytesBase64,
+                    width: 1,
+                    height: 1,
+                    sha256: 'test-image-sha256',
+                },
+            ],
+        });
+        expect(firstRun.accepted).toBe(true);
+        if (!firstRun.accepted) {
+            throw new Error('Expected first multimodal run to start.');
+        }
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+
+        const firstMessages = await caller.session.listMessages({
+            profileId,
+            sessionId: created.session.id,
+            runId: firstRun.runId,
+        });
+        const imagePart = firstMessages.messageParts.find((part) => part.partType === 'image');
+        expect(imagePart).toBeDefined();
+        if (!imagePart) {
+            throw new Error('Expected persisted image message part.');
+        }
+        expect(imagePart.payload['mediaId']).toEqual(expect.stringMatching(/^media_/));
+
+        const mediaId = imagePart.payload['mediaId'];
+        if (typeof mediaId !== 'string') {
+            throw new Error('Expected persisted media id.');
+        }
+
+        const media = await caller.session.getMessageMedia({
+            profileId,
+            mediaId,
+        });
+        expect(media.found).toBe(true);
+        if (!media.found) {
+            throw new Error('Expected persisted message media.');
+        }
+        expect(media.dataUrl.startsWith('data:image/png;base64,')).toBe(true);
+
+        const contextState = await caller.context.getResolvedState({
+            profileId,
+            sessionId: created.session.id,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+        });
+        expect(contextState.policy.disabledReason).toBe('multimodal_counting_unavailable');
+        expect(contextState.compactable).toBe(false);
+
+        const secondRun = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Now continue without another image',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+        });
+        expect(secondRun.accepted).toBe(true);
+        if (!secondRun.accepted) {
+            throw new Error('Expected second multimodal replay run to start.');
+        }
+        await waitForRunStatus(caller, profileId, created.session.id, 'completed');
+
+        const firstRequestInput = Array.isArray(requestBodies[0]?.['input']) ? requestBodies[0]['input'] : [];
+        const secondRequestInput = Array.isArray(requestBodies[1]?.['input']) ? requestBodies[1]['input'] : [];
+        const firstRequestContent = firstRequestInput.flatMap((message) =>
+            typeof message === 'object' && message !== null && Array.isArray((message as { content?: unknown }).content)
+                ? ((message as { content: unknown[] }).content)
+                : []
+        );
+        const secondRequestContent = secondRequestInput.flatMap((message) =>
+            typeof message === 'object' && message !== null && Array.isArray((message as { content?: unknown }).content)
+                ? ((message as { content: unknown[] }).content)
+                : []
+        );
+
+        expect(
+            firstRequestContent.some(
+                (entry) =>
+                    typeof entry === 'object' &&
+                    entry !== null &&
+                    (entry as { type?: unknown }).type === 'input_image'
+            )
+        ).toBe(true);
+        expect(
+            secondRequestContent.some(
+                (entry) =>
+                    typeof entry === 'object' &&
+                    entry !== null &&
+                    (entry as { type?: unknown }).type === 'input_image'
+            )
+        ).toBe(true);
+    });
+
     it('supports session lifecycle with run execution, abort, and revert', async () => {
         const caller = createCaller();
         const completionFetchMock = vi

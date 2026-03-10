@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { messageStore, sessionContextCompactionStore } from '@/app/backend/persistence/stores';
 import type { SessionContextCompactionRecord } from '@/app/backend/persistence/types';
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
+import type { ComposerImageAttachmentInput } from '@/app/backend/runtime/contracts';
 import {
     createEntityId,
     type CompactSessionResult,
@@ -18,6 +19,11 @@ import {
     toPartsMap,
     type ReplayMessage,
 } from '@/app/backend/runtime/services/runExecution/contextReplay';
+import {
+    appendPromptMessage,
+    createTextMessage,
+    hashablePartContent,
+} from '@/app/backend/runtime/services/runExecution/contextParts';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
 
@@ -38,17 +44,16 @@ function buildDigest(messages: RunContextMessage[]): string {
     for (const message of messages) {
         hash.update(message.role);
         hash.update('|');
-        hash.update(message.text);
-        hash.update('\n');
+        for (const part of message.parts) {
+            hash.update(hashablePartContent(part));
+            hash.update('\n');
+        }
     }
     return `runctx-${hash.digest('hex').slice(0, 32)}`;
 }
 
 function toSummaryMessage(compaction: SessionContextCompactionRecord): RunContextMessage {
-    return {
-        role: 'system',
-        text: `Compacted conversation summary\n\n${compaction.summaryText}`,
-    };
+    return createTextMessage('system', `Compacted conversation summary\n\n${compaction.summaryText}`);
 }
 
 function applyPersistedCompaction(
@@ -70,35 +75,25 @@ function applyPersistedCompaction(
     };
 }
 
-function appendPrompt(messages: RunContextMessage[], prompt: string): RunContextMessage[] {
-    const normalizedPrompt = prompt.trim();
-    if (normalizedPrompt.length === 0) {
-        return messages;
-    }
-
-    return [
-        ...messages,
-        {
-            role: 'user',
-            text: normalizedPrompt,
-        },
-    ];
-}
-
 function buildReplayContextMessages(input: {
     replayMessages: ReplayMessage[];
     prompt: string;
+    attachments?: ComposerImageAttachmentInput[];
     summaryMessage?: RunContextMessage;
 }): RunContextMessage[] {
     const baseMessages = [
         ...(input.summaryMessage ? [input.summaryMessage] : []),
         ...input.replayMessages.map<RunContextMessage>((message) => ({
             role: message.role,
-            text: message.text,
+            parts: message.parts,
         })),
     ];
 
-    return appendPrompt(baseMessages, input.prompt);
+    return appendPromptMessage({
+        messages: baseMessages,
+        prompt: input.prompt,
+        ...(input.attachments ? { attachments: input.attachments } : {}),
+    });
 }
 
 function selectMessagesToKeep(
@@ -151,23 +146,16 @@ async function summarizeReplayMessages(input: {
 
     const adapter = getProviderAdapter(input.providerId);
     const summaryMessages: RunContextMessage[] = [
-        { role: 'system', text: COMPACTION_SYSTEM_PROMPT },
-        ...(input.existingSummary
-            ? [
-                  {
-                      role: 'system' as const,
-                      text: `Existing compacted summary\n\n${input.existingSummary}`,
-                  },
-              ]
-            : []),
+        createTextMessage('system', COMPACTION_SYSTEM_PROMPT),
+        ...(input.existingSummary ? [createTextMessage('system', `Existing compacted summary\n\n${input.existingSummary}`)] : []),
         ...input.replayMessages.map((message) => ({
             role: message.role,
-            text: message.text,
+            parts: message.parts,
         })),
-        {
-            role: 'user',
-            text: 'Rewrite the compacted working summary for future turns. Preserve concrete decisions, files, constraints, and next steps.',
-        },
+        createTextMessage(
+            'user',
+            'Rewrite the compacted working summary for future turns. Preserve concrete decisions, files, constraints, and next steps.'
+        ),
     ];
 
     let summaryText = '';
@@ -179,7 +167,22 @@ async function summarizeReplayMessages(input: {
             providerId: input.providerId,
             modelId: input.modelId,
             promptText: '',
-            contextMessages: summaryMessages,
+            contextMessages: summaryMessages.map((message) => ({
+                role: message.role,
+                parts: message.parts
+                    .filter(
+                        (
+                            part
+                        ): part is {
+                            type: 'text';
+                            text: string;
+                        } => part.type === 'text'
+                    )
+                    .map((part) => ({
+                        type: 'text' as const,
+                        text: part.text,
+                    })),
+            })),
             runtimeOptions: {
                 reasoning: {
                     effort: 'none',
@@ -253,6 +256,7 @@ class SessionContextService {
         systemMessages: RunContextMessage[];
         replayMessages: ReplayMessage[];
         prompt: string;
+        attachments?: ComposerImageAttachmentInput[];
         compaction: SessionContextCompactionRecord | null;
     }): Promise<{
         messages: RunContextMessage[];
@@ -262,11 +266,12 @@ class SessionContextService {
         const replayContextMessages = buildReplayContextMessages({
             replayMessages: persisted.replayMessages,
             prompt: input.prompt,
+            ...(input.attachments ? { attachments: input.attachments } : {}),
             ...(persisted.summaryMessage ? { summaryMessage: persisted.summaryMessage } : {}),
         });
         const messages = [...input.systemMessages, ...replayContextMessages];
 
-        if (!input.policy.limits.modelLimitsKnown) {
+        if (!input.policy.limits.modelLimitsKnown || input.policy.disabledReason === 'multimodal_counting_unavailable') {
             return { messages };
         }
 
@@ -292,6 +297,7 @@ class SessionContextService {
             ...(input.compaction ? { compaction: input.compaction } : {}),
             compactable:
                 input.policy.enabled &&
+                input.policy.disabledReason === undefined &&
                 input.policy.limits.modelLimitsKnown &&
                 input.policy.thresholdTokens !== undefined,
         };
@@ -304,8 +310,8 @@ class SessionContextService {
         sessionId?: string;
         systemMessages?: RunContextMessage[];
     }): Promise<ResolvedContextState> {
-        const policy = await contextPolicyService.resolvePolicy(input);
         if (!input.sessionId) {
+            const policy = await contextPolicyService.resolvePolicy(input);
             return this.buildResolvedState({ policy });
         }
 
@@ -313,6 +319,10 @@ class SessionContextService {
             this.loadReplayMessages(input.profileId, input.sessionId),
             sessionContextCompactionStore.get(input.profileId, input.sessionId),
         ]);
+        const policy = await contextPolicyService.resolvePolicy({
+            ...input,
+            hasMultimodalContent: replayMessages.some((message) => message.parts.some((part) => part.type === 'image')),
+        });
         const estimated = await this.estimateMessages({
             profileId: input.profileId,
             policy,
@@ -336,16 +346,30 @@ class SessionContextService {
         modelId: string;
         source: 'auto' | 'manual';
     }): Promise<OperationalResult<CompactSessionResult>> {
-        const [policy, replayMessages, existingCompaction] = await Promise.all([
-            contextPolicyService.resolvePolicy(input),
+        const [replayMessages, existingCompaction] = await Promise.all([
             this.loadReplayMessages(input.profileId, input.sessionId),
             sessionContextCompactionStore.get(input.profileId, input.sessionId),
         ]);
+        const policy = await contextPolicyService.resolvePolicy({
+            ...input,
+            hasMultimodalContent: replayMessages.some((message) => message.parts.some((part) => part.type === 'image')),
+        });
 
         if (!policy.enabled) {
             return okOp({
                 compacted: false,
                 reason: 'feature_disabled',
+                state: this.buildResolvedState({
+                    policy,
+                    ...(existingCompaction ? { compaction: existingCompaction } : {}),
+                }),
+            });
+        }
+
+        if (policy.disabledReason === 'multimodal_counting_unavailable') {
+            return okOp({
+                compacted: false,
+                reason: 'multimodal_counting_unavailable',
                 state: this.buildResolvedState({
                     policy,
                     ...(existingCompaction ? { compaction: existingCompaction } : {}),
@@ -372,7 +396,7 @@ class SessionContextService {
             modelId: input.modelId,
             messages: recentReplayMessages.map((message) => ({
                 role: message.role,
-                text: message.text,
+                parts: message.parts,
             })),
         });
 
@@ -465,12 +489,16 @@ class SessionContextService {
         modelId: string;
         systemMessages: RunContextMessage[];
         prompt: string;
+        attachments?: ComposerImageAttachmentInput[];
     }): Promise<OperationalResult<PreparedSessionContext>> {
         const replayMessages = await this.loadReplayMessages(input.profileId, input.sessionId);
         const policy = await contextPolicyService.resolvePolicy({
             profileId: input.profileId,
             providerId: input.providerId,
             modelId: input.modelId,
+            hasMultimodalContent:
+                replayMessages.some((message) => message.parts.some((part) => part.type === 'image')) ||
+                Boolean(input.attachments && input.attachments.length > 0),
         });
         let compaction = await sessionContextCompactionStore.get(input.profileId, input.sessionId);
 
@@ -480,6 +508,7 @@ class SessionContextService {
             systemMessages: input.systemMessages,
             replayMessages,
             prompt: input.prompt,
+            ...(input.attachments ? { attachments: input.attachments } : {}),
             compaction,
         });
 
@@ -513,6 +542,7 @@ class SessionContextService {
                     systemMessages: input.systemMessages,
                     replayMessages,
                     prompt: input.prompt,
+                    ...(input.attachments ? { attachments: input.attachments } : {}),
                     compaction,
                 });
             }

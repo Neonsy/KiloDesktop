@@ -20,6 +20,7 @@ import type { ResolvedContextState } from '@/app/backend/runtime/contracts';
 import type { ReactNode } from 'react';
 
 interface SessionWorkspacePanelProps {
+    profileId: string;
     sessions: SessionSummaryRecord[];
     runs: RunRecord[];
     messages: MessageRecord[];
@@ -58,12 +59,27 @@ interface SessionWorkspacePanelProps {
         }
     >;
     prompt: string;
+    pendingImages: Array<{
+        clientId: string;
+        fileName: string;
+        previewUrl: string;
+        status: 'compressing' | 'ready' | 'failed';
+        errorMessage?: string;
+        byteSize?: number;
+        attachment?: {
+            mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+            width: number;
+            height: number;
+        };
+    }>;
     isCreatingSession: boolean;
     isStartingRun: boolean;
     isResolvingPermission: boolean;
     canCreateSession: boolean;
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
+    canAttachImages: boolean;
+    imageAttachmentBlockedReason?: string;
     routingBadge?: string;
     selectedProviderStatus?:
         | {
@@ -106,6 +122,9 @@ interface SessionWorkspacePanelProps {
     onModelChange: (modelId: string) => void;
     onCreateSession: () => void;
     onPromptChange: (nextPrompt: string) => void;
+    onAddImageFiles: (files: FileList | File[]) => void;
+    onRemovePendingImage: (clientId: string) => void;
+    onRetryPendingImage: (clientId: string) => void;
     onSubmitPrompt: () => void;
     onCompactContext?: () => void;
     onResolvePermission: (
@@ -118,6 +137,7 @@ interface SessionWorkspacePanelProps {
 }
 
 export function SessionWorkspacePanel({
+    profileId,
     sessions,
     runs,
     messages,
@@ -129,12 +149,15 @@ export function SessionWorkspacePanel({
     pendingPermissions,
     permissionWorkspaces,
     prompt,
+    pendingImages,
     isCreatingSession,
     isStartingRun,
     isResolvingPermission,
     canCreateSession,
     selectedProviderId,
     selectedModelId,
+    canAttachImages,
+    imageAttachmentBlockedReason,
     routingBadge,
     selectedProviderStatus,
     selectedModelLabel,
@@ -159,6 +182,9 @@ export function SessionWorkspacePanel({
     onModelChange,
     onCreateSession,
     onPromptChange,
+    onAddImageFiles,
+    onRemovePendingImage,
+    onRetryPendingImage,
     onSubmitPrompt,
     onCompactContext,
     onResolvePermission,
@@ -261,6 +287,7 @@ export function SessionWorkspacePanel({
                 {diffCheckpointPanel}
 
                 <MessageTimelinePanel
+                    profileId={profileId}
                     messages={messages}
                     partsByMessageId={partsByMessageId}
                     {...(onEditMessage ? { onEditMessage } : {})}
@@ -269,10 +296,13 @@ export function SessionWorkspacePanel({
 
                 <ComposerActionPanel
                     prompt={prompt}
+                    pendingImages={pendingImages}
                     disabled={!selectedSessionId}
                     isSubmitting={isStartingRun}
                     selectedProviderId={selectedProviderId}
                     selectedModelId={selectedModelId}
+                    canAttachImages={canAttachImages}
+                    {...(imageAttachmentBlockedReason ? { imageAttachmentBlockedReason } : {})}
                     {...(routingBadge !== undefined ? { routingBadge } : {})}
                     providerOptions={providerOptions}
                     modelOptions={modelOptions}
@@ -284,6 +314,9 @@ export function SessionWorkspacePanel({
                     onProviderChange={onProviderChange}
                     onModelChange={onModelChange}
                     onPromptChange={onPromptChange}
+                    onAddImageFiles={onAddImageFiles}
+                    onRemovePendingImage={onRemovePendingImage}
+                    onRetryPendingImage={onRetryPendingImage}
                     onSubmitPrompt={onSubmitPrompt}
                     {...(onCompactContext ? { onCompactContext } : {})}
                 />

@@ -7,6 +7,7 @@ export type EntityIdPrefix =
     | 'run'
     | 'msg'
     | 'part'
+    | 'media'
     | 'tag'
     | 'sess'
     | 'perm'

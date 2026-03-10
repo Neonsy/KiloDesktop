@@ -1,3 +1,7 @@
+import { ImagePlus, LoaderCircle, RefreshCw, X } from 'lucide-react';
+import { useRef, useState } from 'react';
+
+import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLightboxModal';
 import { Button } from '@/web/components/ui/button';
 
 import type { ResolvedContextState } from '@/app/backend/runtime/contracts';
@@ -16,12 +20,29 @@ interface ModelOption {
     tps?: number;
 }
 
+interface PendingImageView {
+    clientId: string;
+    fileName: string;
+    previewUrl: string;
+    status: 'compressing' | 'ready' | 'failed';
+    errorMessage?: string;
+    byteSize?: number;
+    attachment?: {
+        mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+        width: number;
+        height: number;
+    };
+}
+
 interface ComposerActionPanelProps {
     prompt: string;
+    pendingImages: PendingImageView[];
     disabled: boolean;
     isSubmitting: boolean;
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
+    canAttachImages: boolean;
+    imageAttachmentBlockedReason?: string;
     routingBadge?: string;
     providerOptions: ProviderOption[];
     modelOptions: ModelOption[];
@@ -33,6 +54,9 @@ interface ComposerActionPanelProps {
     onProviderChange: (providerId: string) => void;
     onModelChange: (modelId: string) => void;
     onPromptChange: (nextPrompt: string) => void;
+    onAddImageFiles: (files: FileList | File[]) => void;
+    onRemovePendingImage: (clientId: string) => void;
+    onRetryPendingImage: (clientId: string) => void;
     onSubmitPrompt: () => void;
     onCompactContext?: () => void;
 }
@@ -49,12 +73,42 @@ function formatCompactionTimestamp(value: string): string {
     return timestamp.toLocaleString();
 }
 
+function formatImageBytes(value?: number): string | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    return `${(value / 1_000_000).toFixed(2)} MB`;
+}
+
+function extractDroppedFiles(dataTransfer: DataTransfer | null): File[] {
+    if (!dataTransfer) {
+        return [];
+    }
+
+    return Array.from(dataTransfer.files).filter((file) => file.type.startsWith('image/'));
+}
+
+function extractClipboardFiles(clipboardData: DataTransfer | null): File[] {
+    if (!clipboardData) {
+        return [];
+    }
+
+    return Array.from(clipboardData.items)
+        .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+}
+
 export function ComposerActionPanel({
     prompt,
+    pendingImages,
     disabled,
     isSubmitting,
     selectedProviderId,
     selectedModelId,
+    canAttachImages,
+    imageAttachmentBlockedReason,
     routingBadge,
     providerOptions,
     modelOptions,
@@ -66,121 +120,343 @@ export function ComposerActionPanel({
     onProviderChange,
     onModelChange,
     onPromptChange,
+    onAddImageFiles,
+    onRemovePendingImage,
+    onRetryPendingImage,
     onSubmitPrompt,
     onCompactContext,
 }: ComposerActionPanelProps) {
+    const [isDragActive, setIsDragActive] = useState(false);
+    const [lightboxImage, setLightboxImage] = useState<
+        | {
+              imageUrl: string;
+              title: string;
+              detail?: string;
+          }
+        | undefined
+    >(undefined);
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const thresholdTokens = contextState?.policy.thresholdTokens;
     const totalTokens = contextState?.estimate?.totalTokens;
     const hasUsageNumbers = totalTokens !== undefined && thresholdTokens !== undefined;
     const compactionRecord = contextState?.compaction;
+    const hasBlockingPendingImages = pendingImages.some((image) => image.status !== 'ready');
+    const hasSubmittableContent = prompt.trim().length > 0 || pendingImages.some((image) => image.status === 'ready');
+    const hasUnsupportedPendingImages = pendingImages.length > 0 && !canAttachImages;
+
+    function openFilePicker() {
+        fileInputRef.current?.click();
+    }
 
     return (
-        <form
-            className='border-border mt-3 space-y-2 border-t pt-3'
-            onSubmit={(event) => {
-                event.preventDefault();
-                onSubmitPrompt();
-            }}>
-            <div className='grid grid-cols-2 gap-2'>
-                <select
-                    value={selectedProviderId ?? ''}
+        <>
+            <form
+                className='border-border mt-3 space-y-2 border-t pt-3'
+                onDragOver={(event) => {
+                    event.preventDefault();
+                    if (!canAttachImages || disabled) {
+                        return;
+                    }
+
+                    setIsDragActive(true);
+                }}
+                onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                        return;
+                    }
+
+                    setIsDragActive(false);
+                }}
+                onDrop={(event) => {
+                    event.preventDefault();
+                    setIsDragActive(false);
+                    if (!canAttachImages || disabled) {
+                        return;
+                    }
+
+                    const files = extractDroppedFiles(event.dataTransfer);
+                    if (files.length === 0) {
+                        return;
+                    }
+
+                    onAddImageFiles(files);
+                }}
+                onSubmit={(event) => {
+                    event.preventDefault();
+                    onSubmitPrompt();
+                }}>
+                <input
+                    ref={fileInputRef}
+                    type='file'
+                    accept='image/jpeg,image/png,image/webp'
+                    multiple
+                    className='hidden'
                     onChange={(event) => {
-                        onProviderChange(event.target.value);
+                        if (event.target.files && event.target.files.length > 0) {
+                            onAddImageFiles(event.target.files);
+                            event.target.value = '';
+                        }
                     }}
-                    className='border-border bg-background h-9 rounded-md border px-2 text-xs'
-                    disabled={disabled || providerOptions.length === 0}>
-                    <option value='' disabled>
-                        Select provider
-                    </option>
-                    {providerOptions.map((provider) => (
-                        <option key={provider.id} value={provider.id}>
-                            {provider.label} ({provider.authState})
+                />
+                <div className='grid grid-cols-2 gap-2'>
+                    <select
+                        value={selectedProviderId ?? ''}
+                        onChange={(event) => {
+                            onProviderChange(event.target.value);
+                        }}
+                        className='border-border bg-background h-9 rounded-md border px-2 text-xs'
+                        disabled={disabled || providerOptions.length === 0}>
+                        <option value='' disabled>
+                            Select provider
                         </option>
-                    ))}
-                </select>
-                <select
-                    value={selectedModelId ?? ''}
-                    onChange={(event) => {
-                        onModelChange(event.target.value);
-                    }}
-                    className='border-border bg-background h-9 rounded-md border px-2 text-xs'
-                    disabled={disabled || modelOptions.length === 0}>
-                    <option value='' disabled>
-                        Select model
-                    </option>
-                    {modelOptions.map((model) => (
-                        <option key={model.id} value={model.id}>
-                            {model.label}
+                        {providerOptions.map((provider) => (
+                            <option key={provider.id} value={provider.id}>
+                                {provider.label} ({provider.authState})
+                            </option>
+                        ))}
+                    </select>
+                    <select
+                        value={selectedModelId ?? ''}
+                        onChange={(event) => {
+                            onModelChange(event.target.value);
+                        }}
+                        className='border-border bg-background h-9 rounded-md border px-2 text-xs'
+                        disabled={disabled || modelOptions.length === 0}>
+                        <option value='' disabled>
+                            Select model
                         </option>
-                    ))}
-                </select>
-            </div>
-            {routingBadge ? <p className='text-muted-foreground text-xs'>{routingBadge}</p> : null}
-            {runErrorMessage ? <p className='text-destructive text-xs'>{runErrorMessage}</p> : null}
-            {contextState ? (
-                <div className='border-border bg-card/40 space-y-1 rounded-md border px-3 py-2'>
-                    <div className='flex flex-wrap items-center justify-between gap-2'>
-                        <div className='space-y-0.5'>
-                            <p className='text-[11px] font-semibold tracking-[0.14em] uppercase'>Context</p>
-                            {hasUsageNumbers ? (
-                                <p className='text-muted-foreground text-xs'>
-                                    {formatTokenCount(totalTokens)} / {formatTokenCount(thresholdTokens)} token
-                                    threshold · {contextState.estimate?.mode === 'exact' ? 'Exact' : 'Estimated'}
-                                </p>
-                            ) : contextState.policy.disabledReason === 'missing_model_limits' ? (
-                                <p className='text-muted-foreground text-xs'>
-                                    Token-aware compaction is unavailable because this model has no known context limit.
-                                </p>
-                            ) : contextState.policy.disabledReason === 'feature_disabled' ? (
-                                <p className='text-muted-foreground text-xs'>
-                                    Global context management is disabled for this profile.
-                                </p>
-                            ) : (
-                                <p className='text-muted-foreground text-xs'>
-                                    Context policy is active with {contextState.countingMode} counting for this model.
-                                </p>
-                            )}
+                        {modelOptions.map((model) => (
+                            <option key={model.id} value={model.id}>
+                                {model.label}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+                {routingBadge ? <p className='text-muted-foreground text-xs'>{routingBadge}</p> : null}
+                {runErrorMessage ? <p className='text-destructive text-xs'>{runErrorMessage}</p> : null}
+                {contextState ? (
+                    <div className='border-border bg-card/40 space-y-1 rounded-md border px-3 py-2'>
+                        <div className='flex flex-wrap items-center justify-between gap-2'>
+                            <div className='space-y-0.5'>
+                                <p className='text-[11px] font-semibold tracking-[0.14em] uppercase'>Context</p>
+                                {hasUsageNumbers ? (
+                                    <p className='text-muted-foreground text-xs'>
+                                        {formatTokenCount(totalTokens)} / {formatTokenCount(thresholdTokens)} token
+                                        threshold · {contextState.estimate?.mode === 'exact' ? 'Exact' : 'Estimated'}
+                                    </p>
+                                ) : contextState.policy.disabledReason === 'missing_model_limits' ? (
+                                    <p className='text-muted-foreground text-xs'>
+                                        Token-aware compaction is unavailable because this model has no known context
+                                        limit.
+                                    </p>
+                                ) : contextState.policy.disabledReason === 'feature_disabled' ? (
+                                    <p className='text-muted-foreground text-xs'>
+                                        Global context management is disabled for this profile.
+                                    </p>
+                                ) : contextState.policy.disabledReason === 'multimodal_counting_unavailable' ? (
+                                    <p className='text-muted-foreground text-xs'>
+                                        Token-aware compaction is paused for image sessions because multimodal token
+                                        counting is not implemented yet.
+                                    </p>
+                                ) : (
+                                    <p className='text-muted-foreground text-xs'>
+                                        Context policy is active with {contextState.countingMode} counting for this
+                                        model.
+                                    </p>
+                                )}
+                            </div>
+                            {onCompactContext ? (
+                                <Button
+                                    type='button'
+                                    size='sm'
+                                    variant='outline'
+                                    disabled={!canCompactContext || isCompactingContext}
+                                    onClick={onCompactContext}>
+                                    {isCompactingContext ? 'Compacting...' : 'Compact now'}
+                                </Button>
+                            ) : null}
                         </div>
-                        {onCompactContext ? (
-                            <Button
-                                type='button'
-                                size='sm'
-                                variant='outline'
-                                disabled={!canCompactContext || isCompactingContext}
-                                onClick={onCompactContext}>
-                                {isCompactingContext ? 'Compacting...' : 'Compact now'}
-                            </Button>
+                        {compactionRecord ? (
+                            <p className='text-muted-foreground text-[11px]'>
+                                Last compacted {compactionRecord.source} at{' '}
+                                {formatCompactionTimestamp(compactionRecord.updatedAt)}.
+                            </p>
                         ) : null}
-                    </div>
-                    {compactionRecord ? (
                         <p className='text-muted-foreground text-[11px]'>
-                            Last compacted {compactionRecord.source} at{' '}
-                            {formatCompactionTimestamp(compactionRecord.updatedAt)}.
+                            Limit source: {contextState.policy.limits.source}
+                            {contextState.policy.limits.overrideReason
+                                ? ` · Override: ${contextState.policy.limits.overrideReason}`
+                                : ''}
+                        </p>
+                        {contextErrorMessage ? <p className='text-destructive text-xs'>{contextErrorMessage}</p> : null}
+                    </div>
+                ) : null}
+                <div
+                    className={`border-border bg-card/30 relative overflow-hidden rounded-2xl border transition ${
+                        isDragActive ? 'border-primary bg-primary/8 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]' : ''
+                    }`}>
+                    <div className='border-border flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2'>
+                        <div>
+                            <p className='text-sm font-semibold'>Prompt</p>
+                            <p className='text-muted-foreground text-xs'>
+                                Paste or drop images here. Up to 4 images, 1.5 MB each after compression.
+                            </p>
+                        </div>
+                        <Button
+                            type='button'
+                            size='sm'
+                            variant='outline'
+                            disabled={disabled || !canAttachImages}
+                            onClick={openFilePicker}>
+                            <ImagePlus className='h-4 w-4' />
+                            Add images
+                        </Button>
+                    </div>
+                    {imageAttachmentBlockedReason && !canAttachImages ? (
+                        <p className='text-muted-foreground border-border border-b px-3 py-2 text-xs'>
+                            {imageAttachmentBlockedReason}
                         </p>
                     ) : null}
-                    <p className='text-muted-foreground text-[11px]'>
-                        Limit source: {contextState.policy.limits.source}
-                        {contextState.policy.limits.overrideReason
-                            ? ` · Override: ${contextState.policy.limits.overrideReason}`
-                            : ''}
-                    </p>
-                    {contextErrorMessage ? <p className='text-destructive text-xs'>{contextErrorMessage}</p> : null}
+                    {pendingImages.length > 0 ? (
+                        <div className='border-border grid gap-2 border-b px-3 py-3 sm:grid-cols-2 xl:grid-cols-4'>
+                            {pendingImages.map((image) => (
+                                <div key={image.clientId} className='border-border bg-background/80 rounded-2xl border p-2'>
+                                    <button
+                                        type='button'
+                                        className='group block w-full text-left'
+                                        onClick={() => {
+                                            setLightboxImage({
+                                                imageUrl: image.previewUrl,
+                                                title: image.fileName,
+                                                detail:
+                                                    image.attachment
+                                                        ? `${image.attachment.width} × ${image.attachment.height}`
+                                                        : undefined,
+                                            });
+                                        }}>
+                                        <div className='bg-muted relative overflow-hidden rounded-xl'>
+                                            <img
+                                                src={image.previewUrl}
+                                                alt={image.fileName}
+                                                className='h-32 w-full object-cover transition duration-200 group-hover:scale-[1.02]'
+                                            />
+                                            <div className='absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/55 px-2 py-1 text-[11px] text-white'>
+                                                <span className='truncate'>
+                                                    {image.status === 'compressing'
+                                                        ? 'Compressing'
+                                                        : image.status === 'failed'
+                                                          ? 'Needs attention'
+                                                          : 'Ready'}
+                                                </span>
+                                                <span>{formatImageBytes(image.byteSize) ?? ''}</span>
+                                            </div>
+                                        </div>
+                                    </button>
+                                    <div className='mt-2 space-y-1'>
+                                        <p className='truncate text-xs font-medium'>{image.fileName}</p>
+                                        {image.attachment ? (
+                                            <p className='text-muted-foreground text-[11px]'>
+                                                {image.attachment.width} × {image.attachment.height} ·{' '}
+                                                {image.attachment.mimeType.replace('image/', '').toUpperCase()}
+                                            </p>
+                                        ) : null}
+                                        {image.errorMessage ? (
+                                            <p className='text-destructive text-[11px]'>{image.errorMessage}</p>
+                                        ) : null}
+                                    </div>
+                                    <div className='mt-2 flex items-center justify-end gap-1'>
+                                        {image.status === 'failed' ? (
+                                            <Button
+                                                type='button'
+                                                size='sm'
+                                                variant='outline'
+                                                className='h-7 px-2 text-[11px]'
+                                                onClick={() => {
+                                                    onRetryPendingImage(image.clientId);
+                                                }}>
+                                                <RefreshCw className='h-3.5 w-3.5' />
+                                                Retry
+                                            </Button>
+                                        ) : null}
+                                        {image.status === 'compressing' ? (
+                                            <span className='text-muted-foreground inline-flex items-center gap-1 px-2 text-[11px]'>
+                                                <LoaderCircle className='h-3.5 w-3.5 animate-spin' />
+                                                Preparing
+                                            </span>
+                                        ) : null}
+                                        <Button
+                                            type='button'
+                                            size='sm'
+                                            variant='outline'
+                                            className='h-7 px-2 text-[11px]'
+                                            onClick={() => {
+                                                onRemovePendingImage(image.clientId);
+                                            }}>
+                                            <X className='h-3.5 w-3.5' />
+                                            Remove
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : null}
+                    <textarea
+                        value={prompt}
+                        onChange={(event) => {
+                            onPromptChange(event.target.value);
+                        }}
+                        onPaste={(event) => {
+                            const files = extractClipboardFiles(event.clipboardData);
+                            if (files.length === 0) {
+                                return;
+                            }
+
+                            event.preventDefault();
+                            onAddImageFiles(files);
+                        }}
+                        rows={4}
+                        className='bg-background/70 min-h-[112px] w-full resize-y px-3 py-3 text-sm outline-none'
+                        placeholder='Prompt for selected session...'
+                    />
+                    {isDragActive ? (
+                        <div className='bg-primary/10 text-primary pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold backdrop-blur-sm'>
+                            Drop images to attach them
+                        </div>
+                    ) : null}
                 </div>
-            ) : null}
-            <textarea
-                value={prompt}
-                onChange={(event) => {
-                    onPromptChange(event.target.value);
+                <div className='flex items-center justify-between gap-2'>
+                    <p className='text-muted-foreground text-xs'>
+                        {hasUnsupportedPendingImages
+                            ? imageAttachmentBlockedReason ?? 'Select a vision-capable model to send attached images.'
+                            : hasBlockingPendingImages
+                            ? 'Sending is locked until every image finishes processing.'
+                            : pendingImages.length > 0
+                              ? 'Images are ready to send with this message.'
+                              : 'Text-only prompt.'}
+                    </p>
+                    <Button
+                        type='submit'
+                        size='sm'
+                        disabled={
+                            disabled ||
+                            isSubmitting ||
+                            !hasSubmittableContent ||
+                            hasBlockingPendingImages ||
+                            hasUnsupportedPendingImages
+                        }>
+                        {hasBlockingPendingImages ? 'Images preparing...' : 'Start Run'}
+                    </Button>
+                </div>
+            </form>
+            <ImageLightboxModal
+                open={lightboxImage !== undefined}
+                imageUrl={lightboxImage?.imageUrl}
+                title={lightboxImage?.title}
+                detail={lightboxImage?.detail}
+                onClose={() => {
+                    setLightboxImage(undefined);
                 }}
-                rows={3}
-                className='border-border bg-background w-full resize-y rounded-md border p-2 text-sm'
-                placeholder='Prompt for selected session...'
             />
-            <div className='flex justify-end'>
-                <Button type='submit' size='sm' disabled={disabled || isSubmitting || prompt.trim().length === 0}>
-                    Start Run
-                </Button>
-            </div>
-        </form>
+        </>
     );
 }

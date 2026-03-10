@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 
 import {
+    providerCatalogStore,
     runtimeContractProfileId,
     registerRuntimeContractHooks,
     createCaller,
@@ -10,6 +11,11 @@ import {
     getPersistence,
     waitForRunStatus,
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
+import {
+    listStaticModelDefinitions,
+    toStaticProviderCatalogModel,
+} from '@/app/backend/providers/metadata/staticCatalog/registry';
+import { toProviderCatalogUpsert } from '@/app/backend/providers/metadata/normalize';
 
 registerRuntimeContractHooks();
 
@@ -200,6 +206,20 @@ describe('runtime contracts: provider and account flows', () => {
     });
 
 
+    it('auto-backfills static openai catalogs from the local registry', async () => {
+        const caller = createCaller();
+
+        const staleOnly = listStaticModelDefinitions('openai', 'default')
+            .filter((definition) => definition.modelId === 'openai/gpt-5')
+            .map((definition) => toProviderCatalogUpsert(toStaticProviderCatalogModel(definition, 'default')));
+        await providerCatalogStore.replaceModels(profileId, 'openai', staleOnly);
+
+        const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
+        expect(models.models.some((model) => model.id === 'openai/gpt-5')).toBe(true);
+        expect(models.models.some((model) => model.id === 'openai/gpt-5-nano')).toBe(true);
+        expect(models.models.some((model) => model.id === 'openai/gpt-5-codex')).toBe(true);
+    });
+
     it('syncs openai api catalog and keeps codex model ids', async () => {
         const caller = createCaller();
 
@@ -215,12 +235,14 @@ describe('runtime contracts: provider and account flows', () => {
             providerId: 'openai',
         });
         expect(syncResult.ok).toBe(true);
-        expect(syncResult.modelCount).toBe(4);
+        expect(syncResult.modelCount).toBeGreaterThanOrEqual(5);
 
         const models = await caller.provider.listModels({ profileId, providerId: 'openai' });
+        expect(models.models.some((model) => model.id === 'openai/gpt-5-nano')).toBe(true);
         expect(models.models.some((model) => model.id === 'openai/gpt-5-codex')).toBe(true);
         const codex = models.models.find((model) => model.id === 'openai/gpt-5-codex');
         expect(codex?.promptFamily).toBe('codex');
+        expect(models.models.some((model) => model.id === 'openai/gpt-5' && model.supportsVision)).toBe(true);
     });
 
 

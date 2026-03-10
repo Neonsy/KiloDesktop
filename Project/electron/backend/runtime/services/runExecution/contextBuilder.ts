@@ -8,7 +8,7 @@ import {
     type RunExecutionResult,
     type RunExecutionErrorCode,
 } from '@/app/backend/runtime/services/runExecution/errors';
-import type { RunContext } from '@/app/backend/runtime/services/runExecution/types';
+import type { RunContext, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 
 function toRunExecutionErrorCode(code: OperationalErrorCode): RunExecutionErrorCode {
     switch (code) {
@@ -37,6 +37,7 @@ export async function buildRunContext(input: {
     profileId: string;
     sessionId: `sess_${string}`;
     prompt: string;
+    attachments?: StartRunInput['attachments'];
     topLevelTab: TopLevelTab;
     providerId: 'kilo' | 'openai' | 'zai' | 'moonshot';
     modelId: string;
@@ -67,6 +68,7 @@ export async function buildRunContext(input: {
         modelId: input.modelId,
         systemMessages: systemPreludeResult.value,
         prompt: input.prompt,
+        ...(input.attachments ? { attachments: input.attachments } : {}),
     });
     if (preparedContext.isErr()) {
         return errRunExecution(toRunExecutionErrorCode(preparedContext.error.code), preparedContext.error.message);

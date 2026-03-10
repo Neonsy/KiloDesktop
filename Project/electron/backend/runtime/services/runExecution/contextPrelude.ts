@@ -7,6 +7,7 @@ import {
     okRunExecution,
     type RunExecutionResult,
 } from '@/app/backend/runtime/services/runExecution/errors';
+import { createTextMessage } from '@/app/backend/runtime/services/runExecution/contextParts';
 import type { RunContextMessage } from '@/app/backend/runtime/services/runExecution/types';
 
 function readModeInstructions(mode: ModeDefinition): string | undefined {
@@ -15,10 +16,7 @@ function readModeInstructions(mode: ModeDefinition): string | undefined {
 }
 
 function createSystemMessage(label: string, body: string): RunContextMessage {
-    return {
-        role: 'system',
-        text: `${label}\n\n${body.trim()}`,
-    };
+    return createTextMessage('system', `${label}\n\n${body.trim()}`);
 }
 
 function buildAgentPrelude(input: {

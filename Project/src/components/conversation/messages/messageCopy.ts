@@ -19,6 +19,10 @@ function buildCopyPayload(input: {
 }): string {
     const sections = input.body
         .map((bodyEntry) => {
+            if (!('text' in bodyEntry)) {
+                return null;
+            }
+
             const sourceText = bodyEntry.text.trim();
             if (sourceText.length === 0) {
                 return null;

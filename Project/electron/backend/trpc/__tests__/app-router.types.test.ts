@@ -62,6 +62,14 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         sessionId: string;
         prompt: string;
+        attachments?: Array<{
+            clientId: string;
+            mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+            bytesBase64: string;
+            width: number;
+            height: number;
+            sha256: string;
+        }>;
         topLevelTab: 'chat' | 'agent' | 'orchestrator';
         modeKey: string;
         workspaceFingerprint?: string;
@@ -104,6 +112,14 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         sessionId: string;
         assetKeys: string[];
+    }>();
+    expectTypeOf<Inputs['session']['getMessageMedia']>().toExtend<{
+        profileId: string;
+        mediaId: string;
+    }>();
+    expectTypeOf<Outputs['session']['getMessageMedia']>().toExtend<{
+        found: boolean;
+        dataUrl?: string;
     }>();
     expectTypeOf<Inputs['diff']['listByRun']>().toExtend<{
         profileId: string;

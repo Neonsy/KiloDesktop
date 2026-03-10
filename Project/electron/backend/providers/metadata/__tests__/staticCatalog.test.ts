@@ -32,4 +32,61 @@ describe('static model catalog', () => {
             expect(definition.maxOutputTokens).toBeGreaterThan(0);
         }
     });
+
+    it('exposes the curated chat-capable non-kilo model sets by endpoint profile', () => {
+        expect(listStaticModelDefinitions('openai', 'default').map((definition) => definition.modelId)).toEqual([
+            'openai/gpt-5-codex',
+            'openai/codex-mini',
+            'openai/gpt-5',
+            'openai/gpt-5-mini',
+            'openai/gpt-5-nano',
+        ]);
+        expect(
+            listStaticModelDefinitions('zai', 'coding_international').map((definition) => definition.modelId)
+        ).toEqual([
+            'zai/glm-4.5',
+            'zai/glm-4.5-air',
+            'zai/glm-4.5-flash',
+            'zai/glm-4.5v',
+            'zai/glm-4.6',
+        ]);
+        expect(
+            listStaticModelDefinitions('zai', 'general_international').map((definition) => definition.modelId)
+        ).toEqual([
+            'zai/glm-4.5',
+            'zai/glm-4.5-air',
+            'zai/glm-4.5-flash',
+            'zai/glm-4.5v',
+            'zai/glm-4.6',
+        ]);
+        expect(
+            listStaticModelDefinitions('moonshot', 'coding_plan').map((definition) => definition.modelId)
+        ).toEqual([
+            'moonshot/kimi-for-coding',
+            'moonshot/kimi-k2',
+            'moonshot/kimi-k2-thinking',
+            'moonshot/kimi-k2-thinking-turbo',
+            'moonshot/kimi-latest',
+        ]);
+        expect(
+            listStaticModelDefinitions('moonshot', 'standard_api').map((definition) => definition.modelId)
+        ).toEqual([
+            'moonshot/kimi-k2-thinking',
+            'moonshot/kimi-k2',
+            'moonshot/kimi-k2-thinking-turbo',
+            'moonshot/kimi-latest',
+        ]);
+    });
+
+    it('marks vision-capable static models with image input modalities', () => {
+        const openAiVisionModels = listStaticModelDefinitions('openai', 'default');
+        expect(openAiVisionModels.every((definition) => definition.supportsVision === true)).toBe(true);
+        expect(openAiVisionModels.every((definition) => definition.inputModalities?.includes('image'))).toBe(true);
+
+        const zaiVisionModels = listStaticModelDefinitions('zai', 'coding_international').filter(
+            (definition) => definition.supportsVision
+        );
+        expect(zaiVisionModels.map((definition) => definition.modelId)).toEqual(['zai/glm-4.5v', 'zai/glm-4.6']);
+        expect(zaiVisionModels.every((definition) => definition.inputModalities?.includes('image'))).toBe(true);
+    });
 });

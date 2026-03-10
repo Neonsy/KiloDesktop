@@ -453,6 +453,17 @@ export interface MessagePartRecord {
     createdAt: string;
 }
 
+export interface MessageMediaRecord {
+    mediaId: string;
+    messagePartId: EntityId<'part'>;
+    mimeType: string;
+    width: number;
+    height: number;
+    byteSize: number;
+    sha256: string;
+    createdAt: string;
+}
+
 export interface RunUsageRecord {
     runId: EntityId<'run'>;
     providerId: RuntimeProviderId;

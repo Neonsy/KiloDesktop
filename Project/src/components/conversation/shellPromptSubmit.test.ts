@@ -82,4 +82,66 @@ describe('submitPrompt', () => {
             'OpenAI is not authenticated. Open Settings > Providers to connect it before running.'
         );
     });
+
+    it('submits ready image attachments for executable runs', async () => {
+        const startRun = vi.fn().mockResolvedValue({});
+        const onPromptCleared = vi.fn();
+        const onRuntimeRefetch = vi.fn();
+
+        await submitPrompt({
+            prompt: '',
+            attachments: [
+                {
+                    clientId: 'img-1',
+                    mimeType: 'image/png',
+                    bytesBase64: 'abc123',
+                    width: 1,
+                    height: 1,
+                    sha256: 'hash-1',
+                },
+            ],
+            isStartingRun: false,
+            selectedSessionId: 'sess_test',
+            isPlanningMode: false,
+            profileId: 'profile_default',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            workspaceFingerprint: undefined,
+            resolvedRunTarget: {
+                providerId: 'openai',
+                modelId: 'openai/gpt-5',
+            },
+            runtimeOptions: DEFAULT_RUN_OPTIONS,
+            providerById: new Map([
+                [
+                    'openai',
+                    {
+                        label: 'OpenAI',
+                        authState: 'configured',
+                        authMethod: 'api_key',
+                    },
+                ],
+            ]),
+            startPlan: vi.fn(),
+            startRun,
+            onPromptCleared,
+            onPlanRefetch: vi.fn(),
+            onRuntimeRefetch,
+            onError: vi.fn(),
+        });
+
+        expect(startRun).toHaveBeenCalledWith(
+            expect.objectContaining({
+                prompt: '',
+                attachments: [
+                    expect.objectContaining({
+                        clientId: 'img-1',
+                        mimeType: 'image/png',
+                    }),
+                ],
+            })
+        );
+        expect(onPromptCleared).toHaveBeenCalledOnce();
+        expect(onRuntimeRefetch).toHaveBeenCalledOnce();
+    });
 });

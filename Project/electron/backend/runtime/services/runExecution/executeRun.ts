@@ -1,4 +1,4 @@
-import { runStore, runUsageStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
+import { messageMediaStore, runStore, runUsageStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import { getProviderAdapter } from '@/app/backend/providers/adapters';
 import { getProviderRuntimeBehavior } from '@/app/backend/providers/behaviors';
 import type { ProviderRuntimeTransportSelection, ProviderRuntimeUsage } from '@/app/backend/providers/types';
@@ -89,6 +89,36 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
     const behavior = getProviderRuntimeBehavior(input.providerId);
     let usage: UsageAccumulator = {};
     let transportSelection = input.transportSelection;
+    const resolvedContextMessages = input.contextMessages
+        ? await Promise.all(
+              input.contextMessages.map(async (message) => ({
+                  role: message.role,
+                  parts: (
+                      await Promise.all(
+                          message.parts.map(async (part) => {
+                              if (part.type === 'text') {
+                                  return part;
+                              }
+
+                              const dataUrl =
+                                  part.dataUrl ?? (part.mediaId ? await messageMediaStore.getDataUrl(part.mediaId) : null);
+                              if (!dataUrl) {
+                                  return null;
+                              }
+
+                              return {
+                                  type: 'image' as const,
+                                  dataUrl,
+                                  mimeType: part.mimeType,
+                                  width: part.width,
+                                  height: part.height,
+                              };
+                          })
+                      )
+                  ).filter((part): part is NonNullable<typeof part> => part !== null),
+              }))
+          )
+        : undefined;
 
     const streamResult = await adapter.streamCompletion(
         {
@@ -98,7 +128,7 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
             providerId: input.providerId,
             modelId: input.modelId,
             promptText: input.prompt,
-            ...(input.contextMessages ? { contextMessages: input.contextMessages } : {}),
+            ...(resolvedContextMessages ? { contextMessages: resolvedContextMessages } : {}),
             runtimeOptions: input.runtimeOptions,
             cache: input.cache,
             authMethod: input.authMethod,

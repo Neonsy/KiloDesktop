@@ -2,15 +2,81 @@ import { Copy } from 'lucide-react';
 import { useState } from 'react';
 
 import { MarkdownContent } from '@/web/components/content/markdown/markdownContent';
-import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
+import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLightboxModal';
+import type { MessageTimelineBodyEntry, MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
 import { Button } from '@/web/components/ui/button';
 import { copyText } from '@/web/lib/copy';
+import { trpc } from '@/web/trpc/client';
 
 interface MessageTimelineItemProps {
+    profileId: string;
     entry: MessageTimelineEntry;
     canBranch: boolean;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
+}
+
+function TimelineImagePart({
+    profileId,
+    item,
+}: {
+    profileId: string;
+    item: Extract<MessageTimelineBodyEntry, { mediaId: string }>;
+}) {
+    const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+    const mediaQuery = trpc.session.getMessageMedia.useQuery(
+        {
+            profileId,
+            mediaId: item.mediaId,
+        },
+        {
+            refetchOnWindowFocus: false,
+        }
+    );
+
+    const imageUrl = mediaQuery.data?.found ? mediaQuery.data.dataUrl : undefined;
+    const detail = `${item.width} × ${item.height}`;
+
+    return (
+        <>
+            <button
+                type='button'
+                className='border-border bg-background/75 block overflow-hidden rounded-2xl border text-left transition hover:shadow-md'
+                onClick={() => {
+                    if (imageUrl) {
+                        setIsLightboxOpen(true);
+                    }
+                }}>
+                {imageUrl ? (
+                    <img
+                        src={imageUrl}
+                        alt='Chat image attachment'
+                        className='max-h-[24rem] w-full object-cover'
+                        style={{ aspectRatio: `${String(item.width)} / ${String(item.height)}` }}
+                    />
+                ) : (
+                    <div
+                        className='bg-muted text-muted-foreground flex w-full items-center justify-center text-sm'
+                        style={{ aspectRatio: `${String(item.width)} / ${String(item.height)}` }}>
+                        {mediaQuery.isLoading ? 'Loading image...' : 'Image unavailable'}
+                    </div>
+                )}
+                <div className='flex items-center justify-between gap-2 px-3 py-2 text-[11px]'>
+                    <span className='text-muted-foreground'>{detail}</span>
+                    <span className='text-muted-foreground'>{item.mimeType.replace('image/', '').toUpperCase()}</span>
+                </div>
+            </button>
+            <ImageLightboxModal
+                open={isLightboxOpen}
+                imageUrl={imageUrl}
+                title='Chat image'
+                detail={detail}
+                onClose={() => {
+                    setIsLightboxOpen(false);
+                }}
+            />
+        </>
+    );
 }
 
 export function MessageTimelineEmptyState() {
@@ -22,6 +88,7 @@ export function MessageTimelineEmptyState() {
 }
 
 export function MessageTimelineItem({
+    profileId,
     entry,
     canBranch,
     onEditMessage,
@@ -100,21 +167,27 @@ export function MessageTimelineItem({
                 {entry.body.length > 0 ? (
                     entry.body.map((item) => (
                         <div key={item.id} className='space-y-2'>
-                            {item.type === 'assistant_reasoning' ? (
-                                <div className='text-primary inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase'>
-                                    Reasoning
-                                    {item.providerLimitedReasoning ? (
-                                        <span className='text-muted-foreground text-[10px] tracking-normal lowercase'>
-                                            provider-limited
-                                        </span>
+                            {'text' in item ? (
+                                <>
+                                    {item.type === 'assistant_reasoning' ? (
+                                        <div className='text-primary inline-flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase'>
+                                            Reasoning
+                                            {item.providerLimitedReasoning ? (
+                                                <span className='text-muted-foreground text-[10px] tracking-normal lowercase'>
+                                                    provider-limited
+                                                </span>
+                                            ) : null}
+                                        </div>
                                     ) : null}
-                                </div>
-                            ) : null}
-                            <MarkdownContent markdown={item.text} />
+                                    <MarkdownContent markdown={item.text} />
+                                </>
+                            ) : (
+                                <TimelineImagePart profileId={profileId} item={item} />
+                            )}
                         </div>
                     ))
                 ) : (
-                    <p className='text-muted-foreground'>No renderable text payload.</p>
+                    <p className='text-muted-foreground'>No renderable message payload.</p>
                 )}
             </div>
         </article>

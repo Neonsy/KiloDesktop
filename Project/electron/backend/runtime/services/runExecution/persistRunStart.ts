@@ -1,5 +1,7 @@
-import { messageStore, runStore, sessionStore } from '@/app/backend/persistence/stores';
+import { messageMediaStore, messageStore, runStore, sessionStore } from '@/app/backend/persistence/stores';
+import { createEntityId } from '@/app/backend/runtime/contracts';
 import { eventMetadata } from '@/app/backend/runtime/services/common/logContext';
+import { decodeAttachmentBytes } from '@/app/backend/runtime/services/runExecution/contextParts';
 import { emitCacheResolutionEvent, emitTransportSelectionEvent } from '@/app/backend/runtime/services/runExecution/eventing';
 import type { PreparedRunStart, StartRunInput } from '@/app/backend/runtime/services/runExecution/types';
 import { runtimeStatusEvent } from '@/app/backend/runtime/services/runtimeEventEnvelope';
@@ -39,13 +41,39 @@ export async function persistRunStart(input: {
         runId: run.id,
         role: 'user',
     });
-    await messageStore.appendPart({
-        messageId: userMessage.id,
-        partType: 'text',
-        payload: {
-            text: input.input.prompt,
-        },
-    });
+    if (input.input.prompt.trim().length > 0) {
+        await messageStore.appendPart({
+            messageId: userMessage.id,
+            partType: 'text',
+            payload: {
+                text: input.input.prompt,
+            },
+        });
+    }
+
+    for (const attachment of input.input.attachments ?? []) {
+        const mediaId = createEntityId('media');
+        const imagePart = await messageStore.appendPart({
+            messageId: userMessage.id,
+            partType: 'image',
+            payload: {
+                mediaId,
+                mimeType: attachment.mimeType,
+                width: attachment.width,
+                height: attachment.height,
+                sha256: attachment.sha256,
+            },
+        });
+        await messageMediaStore.create({
+            mediaId,
+            messagePartId: imagePart.id,
+            mimeType: attachment.mimeType,
+            width: attachment.width,
+            height: attachment.height,
+            sha256: attachment.sha256,
+            bytes: decodeAttachmentBytes(attachment),
+        });
+    }
 
     const assistantMessage = await messageStore.createMessage({
         profileId: input.input.profileId,

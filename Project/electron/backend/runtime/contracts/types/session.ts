@@ -12,6 +12,18 @@ import type { EntityId } from '@/app/backend/runtime/contracts/ids';
 import type { ProfileInput } from '@/app/backend/runtime/contracts/types/common';
 import type { SkillfileDefinition } from '@/app/backend/runtime/contracts/types/mode';
 
+export const composerImageAttachmentMimeTypes = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export type ComposerImageAttachmentMimeType = (typeof composerImageAttachmentMimeTypes)[number];
+
+export interface ComposerImageAttachmentInput {
+    clientId: string;
+    mimeType: ComposerImageAttachmentMimeType;
+    bytesBase64: string;
+    width: number;
+    height: number;
+    sha256: string;
+}
+
 export interface SessionCreateInput extends ProfileInput {
     threadId: EntityId<'thr'>;
     kind: SessionKind;
@@ -48,6 +60,7 @@ export interface RuntimeRunOptions {
 
 export interface SessionStartRunInput extends SessionByIdInput {
     prompt: string;
+    attachments?: ComposerImageAttachmentInput[];
     providerId?: RuntimeProviderId;
     modelId?: string;
     topLevelTab: TopLevelTab;
@@ -75,6 +88,10 @@ export type SessionListRunsInput = SessionByIdInput;
 
 export interface SessionListMessagesInput extends SessionByIdInput {
     runId?: EntityId<'run'>;
+}
+
+export interface SessionGetMessageMediaInput extends ProfileInput {
+    mediaId: EntityId<'media'>;
 }
 
 export type SessionGetAttachedSkillsInput = SessionByIdInput;

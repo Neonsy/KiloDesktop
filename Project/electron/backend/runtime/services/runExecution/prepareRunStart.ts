@@ -84,6 +84,12 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
     if (capabilityValidation.isErr()) {
         return errRunExecution(capabilityValidation.error.code, capabilityValidation.error.message);
     }
+    if (input.attachments && input.attachments.length > 0 && !modelCapabilities.supportsVision) {
+        return errRunExecution(
+            'runtime_option_invalid',
+            `Model "${activeTarget.modelId}" does not support image input. Select a vision-capable model before attaching images.`
+        );
+    }
 
     const initialTransport = resolveInitialRunTransport({
         providerId: activeTarget.providerId,
@@ -93,6 +99,7 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         profileId: input.profileId,
         sessionId: input.sessionId,
         prompt: input.prompt,
+        ...(input.attachments ? { attachments: input.attachments } : {}),
         topLevelTab: input.topLevelTab,
         providerId: activeTarget.providerId,
         modelId: activeTarget.modelId,

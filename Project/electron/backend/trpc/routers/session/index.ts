@@ -1,10 +1,11 @@
-import { messageStore, runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
+import { messageMediaStore, messageStore, runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import {
     profileInputSchema,
     sessionByIdInputSchema,
     sessionCreateInputSchema,
     sessionEditInputSchema,
     sessionGetAttachedSkillsInputSchema,
+    sessionGetMessageMediaInputSchema,
     sessionListMessagesInputSchema,
     sessionListRunsInputSchema,
     sessionRevertInputSchema,
@@ -130,6 +131,14 @@ export const sessionRouter = router({
         return {
             messages,
             messageParts,
+        };
+    }),
+    getMessageMedia: publicProcedure.input(sessionGetMessageMediaInputSchema).query(async ({ input }) => {
+        const media = await messageMediaStore.getDataUrlForProfile(input.profileId, input.mediaId);
+
+        return {
+            found: media !== null,
+            ...(media ? { dataUrl: media } : {}),
         };
     }),
     abort: publicProcedure.input(sessionByIdInputSchema).mutation(async ({ input, ctx }) => {

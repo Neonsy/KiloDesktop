@@ -1,4 +1,5 @@
 import type {
+    ComposerImageAttachmentInput,
     EntityId,
     ModeDefinition,
     ProviderAuthMethod,
@@ -14,6 +15,7 @@ export interface StartRunInput {
     profileId: string;
     sessionId: EntityId<'sess'>;
     prompt: string;
+    attachments?: ComposerImageAttachmentInput[];
     topLevelTab: TopLevelTab;
     modeKey: string;
     workspaceFingerprint?: string;
@@ -46,8 +48,23 @@ export interface RunCacheResolution {
 
 export interface RunContextMessage {
     role: 'system' | 'user' | 'assistant';
-    text: string;
+    parts: RunContextPart[];
 }
+
+export type RunContextPart =
+    | {
+          type: 'text';
+          text: string;
+      }
+    | {
+          type: 'image';
+          mediaId?: string;
+          dataUrl?: string;
+          sha256?: string;
+          mimeType: ComposerImageAttachmentInput['mimeType'];
+          width: number;
+          height: number;
+      };
 
 export interface RunContext {
     messages: RunContextMessage[];
