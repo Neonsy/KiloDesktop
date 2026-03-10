@@ -32,6 +32,16 @@ describe('electron-builder packaging config', () => {
         expect(contents.main).toBe('dist-electron/index.js');
     });
 
+    it('keeps the splash page and named preload bundles in the desktop build config', () => {
+        const viteConfigPath = path.join(process.cwd(), 'vite.config.ts');
+        const splashHtmlPath = path.join(process.cwd(), 'splash.html');
+        const contents = readFileSync(viteConfigPath, 'utf8');
+
+        expect(readFileSync(splashHtmlPath, 'utf8')).toContain('/src/splash/main.ts');
+        expect(contents).toContain("buildPreloadOptions('electron/main/preload/index.ts', 'mainWindow')");
+        expect(contents).toContain("buildPreloadOptions('electron/main/preload/splash.ts', 'splashWindow')");
+    });
+
     it('sanitizes the Electron child environment', () => {
         const childEnv = resolveElectronChildEnv({
             ELECTRON_RUN_AS_NODE: '1',

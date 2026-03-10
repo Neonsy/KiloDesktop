@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
 
-import { buildSplashHtml, resolveSplashAssetPath } from '@/app/main/window/splash';
+import { resolveSplashAssetPath, resolveSplashPageLocation, updateSplashWindowPhase } from '@/app/main/window/splash';
 
 describe('splash window', () => {
     it('resolves the mascot from the project app path during development', () => {
@@ -22,15 +24,53 @@ describe('splash window', () => {
         ).toBe('C:\\Program Files\\NeonConductor\\resources\\assets\\appicon.png');
     });
 
-    it('updates the splash subtitle when startup is delayed', () => {
-        const html = buildSplashHtml({
-            imageDataUrl: 'data:image/png;base64,test',
-            phase: 'delayed',
+    it('loads the bundled splash page from the Vite dev server during development', () => {
+        expect(
+            resolveSplashPageLocation({
+                appPath: 'C:\\repo\\Project',
+                devServerUrl: 'http://localhost:5173',
+                isPackaged: false,
+                mainDirname: 'C:\\repo\\Project\\dist-electron',
+            })
+        ).toEqual({
+            kind: 'url',
+            value: 'http://localhost:5173/splash.html',
         });
+    });
 
-        expect(html).toContain('Still starting. Preparing the workspace and runtime.');
-        expect(html).toContain('NeonConductor');
-        expect(html).toContain('window.__setSplashPhase');
-        expect(html).toContain('id="splash-subtitle"');
+    it('loads the packaged splash page from the built dist directory', () => {
+        expect(
+            resolveSplashPageLocation({
+                appPath: 'C:\\repo\\Project',
+                isPackaged: true,
+                mainDirname: 'C:\\repo\\Project\\dist-electron',
+                resourcesPath: 'C:\\Program Files\\NeonConductor\\resources',
+            })
+        ).toEqual({
+            kind: 'file',
+            value: 'C:\\repo\\Project\\dist\\splash.html',
+        });
+    });
+
+    it('sends delayed phase updates over IPC instead of reloading the page', async () => {
+        const sendSpy = vi.fn();
+        const splashWindow = {
+            isDestroyed: vi.fn(() => false),
+            webContents: {
+                send: sendSpy,
+            },
+        };
+
+        await updateSplashWindowPhase(splashWindow as never, {} as never, 'delayed');
+
+        expect(sendSpy).toHaveBeenCalledWith('neonconductor:splash-phase', 'delayed');
+    });
+
+    it('no longer relies on inline data pages or executeJavaScript patching', () => {
+        const sourcePath = path.join(process.cwd(), 'electron/main/window/splash.ts');
+        const source = readFileSync(sourcePath, 'utf8');
+
+        expect(source).not.toContain('data:text/html');
+        expect(source).not.toContain('executeJavaScript');
     });
 });

@@ -45,7 +45,9 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
     };
     const splashWindowOptions = {
         appPath: app.getAppPath(),
+        ...(devServerUrl ? { devServerUrl } : {}),
         isPackaged: app.isPackaged,
+        mainDirname,
         resourcesPath: process.resourcesPath,
     };
     const runtimeCspOptions = {

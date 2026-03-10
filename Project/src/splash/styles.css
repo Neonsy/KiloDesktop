@@ -1,0 +1,125 @@
+:root {
+    color-scheme: dark;
+    --surface: #090b12;
+    --border: rgba(255, 255, 255, 0.12);
+    --text: #f6f7fb;
+    --muted: rgba(231, 235, 244, 0.72);
+    --accent: #7dd3fc;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    min-height: 100%;
+}
+
+body {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    background:
+        radial-gradient(circle at top, rgba(125, 211, 252, 0.16), transparent 42%),
+        linear-gradient(180deg, #0a0d17 0%, var(--surface) 100%);
+    font-family: "Segoe UI Variable Text", "Aptos", "Segoe UI", sans-serif;
+    color: var(--text);
+}
+
+body::before {
+    content: '';
+    position: fixed;
+    inset: 20px;
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 28%);
+    pointer-events: none;
+}
+
+.splash-shell {
+    width: min(360px, calc(100vw - 40px));
+    padding: 34px 28px 28px;
+    border-radius: 30px;
+    border: 1px solid var(--border);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+        rgba(9, 11, 18, 0.88);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.38);
+    backdrop-filter: blur(14px);
+    text-align: center;
+}
+
+.splash-mascot {
+    width: 196px;
+    height: 232px;
+    margin: 0 auto 22px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+}
+
+.splash-mascot img {
+    width: 168px;
+    height: 212px;
+    object-fit: contain;
+    filter: drop-shadow(0 18px 42px rgba(0, 0, 0, 0.34));
+    animation: splash-mascot-float 3.8s ease-in-out infinite;
+}
+
+h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 650;
+    letter-spacing: 0.02em;
+}
+
+p {
+    margin: 10px auto 0;
+    max-width: 280px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--muted);
+}
+
+.splash-progress {
+    width: 100%;
+    height: 6px;
+    margin-top: 24px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.splash-progress::before {
+    content: '';
+    display: block;
+    width: 42%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(125, 211, 252, 0.3), rgba(125, 211, 252, 0.92));
+    animation: splash-progress-sweep 1.5s ease-in-out infinite;
+}
+
+@keyframes splash-mascot-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-5px);
+    }
+}
+
+@keyframes splash-progress-sweep {
+    0% {
+        transform: translateX(-126%);
+    }
+
+    100% {
+        transform: translateX(316%);
+    }
+}

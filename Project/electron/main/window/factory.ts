@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import { attachDevelopmentShortcuts } from '@/app/main/window/devtoolsShortcuts';
 import { attachNavigationGuards } from '@/app/main/window/navigationGuards';
+import { resolveMainWindowPreloadPath } from '@/app/main/window/preloadPaths';
 
 export interface MainWindowOptions {
     isDev: boolean;
@@ -22,7 +23,7 @@ export function createMainWindow(options: MainWindowOptions): BrowserWindow {
         show: false, // Prevent flash before maximize
         backgroundColor: '#0a0a0f', // Match app background to prevent white flash
         webPreferences: {
-            preload: path.join(mainDirname, 'index.mjs'),
+            preload: resolveMainWindowPreloadPath(mainDirname),
             // Security hardening: isolate renderer from Node.js
             contextIsolation: true,
             nodeIntegration: false,

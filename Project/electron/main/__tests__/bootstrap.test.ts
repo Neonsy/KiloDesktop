@@ -214,7 +214,9 @@ describe('bootstrapMainProcess', () => {
         expect(attachCspHeadersSpy).toHaveBeenCalled();
         expect(createSplashWindowSpy).toHaveBeenCalledWith({
             appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
+            devServerUrl: 'http://localhost:5173',
             isPackaged: false,
+            mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
             resourcesPath: process.resourcesPath,
         });
         expect(createMainWindowSpy).toHaveBeenCalled();
@@ -236,7 +238,9 @@ describe('bootstrapMainProcess', () => {
             { id: 'window-splash' },
             {
                 appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
+                devServerUrl: 'http://localhost:5173',
                 isPackaged: false,
+                mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
                 resourcesPath: process.resourcesPath,
             },
             'delayed'
@@ -294,6 +298,7 @@ describe('bootstrapMainProcess', () => {
         expect(createSplashWindowSpy).toHaveBeenCalledWith({
             appPath: 'M:\\Neonsy\\Projects\\NeonConductor\\Project',
             isPackaged: true,
+            mainDirname: 'M:\\Neonsy\\Projects\\NeonConductor\\Project\\electron\\main',
             resourcesPath: process.resourcesPath,
         });
     });
