@@ -76,7 +76,7 @@ export function ModeExecutionPanel({
         .join('\n');
 
     return (
-        <section className='border-border bg-card mb-3 rounded-md border p-3'>
+        <section className='border-border bg-card rounded-2xl border p-3'>
             {modeKey === 'plan' ? (
                 <div className='space-y-3'>
                     <div>

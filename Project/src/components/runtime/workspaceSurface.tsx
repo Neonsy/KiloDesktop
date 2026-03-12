@@ -78,36 +78,7 @@ export function WorkspaceSurface() {
             <WorkspaceSurfaceHeader
                 profiles={controller.profiles}
                 resolvedProfileId={controller.resolvedProfileId}
-                topLevelTab={controller.topLevelTab}
                 isSwitchingProfile={controller.profileSetActiveMutation.isPending}
-                onTopLevelTabChange={(nextTab) => {
-                    startTransition(() => {
-                        controller.setTopLevelTab(nextTab);
-                    });
-                }}
-                onPreviewTopLevelTab={(nextTab) => {
-                    if (!controller.resolvedProfileId || nextTab !== 'agent') {
-                        return;
-                    }
-
-                    const modeInput = {
-                        profileId: controller.resolvedProfileId,
-                        topLevelTab: 'agent' as const,
-                        ...(controller.currentWorkspaceFingerprint
-                            ? { workspaceFingerprint: controller.currentWorkspaceFingerprint }
-                            : {}),
-                    };
-                    void Promise.all([
-                        utils.mode.list.prefetch(modeInput),
-                        utils.mode.getActive.prefetch(modeInput),
-                        utils.registry.listResolved.prefetch({
-                            profileId: controller.resolvedProfileId,
-                            ...(controller.currentWorkspaceFingerprint
-                                ? { workspaceFingerprint: controller.currentWorkspaceFingerprint }
-                                : {}),
-                        }),
-                    ]);
-                }}
                 onProfileChange={(profileId) => {
                     void controller.selectProfile(profileId);
                 }}

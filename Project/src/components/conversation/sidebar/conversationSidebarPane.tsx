@@ -173,6 +173,12 @@ export function ConversationSidebarPane({
                 isAddingTag={isAddingTag}
                 {...(feedbackMessage ? { feedbackMessage } : {})}
                 {...(statusMessage ? { statusMessage, statusTone } : {})}
+                onTopLevelTabChange={(nextTab) => {
+                    startTransition(() => {
+                        onSetTabSwitchNotice(undefined);
+                        onTopLevelTabChange(nextTab);
+                    });
+                }}
                 onSelectThread={(threadId) => {
                     startSelectionTransition(() => {
                         const targetThread = threads.find((thread) => thread.id === threadId);

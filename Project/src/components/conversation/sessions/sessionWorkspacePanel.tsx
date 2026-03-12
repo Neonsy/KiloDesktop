@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
 import { ComposerActionPanel } from '@/web/components/conversation/panels/composerActionPanel';
 import { MessageTimelinePanel } from '@/web/components/conversation/panels/messageTimelinePanel';
@@ -5,6 +7,11 @@ import { PendingPermissionsPanel } from '@/web/components/conversation/panels/pe
 import { RunChangeSummaryPanel } from '@/web/components/conversation/panels/runChangeSummaryPanel';
 import { WorkspaceStatusPanel } from '@/web/components/conversation/panels/workspaceStatusPanel';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
+import { WorkspaceInspector } from '@/web/components/conversation/sessions/workspaceInspector';
+import type {
+    WorkspaceInspectorSection,
+    WorkspaceStripChip,
+} from '@/web/components/conversation/sessions/workspaceShellModel';
 import { Button } from '@/web/components/ui/button';
 import { trpc } from '@/web/trpc/client';
 
@@ -154,32 +161,56 @@ interface SessionWorkspacePanelProps {
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
 
-function UtilityDetails({
-    title,
-    summary,
-    children,
-    open = false,
+function describeSession(session: SessionSummaryRecord): WorkspaceStripChip {
+    const label =
+        session.kind === 'worktree'
+            ? 'Worktree session'
+            : session.kind === 'local'
+              ? 'Workspace session'
+              : 'Playground session';
+
+    return {
+        id: session.id,
+        label,
+        detail: `${session.runStatus.replaceAll('_', ' ')} · ${String(session.turnCount)} turns`,
+        selected: false,
+    };
+}
+
+function describeRun(run: RunRecord): WorkspaceStripChip {
+    const timestamp = new Date(run.updatedAt);
+
+    return {
+        id: run.id,
+        label: run.status.replaceAll('_', ' '),
+        detail: Number.isNaN(timestamp.getTime()) ? run.id : timestamp.toLocaleTimeString(),
+        selected: false,
+    };
+}
+
+function StripChip({
+    item,
+    onClick,
+    onPointerIntent,
 }: {
-    title: string;
-    summary: string;
-    children: ReactNode;
-    open?: boolean;
+    item: WorkspaceStripChip;
+    onClick: () => void;
+    onPointerIntent?: () => void;
 }) {
     return (
-        <details
-            className='border-border/70 bg-card/70 rounded-2xl border p-4'
-            {...(open ? { open: true } : {})}>
-            <summary className='flex cursor-pointer list-none items-center justify-between gap-3'>
-                <div>
-                    <p className='text-sm font-semibold'>{title}</p>
-                    <p className='text-muted-foreground mt-1 text-xs'>{summary}</p>
-                </div>
-                <span className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                    Toggle
-                </span>
-            </summary>
-            <div className='mt-4 min-w-0'>{children}</div>
-        </details>
+        <button
+            type='button'
+            className={`min-w-[180px] shrink-0 rounded-2xl border px-3 py-2 text-left transition-colors ${
+                item.selected
+                    ? 'border-primary bg-primary/10 shadow-sm'
+                    : 'border-border bg-background/80 hover:bg-accent'
+            }`}
+            onMouseEnter={onPointerIntent}
+            onFocus={onPointerIntent}
+            onClick={onClick}>
+            <p className='truncate text-sm font-medium'>{item.label}</p>
+            <p className='text-muted-foreground mt-1 text-xs'>{item.detail}</p>
+        </button>
     );
 }
 
@@ -243,161 +274,278 @@ export function SessionWorkspacePanel({
     onBranchFromMessage,
 }: SessionWorkspacePanelProps) {
     const utils = trpc.useUtils();
+    const [isInspectorOpen, setIsInspectorOpen] = useState(false);
     const latestRun = runs.find((run) => run.id === selectedRunId) ?? runs.at(-1);
     const pendingPermissionCount = pendingPermissions.length;
+    const isPlanPrimarySurface = Boolean(modePanel) && (topLevelTab === 'orchestrator' || activeModeKey === 'plan');
+    const sessionChips = sessions.map((session) => ({
+        ...describeSession(session),
+        selected: selectedSessionId === session.id,
+    }));
+    const runChips = runs.map((run) => ({
+        ...describeRun(run),
+        selected: selectedRunId === run.id,
+    }));
+    const compactConnectionLabel = selectedProviderStatus
+        ? `${selectedProviderStatus.label} · ${selectedProviderStatus.authState.replaceAll('_', ' ')}`
+        : undefined;
+    const inspectorSections: WorkspaceInspectorSection[] = [
+        {
+            id: 'workspace-status',
+            label: 'Workspace status',
+            description: 'Run state, workspace scope, provider readiness, and local telemetry.',
+            content: (
+                <WorkspaceStatusPanel
+                    run={latestRun}
+                    executionPreset={executionPreset}
+                    workspaceScope={workspaceScope}
+                    provider={selectedProviderStatus}
+                    modelLabel={selectedModelLabel}
+                    usageSummary={selectedUsageSummary}
+                    routingBadge={routingBadge}
+                    registrySummary={registrySummary}
+                    agentContextSummary={agentContextSummary}
+                />
+            ),
+        },
+        ...(executionEnvironmentPanel
+            ? [
+                  {
+                      id: 'execution-environment',
+                      label: 'Execution environment',
+                      description: 'Workspace targeting and execution-scope details.',
+                      content: executionEnvironmentPanel,
+                  } satisfies WorkspaceInspectorSection,
+              ]
+            : []),
+        {
+            id: 'run-changes',
+            label: 'Run changes',
+            description: 'Diff summaries and run-level changes for the selected run.',
+            content: (
+                <RunChangeSummaryPanel
+                    {...(selectedRunId ? { selectedRunId } : {})}
+                    {...(runDiffOverview ? { overview: runDiffOverview } : {})}
+                />
+            ),
+        },
+        {
+            id: 'pending-permissions',
+            label: 'Pending permissions',
+            description: 'Approvals stay out of the main composer until an action needs them.',
+            badge:
+                pendingPermissionCount > 0
+                    ? `${String(pendingPermissionCount)} waiting`
+                    : 'None waiting',
+            tone: pendingPermissionCount > 0 ? 'attention' : 'default',
+            content: (
+                <PendingPermissionsPanel
+                    requests={pendingPermissions}
+                    {...(permissionWorkspaces ? { workspaceByFingerprint: permissionWorkspaces } : {})}
+                    busy={isResolvingPermission}
+                    onResolve={onResolvePermission}
+                />
+            ),
+        },
+        ...(attachedSkillsPanel
+            ? [
+                  {
+                      id: 'attached-skills',
+                      label: 'Attached skills',
+                      description: 'Agent-specific rules and attached skill context.',
+                      content: attachedSkillsPanel,
+                  } satisfies WorkspaceInspectorSection,
+              ]
+            : []),
+        ...(diffCheckpointPanel
+            ? [
+                  {
+                      id: 'checkpoints',
+                      label: 'Checkpoints',
+                      description: 'Checkpoint and diff recovery data for the current session.',
+                      content: diffCheckpointPanel,
+                  } satisfies WorkspaceInspectorSection,
+              ]
+            : []),
+    ];
 
     return (
-        <div className='grid min-h-0 flex-1 2xl:grid-cols-[220px_minmax(0,1fr)]'>
-            <aside className='border-border/70 bg-card/35 min-h-0 overflow-hidden border-b 2xl:border-r 2xl:border-b-0'>
-                <div className='flex h-full min-h-0 flex-col px-4 py-4'>
-                    <div className='mb-4 flex items-center justify-between gap-3'>
-                        <div>
-                            <p className='text-sm font-semibold'>Sessions</p>
-                            <p className='text-muted-foreground text-xs'>Keep the active execution thread close.</p>
+        <div
+            className={`grid min-h-0 flex-1 min-w-0 ${
+                isInspectorOpen ? 'lg:grid-cols-[minmax(0,1fr)_340px]' : 'grid-cols-1'
+            }`}>
+            <div className='bg-background/20 flex min-h-0 min-w-0 flex-col overflow-hidden'>
+                <div className='border-border/70 bg-card/30 border-b px-4 py-4'>
+                    <div className='flex flex-wrap items-start justify-between gap-3'>
+                        <div className='min-w-0'>
+                            <p className='text-sm font-semibold'>Workspace</p>
+                            <p className='text-muted-foreground text-xs'>
+                                Keep the timeline and composer primary. Secondary execution detail lives in the inspector.
+                            </p>
                         </div>
-                        <Button
-                            type='button'
-                            size='sm'
-                            disabled={!canCreateSession || isCreatingSession}
-                            onClick={onCreateSession}>
-                            New
-                        </Button>
-                    </div>
-
-                    <div className='flex min-h-0 gap-2 overflow-x-auto pb-1 2xl:flex-col 2xl:overflow-y-auto 2xl:pb-0'>
-                        {sessions.map((session) => (
-                            <button
-                                key={session.id}
+                        <div className='flex flex-wrap items-center gap-2'>
+                            {compactConnectionLabel ? (
+                                <span className='border-border bg-background text-muted-foreground rounded-full border px-3 py-1 text-xs'>
+                                    {compactConnectionLabel}
+                                </span>
+                            ) : null}
+                            {routingBadge ? (
+                                <span className='border-border bg-background text-muted-foreground rounded-full border px-3 py-1 text-xs'>
+                                    {routingBadge}
+                                </span>
+                            ) : null}
+                            <Button
                                 type='button'
-                                className={`min-w-[220px] shrink-0 rounded-2xl border p-3 text-left transition-colors 2xl:min-w-0 2xl:w-full ${
-                                    selectedSessionId === session.id
-                                        ? 'border-primary bg-primary/10 shadow-sm'
-                                        : 'border-border bg-background/80 hover:bg-accent'
-                                }`}
-                                onMouseEnter={() => {
-                                    void utils.session.status.prefetch({
-                                        profileId,
-                                        sessionId: session.id,
-                                    });
-                                    void utils.session.listRuns.prefetch({
-                                        profileId,
-                                        sessionId: session.id,
-                                    });
-                                }}
-                                onFocus={() => {
-                                    void utils.session.status.prefetch({
-                                        profileId,
-                                        sessionId: session.id,
-                                    });
-                                    void utils.session.listRuns.prefetch({
-                                        profileId,
-                                        sessionId: session.id,
-                                    });
-                                }}
+                                size='sm'
+                                variant={isInspectorOpen ? 'secondary' : 'outline'}
                                 onClick={() => {
-                                    onSelectSession(session.id);
+                                    setIsInspectorOpen((current) => !current);
                                 }}>
-                                <p className='truncate text-sm font-medium'>{session.id}</p>
-                                <p className='text-muted-foreground mt-1 text-xs leading-5'>
-                                    {session.kind === 'worktree'
-                                        ? 'managed worktree'
-                                        : session.kind === 'local'
-                                          ? 'local workspace'
-                                          : session.kind}
-                                    {' · '}
-                                    {session.runStatus} · turns {session.turnCount}
-                                </p>
-                            </button>
-                        ))}
-                        {sessions.length === 0 ? (
-                            <p className='text-muted-foreground text-sm'>No sessions for this thread yet.</p>
-                        ) : null}
+                                {isInspectorOpen ? 'Hide Inspector' : 'Show Inspector'}
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            </aside>
 
-            <div className='bg-background/20 flex min-h-0 min-w-0 flex-col'>
-                <div className='border-border/70 flex flex-wrap items-start justify-between gap-3 border-b px-4 py-4'>
-                    <div className='min-w-0'>
-                        <p className='text-sm font-semibold'>Run History</p>
-                        <p className='text-muted-foreground text-xs'>
-                            Review recent runs, then continue in the composer below.
-                        </p>
+                    <div className='mt-4 space-y-4'>
+                        <div className='flex items-center justify-between gap-3'>
+                            <div className='min-w-0'>
+                                <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                    Sessions
+                                </p>
+                                <p className='text-muted-foreground mt-1 text-xs'>
+                                    Sessions stay close, but they no longer own a permanent side rail.
+                                </p>
+                            </div>
+                            <Button
+                                type='button'
+                                size='sm'
+                                disabled={!canCreateSession || isCreatingSession}
+                                onClick={onCreateSession}>
+                                New session
+                            </Button>
+                        </div>
+
+                        <div className='flex gap-2 overflow-x-auto pb-1'>
+                            {sessionChips.length > 0 ? (
+                                sessionChips.map((sessionChip) => (
+                                    <StripChip
+                                        key={sessionChip.id}
+                                        item={sessionChip}
+                                        onPointerIntent={() => {
+                                            if (!isEntityId(sessionChip.id, 'sess')) {
+                                                return;
+                                            }
+                                            void utils.session.status.prefetch({
+                                                profileId,
+                                                sessionId: sessionChip.id,
+                                            });
+                                            void utils.session.listRuns.prefetch({
+                                                profileId,
+                                                sessionId: sessionChip.id,
+                                            });
+                                        }}
+                                        onClick={() => {
+                                            onSelectSession(sessionChip.id);
+                                        }}
+                                    />
+                                ))
+                            ) : (
+                                <div className='border-border bg-background/70 text-muted-foreground rounded-2xl border px-4 py-3 text-sm'>
+                                    No sessions for this thread yet.
+                                </div>
+                            )}
+                        </div>
+
+                        {runChips.length > 0 ? (
+                            <div className='space-y-2'>
+                                <div className='flex items-center justify-between gap-3'>
+                                    <div className='min-w-0'>
+                                        <p className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                                            Runs
+                                        </p>
+                                        <p className='text-muted-foreground mt-1 text-xs'>
+                                            Recent runs stay in a compact strip instead of a separate panel.
+                                        </p>
+                                    </div>
+                                    {pendingPermissionCount > 0 ? (
+                                        <span className='rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-200'>
+                                            {String(pendingPermissionCount)} approvals waiting
+                                        </span>
+                                    ) : null}
+                                </div>
+                                <div className='flex gap-2 overflow-x-auto pb-1'>
+                                    {runChips.map((runChip) => (
+                                        <StripChip
+                                            key={runChip.id}
+                                            item={runChip}
+                                            onPointerIntent={() => {
+                                                if (!isEntityId(runChip.id, 'run')) {
+                                                    return;
+                                                }
+                                                if (!isEntityId(selectedSessionId, 'sess')) {
+                                                    return;
+                                                }
+
+                                                void utils.session.listMessages.prefetch({
+                                                    profileId,
+                                                    sessionId: selectedSessionId,
+                                                    runId: runChip.id,
+                                                });
+                                                void utils.diff.listByRun.prefetch({
+                                                    profileId,
+                                                    runId: runChip.id,
+                                                });
+                                                void utils.checkpoint.list.prefetch({
+                                                    profileId,
+                                                    sessionId: selectedSessionId,
+                                                });
+                                            }}
+                                            onClick={() => {
+                                                onSelectRun(runChip.id);
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                 </div>
 
                 <div className='flex min-h-0 flex-1 flex-col gap-4 px-4 py-4'>
-                    {runs.length > 0 ? (
-                        <div className='flex items-center gap-2 overflow-x-auto pb-1'>
-                            {runs.map((run) => (
-                                <button
-                                    key={run.id}
-                                    type='button'
-                                    className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${
-                                        selectedRunId === run.id
-                                            ? 'border-primary bg-primary/10 text-primary'
-                                            : 'border-border bg-card text-foreground'
-                                    }`}
-                                    onMouseEnter={() => {
-                                        if (!isEntityId(selectedSessionId, 'sess')) {
-                                            return;
-                                        }
-
-                                        void utils.session.listMessages.prefetch({
-                                            profileId,
-                                            sessionId: selectedSessionId,
-                                            runId: run.id,
-                                        });
-                                        void utils.diff.listByRun.prefetch({
-                                            profileId,
-                                            runId: run.id,
-                                        });
-                                        void utils.checkpoint.list.prefetch({
-                                            profileId,
-                                            sessionId: selectedSessionId,
-                                        });
-                                    }}
-                                    onFocus={() => {
-                                        if (!isEntityId(selectedSessionId, 'sess')) {
-                                            return;
-                                        }
-
-                                        void utils.session.listMessages.prefetch({
-                                            profileId,
-                                            sessionId: selectedSessionId,
-                                            runId: run.id,
-                                        });
-                                        void utils.diff.listByRun.prefetch({
-                                            profileId,
-                                            runId: run.id,
-                                        });
-                                        void utils.checkpoint.list.prefetch({
-                                            profileId,
-                                            sessionId: selectedSessionId,
-                                        });
-                                    }}
-                                    onClick={() => {
-                                        onSelectRun(run.id);
-                                    }}>
-                                    {run.status} · {run.id}
-                                </button>
-                            ))}
+                    {isPlanPrimarySurface ? (
+                        <div className='grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]'>
+                            <div className='border-border/70 bg-card/35 min-h-0 min-w-0 overflow-y-auto rounded-[28px] border p-4'>
+                                {modePanel}
+                            </div>
+                            <div className='flex min-h-[280px] min-w-0 flex-col rounded-[28px] border border-border/70 bg-card/35 p-4'>
+                                <MessageTimelinePanel
+                                    profileId={profileId}
+                                    messages={messages}
+                                    partsByMessageId={partsByMessageId}
+                                    {...(onEditMessage ? { onEditMessage } : {})}
+                                    {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                                />
+                            </div>
                         </div>
-                    ) : null}
+                    ) : (
+                        <>
+                            {modePanel ? (
+                                <div className='border-border/70 bg-card/35 shrink-0 rounded-[28px] border p-4'>
+                                    {modePanel}
+                                </div>
+                            ) : null}
 
-                    {modePanel}
-
-                    {executionEnvironmentPanel}
-
-                    <div className='flex min-h-[280px] min-w-0 flex-1 flex-col rounded-[28px] border border-border/70 bg-card/35 p-4'>
-                        <MessageTimelinePanel
-                            profileId={profileId}
-                            messages={messages}
-                            partsByMessageId={partsByMessageId}
-                            {...(onEditMessage ? { onEditMessage } : {})}
-                            {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
-                        />
-                    </div>
+                            <div className='flex min-h-[320px] min-w-0 flex-1 flex-col rounded-[28px] border border-border/70 bg-card/35 p-4'>
+                                <MessageTimelinePanel
+                                    profileId={profileId}
+                                    messages={messages}
+                                    partsByMessageId={partsByMessageId}
+                                    {...(onEditMessage ? { onEditMessage } : {})}
+                                    {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
+                                />
+                            </div>
+                        </>
+                    )}
 
                     <div className='shrink-0 rounded-[28px] border border-border/70 bg-background/80 p-4 shadow-sm'>
                         <ComposerActionPanel
@@ -436,62 +584,17 @@ export function SessionWorkspacePanel({
                             {...(onCompactContext ? { onCompactContext } : {})}
                         />
                     </div>
-
-                    <div className='shrink-0 grid gap-3 xl:grid-cols-2 2xl:grid-cols-3'>
-                        <UtilityDetails
-                            title='Workspace Status'
-                            summary='Run state, workspace scope, and telemetry.'
-                            open={Boolean(latestRun?.errorMessage)}>
-                            <WorkspaceStatusPanel
-                                run={latestRun}
-                                executionPreset={executionPreset}
-                                workspaceScope={workspaceScope}
-                                provider={selectedProviderStatus}
-                                modelLabel={selectedModelLabel}
-                                usageSummary={selectedUsageSummary}
-                                routingBadge={routingBadge}
-                                registrySummary={registrySummary}
-                                agentContextSummary={agentContextSummary}
-                            />
-                        </UtilityDetails>
-
-                        {attachedSkillsPanel ? (
-                            <UtilityDetails title='Attached Skills' summary='Agent-specific attached skills and rule context.'>
-                                {attachedSkillsPanel}
-                            </UtilityDetails>
-                        ) : null}
-
-                        <UtilityDetails
-                            title='Run Changes'
-                            summary='Diff summaries and run-level changes.'
-                            open={Boolean(runDiffOverview)}>
-                            <RunChangeSummaryPanel
-                                {...(selectedRunId ? { selectedRunId } : {})}
-                                {...(runDiffOverview ? { overview: runDiffOverview } : {})}
-                            />
-                        </UtilityDetails>
-
-                        <UtilityDetails
-                            title='Pending Permissions'
-                            summary={`${String(pendingPermissionCount)} approval request${pendingPermissionCount === 1 ? '' : 's'} waiting.`}
-                            open={pendingPermissionCount > 0}>
-                            <PendingPermissionsPanel
-                                requests={pendingPermissions}
-                                {...(permissionWorkspaces ? { workspaceByFingerprint: permissionWorkspaces } : {})}
-                                busy={isResolvingPermission}
-                                onResolve={onResolvePermission}
-                            />
-                        </UtilityDetails>
-
-                        {diffCheckpointPanel ? (
-                            <UtilityDetails title='Checkpoints' summary='Checkpoint and diff recovery data.'>
-                                {diffCheckpointPanel}
-                            </UtilityDetails>
-                        ) : null}
-                    </div>
                 </div>
             </div>
+
+            {isInspectorOpen ? (
+                <WorkspaceInspector
+                    sections={inspectorSections}
+                    onClose={() => {
+                        setIsInspectorOpen(false);
+                    }}
+                />
+            ) : null}
         </div>
     );
 }
-
