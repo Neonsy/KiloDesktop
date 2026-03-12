@@ -1,4 +1,10 @@
-import type { RunRecord, SessionSummaryRecord, ThreadListRecord } from '@/app/backend/persistence/types';
+import type {
+    MessagePartRecord,
+    MessageRecord,
+    RunRecord,
+    SessionSummaryRecord,
+    ThreadListRecord,
+} from '@/app/backend/persistence/types';
 import type {
     ComposerImageAttachmentInput,
     EntityId,
@@ -116,6 +122,10 @@ export type StartRunResult =
           runStatus: RunStatus;
           run: RunRecord;
           session: SessionSummaryRecord;
+          initialMessages: {
+              messages: MessageRecord[];
+              messageParts: MessagePartRecord[];
+          };
           thread?: ThreadListRecord;
           resolvedContextState: ResolvedContextState;
       };

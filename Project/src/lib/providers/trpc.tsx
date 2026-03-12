@@ -1,4 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query';
+import { log } from 'evlog';
 import { useEffect } from 'react';
 
 import { queryClient, trpcClient } from '@/web/lib/providers/trpcCore';
@@ -83,10 +84,19 @@ function RuntimeEventStreamBootstrap(): ReactNode {
                         return;
                     }
 
+                    log.warn({
+                        tag: 'runtime.stream',
+                        message: 'Received invalid runtime event payload.',
+                    });
                     setError('Received invalid runtime event payload.');
                 },
                 onError: (error) => {
                     const message = error instanceof Error ? error.message : String(error);
+                    log.warn({
+                        tag: 'runtime.stream',
+                        message: 'Runtime event stream subscription failed.',
+                        error: message,
+                    });
                     setError(message);
                 },
             }

@@ -63,7 +63,11 @@ export function applyConversationSessionCacheUpdate(input: {
     session: SessionSummaryRecord;
     run?: RunRecord;
     thread?: ThreadListRecord;
-    seedEmptyMessagesForRun?: EntityId<'run'>;
+    initialMessagesForRun?: {
+        runId: EntityId<'run'>;
+        messages: MessageRecord[];
+        messageParts: MessagePartRecord[];
+    };
 }) {
     const nextRun = input.run;
     const nextThread = input.thread;
@@ -100,21 +104,17 @@ export function applyConversationSessionCacheUpdate(input: {
         );
     }
 
-    if (input.seedEmptyMessagesForRun) {
+    if (input.initialMessagesForRun) {
+        const initialMessagesForRun = input.initialMessagesForRun;
         input.utils.session.listMessages.setData(
             {
                 profileId: input.profileId,
                 sessionId: input.session.id,
-                runId: input.seedEmptyMessagesForRun,
+                runId: initialMessagesForRun.runId,
             },
-            (
-                current: SessionMessagesData | undefined
-            ): {
-                messages: MessageRecord[];
-                messageParts: MessagePartRecord[];
-            } => ({
-                messages: current?.messages ?? [],
-                messageParts: current?.messageParts ?? [],
+            (): SessionMessagesData => ({
+                messages: initialMessagesForRun.messages,
+                messageParts: initialMessagesForRun.messageParts,
             })
         );
     }

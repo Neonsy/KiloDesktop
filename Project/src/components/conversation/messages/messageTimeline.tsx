@@ -9,12 +9,37 @@ import { ImageLightboxModal } from '@/web/components/conversation/panels/imageLi
 import { Button } from '@/web/components/ui/button';
 import { copyText } from '@/web/lib/copy';
 
+import type { RunRecord } from '@/app/backend/persistence/types';
+
 interface MessageTimelineItemProps {
     profileId: string;
     entry: MessageTimelineEntry;
+    runStatus?: RunRecord['status'];
+    runErrorMessage?: string;
     canBranch: boolean;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
+}
+
+function describeAssistantPlaceholder(input: {
+    runStatus: MessageTimelineItemProps['runStatus'];
+    runErrorMessage: string | undefined;
+}): string {
+    if (input.runStatus === 'error') {
+        return input.runErrorMessage?.trim().length
+            ? `Run failed before any assistant output was recorded. ${input.runErrorMessage}`
+            : 'Run failed before any assistant output was recorded.';
+    }
+
+    if (input.runStatus === 'aborted') {
+        return 'Run was aborted before any assistant output was recorded.';
+    }
+
+    if (input.runStatus === 'completed') {
+        return 'Run completed without any renderable assistant output.';
+    }
+
+    return 'Assistant is responding…';
 }
 
 function TimelineImagePart({
@@ -138,6 +163,8 @@ export function MessageTimelineEmptyState() {
 export function MessageTimelineItem({
     profileId,
     entry,
+    runStatus,
+    runErrorMessage,
     canBranch,
     onEditMessage,
     onBranchFromMessage,
@@ -234,6 +261,8 @@ export function MessageTimelineItem({
                             )}
                         </div>
                     ))
+                ) : entry.role === 'assistant' ? (
+                    <p className='text-muted-foreground text-sm'>{describeAssistantPlaceholder({ runStatus, runErrorMessage })}</p>
                 ) : (
                     <p className='text-muted-foreground'>No renderable message payload.</p>
                 )}

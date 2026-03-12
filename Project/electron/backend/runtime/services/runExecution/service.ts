@@ -1,4 +1,4 @@
-import { runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
+import { messageStore, runStore, sessionStore, threadStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeTransportSelection } from '@/app/backend/providers/types';
 import type { EntityId } from '@/app/backend/runtime/contracts';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
@@ -210,7 +210,7 @@ export class RunExecutionService {
             ),
         });
 
-        const [run, sessionStatus, thread, resolvedContextStateResult] = await Promise.all([
+        const [run, sessionStatus, thread, resolvedContextStateResult, initialMessages, initialMessageParts] = await Promise.all([
             runStore.getById(persisted.run.id),
             sessionStore.status(input.profileId, input.sessionId),
             threadStore.getListRecordById(input.profileId, sessionThread.thread.id),
@@ -223,6 +223,8 @@ export class RunExecutionService {
                 modeKey: input.modeKey,
                 ...(input.workspaceFingerprint ? { workspaceFingerprint: input.workspaceFingerprint } : {}),
             }),
+            messageStore.listMessagesBySession(input.profileId, input.sessionId, persisted.run.id),
+            messageStore.listPartsBySession(input.profileId, input.sessionId, persisted.run.id),
         ]);
 
         if (!run || !sessionStatus.found) {
@@ -246,6 +248,10 @@ export class RunExecutionService {
             runStatus: 'running',
             run,
             session: sessionStatus.session,
+            initialMessages: {
+                messages: initialMessages,
+                messageParts: initialMessageParts,
+            },
             resolvedContextState,
             ...(thread ? { thread } : {}),
         };

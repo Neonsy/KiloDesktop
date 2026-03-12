@@ -72,11 +72,13 @@ export function ConversationShell({
         await mutations.setEditPreferenceMutation.mutateAsync(input);
     };
     const streamState = useRuntimeEventStreamStore((state) => state.connectionState);
+    const streamErrorMessage = useRuntimeEventStreamStore((state) => state.lastError);
     const requestedSessionId = uiState.selectedSessionId;
     const applySessionWorkspaceUpdate = useEffectEvent((input: {
         session: SessionSummaryRecord;
         run?: RunRecord;
         thread?: ThreadListRecord;
+        initialMessagesForRun?: AcceptedRunStartResult['initialMessages'];
     }) => {
         if (!isEntityId(input.session.id, 'sess')) {
             return;
@@ -89,7 +91,15 @@ export function ConversationShell({
             session: input.session,
             ...(input.run ? { run: input.run } : {}),
             ...(input.thread ? { thread: input.thread } : {}),
-            ...(input.run ? { seedEmptyMessagesForRun: input.run.id } : {}),
+            ...(input.run && input.initialMessagesForRun
+                ? {
+                      initialMessagesForRun: {
+                          runId: input.run.id,
+                          messages: input.initialMessagesForRun.messages,
+                          messageParts: input.initialMessagesForRun.messageParts,
+                      },
+                  }
+                : {}),
         });
     });
     const applyPlanWorkspaceUpdate = useEffectEvent((result: { found: false } | { found: true; plan: PlanRecordView }) => {
@@ -238,6 +248,7 @@ export function ConversationShell({
             applySessionWorkspaceUpdate({
                 session: acceptedRun.session,
                 run: acceptedRun.run,
+                initialMessagesForRun: acceptedRun.initialMessages,
                 ...(acceptedRun.thread ? { thread: acceptedRun.thread } : {}),
             });
             setResolvedContextStateCache({
@@ -404,6 +415,52 @@ export function ConversationShell({
         });
     }, [profileId, shellViewModel.selectedThread?.workspaceFingerprint, topLevelTab, utils.worktree.list]);
 
+    const refetchSelectedConversationState = useEffectEvent(() => {
+        if (!hasSelectedSession) {
+            return;
+        }
+
+        const activeRunId = isEntityId(selectedRunId, 'run')
+            ? selectedRunId
+            : shellViewModel.sessionRunSelection.runs.at(0)?.id;
+
+        void utils.session.status.fetch({
+            profileId,
+            sessionId: selectedSessionId,
+        });
+        void utils.session.listRuns.fetch({
+            profileId,
+            sessionId: selectedSessionId,
+        });
+        void utils.session.listMessages.fetch({
+            profileId,
+            sessionId: selectedSessionId,
+            ...(activeRunId ? { runId: activeRunId } : {}),
+        });
+
+        if (activeRunId) {
+            void utils.diff.listByRun.fetch({
+                profileId,
+                runId: activeRunId,
+            });
+        }
+    });
+
+    useEffect(() => {
+        if (streamState !== 'error' || !hasSelectedSession) {
+            return;
+        }
+
+        refetchSelectedConversationState();
+        const intervalHandle = window.setInterval(() => {
+            refetchSelectedConversationState();
+        }, 1500);
+
+        return () => {
+            window.clearInterval(intervalHandle);
+        };
+    }, [hasSelectedSession, refetchSelectedConversationState, streamState]);
+
     useEffect(() => {
         onBootChromeReadyChange?.({
             shellBootstrapSettled: !queries.shellBootstrapQuery.isPending,
@@ -517,7 +574,7 @@ export function ConversationShell({
                 sort={uiState.sort ?? 'latest'}
                 showAllModes={uiState.showAllModes}
                 groupView={uiState.groupView}
-                isCreatingThread={mutations.createThreadMutation.isPending}
+                isCreatingThread={mutations.createThreadMutation.isPending || mutations.createSessionMutation.isPending}
                 isAddingTag={mutations.upsertTagMutation.isPending || mutations.setThreadTagsMutation.isPending}
                 isDeletingWorkspaceThreads={mutations.deleteWorkspaceThreadsMutation.isPending}
                 {...(sidebarStatusMessage
@@ -538,6 +595,7 @@ export function ConversationShell({
                 onShowAllModesChange={uiState.setShowAllModes}
                 onGroupViewChange={uiState.setGroupView}
                 createThread={mutations.createThreadMutation.mutateAsync}
+                createSession={mutations.createSessionMutation.mutateAsync}
                 upsertTag={mutations.upsertTagMutation.mutateAsync}
                 setThreadTags={mutations.setThreadTagsMutation.mutateAsync}
                 setThreadFavorite={mutations.setThreadFavoriteMutation.mutateAsync}
@@ -550,6 +608,7 @@ export function ConversationShell({
                 selectedSessionId={selectedSessionId}
                 selectedRunId={selectedRunId}
                 streamState={streamState}
+                streamErrorMessage={streamErrorMessage}
                 lastSequence={queries.shellBootstrapQuery.data?.lastSequence ?? 0}
                 tabSwitchNotice={tabSwitchNotice}
                 sessions={shellViewModel.sessionRunSelection.sessions}

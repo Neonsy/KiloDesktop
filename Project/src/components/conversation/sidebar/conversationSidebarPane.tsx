@@ -1,5 +1,6 @@
 import { startTransition, useState, useTransition } from 'react';
 
+import { applyConversationSessionCacheUpdate } from '@/web/components/conversation/shell/conversationShellCache';
 import { isEntityId } from '@/web/components/conversation/shell/workspace/helpers';
 import { resolveTabSwitchNotice } from '@/web/components/conversation/shell/workspace/tabSwitch';
 import { ConversationSidebar } from '@/web/components/conversation/sidebar/sidebar';
@@ -60,6 +61,18 @@ interface ConversationSidebarPaneProps {
         workspacePath?: string;
         title: string;
     }) => Promise<{ bucket: ConversationRecord; thread: ThreadRecord }>;
+    createSession: (input: {
+        profileId: string;
+        threadId: EntityId<'thr'>;
+        kind: 'local';
+    }) => Promise<
+        | { created: false; reason: string }
+        | {
+              created: true;
+              session: SessionSummaryRecord;
+              thread?: ThreadListRecord;
+          }
+    >;
     upsertTag: (input: { profileId: string; label: string }) => Promise<{ tag: TagRecord }>;
     setThreadTags: (input: {
         profileId: string;
@@ -116,6 +129,7 @@ export function ConversationSidebarPane({
     onShowAllModesChange,
     onGroupViewChange,
     createThread,
+    createSession,
     upsertTag,
     setThreadTags,
     setThreadFavorite,
@@ -316,6 +330,7 @@ export function ConversationSidebarPane({
                     });
                 }}
                 onCreateThread={async (input) => {
+                    setFeedbackMessage(undefined);
                     const result = await createThread({
                         profileId,
                         topLevelTab,
@@ -341,9 +356,53 @@ export function ConversationSidebarPane({
                             threads: upsertThreadListRecord(current.threads, createdThread, sort),
                         };
                     });
+
+                    if (!isEntityId(result.thread.id, 'thr')) {
+                        onSelectThreadId(result.thread.id);
+                        onSelectSessionId(undefined);
+                        onSelectRunId(undefined);
+                        return;
+                    }
+
                     onSelectThreadId(result.thread.id);
-                    onSelectSessionId(undefined);
                     onSelectRunId(undefined);
+                    try {
+                        const starterSession = await createSession({
+                            profileId,
+                            threadId: result.thread.id,
+                            kind: 'local',
+                        });
+                        if (!starterSession.created) {
+                            onSelectSessionId(undefined);
+                            setFeedbackMessage('The starter session could not be created automatically.');
+                            return;
+                        }
+
+                        utils.session.listRuns.setData(
+                            {
+                                profileId,
+                                sessionId: starterSession.session.id,
+                            },
+                            {
+                                runs: [],
+                            }
+                        );
+                        applyConversationSessionCacheUpdate({
+                            utils,
+                            profileId,
+                            listThreadsInput: threadListQueryInput,
+                            session: starterSession.session,
+                            thread: createdThread,
+                        });
+                        onSelectSessionId(starterSession.session.id);
+                    } catch (error) {
+                        onSelectSessionId(undefined);
+                        setFeedbackMessage(
+                            error instanceof Error
+                                ? error.message
+                                : 'The starter session could not be created automatically.'
+                        );
+                    }
                 }}
                 onAddTagToThread={async (threadId, label) => {
                     if (!isEntityId(threadId, 'thr')) {

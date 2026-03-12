@@ -103,6 +103,8 @@ describe('runtime contracts: conversation and runs', () => {
         if (!firstRun.accepted) {
             throw new Error('Expected first multimodal run to start.');
         }
+        expect(firstRun.initialMessages.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+        expect(firstRun.initialMessages.messageParts.some((part) => part.partType === 'image')).toBe(true);
         await waitForRunStatus(caller, profileId, created.session.id, 'completed');
 
         const firstMessages = await caller.session.listMessages({

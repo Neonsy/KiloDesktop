@@ -151,6 +151,10 @@ describe('submitPrompt', () => {
                 createdAt: '2026-03-10T00:00:00.000Z',
                 updatedAt: '2026-03-10T00:00:00.000Z',
             },
+            initialMessages: {
+                messages: [],
+                messageParts: [],
+            },
         });
         const onPromptCleared = vi.fn();
         const onRunStarted = vi.fn();

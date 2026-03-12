@@ -275,7 +275,7 @@ export function SessionWorkspacePanel({
 }: SessionWorkspacePanelProps) {
     const utils = trpc.useUtils();
     const [isInspectorOpen, setIsInspectorOpen] = useState(false);
-    const latestRun = runs.find((run) => run.id === selectedRunId) ?? runs.at(-1);
+    const latestRun = runs.find((run) => run.id === selectedRunId) ?? runs.at(0);
     const pendingPermissionCount = pendingPermissions.length;
     const isPlanPrimarySurface = Boolean(modePanel) && (topLevelTab === 'orchestrator' || activeModeKey === 'plan');
     const sessionChips = sessions.map((session) => ({
@@ -522,6 +522,7 @@ export function SessionWorkspacePanel({
                                     profileId={profileId}
                                     messages={messages}
                                     partsByMessageId={partsByMessageId}
+                                    {...(latestRun ? { run: latestRun } : {})}
                                     {...(onEditMessage ? { onEditMessage } : {})}
                                     {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
                                 />
@@ -540,6 +541,7 @@ export function SessionWorkspacePanel({
                                     profileId={profileId}
                                     messages={messages}
                                     partsByMessageId={partsByMessageId}
+                                    {...(latestRun ? { run: latestRun } : {})}
                                     {...(onEditMessage ? { onEditMessage } : {})}
                                     {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
                                 />

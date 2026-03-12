@@ -21,6 +21,7 @@ interface ConversationWorkspaceSectionProps {
     selectedSessionId: string | undefined;
     selectedRunId: string | undefined;
     streamState: string;
+    streamErrorMessage?: string | null;
     lastSequence: number;
     tabSwitchNotice: string | undefined;
     sessions: SessionSummaryRecord[];
@@ -157,6 +158,7 @@ export function ConversationWorkspaceSection({
     selectedSessionId,
     selectedRunId,
     streamState,
+    streamErrorMessage,
     lastSequence,
     tabSwitchNotice,
     sessions,
@@ -219,8 +221,14 @@ export function ConversationWorkspaceSection({
             <header className='border-border flex items-center justify-between border-b px-4 py-3'>
                 <div className='min-w-0'>
                     <p className='truncate text-sm font-semibold'>{selectedThread?.title ?? 'No Thread Selected'}</p>
-                    <p className='text-muted-foreground text-xs'>
-                        Stream: {streamState} · Events: {lastSequence}
+                    <p
+                        className={`text-xs ${
+                            streamState === 'error' ? 'text-amber-300' : 'text-muted-foreground'
+                        }`}
+                        title={streamErrorMessage ?? undefined}>
+                        {streamState === 'error'
+                            ? `Live updates degraded · retrying · Events: ${String(lastSequence)}`
+                            : `Live updates: ${streamState} · Events: ${String(lastSequence)}`}
                     </p>
                     {tabSwitchNotice ? <p className='text-primary text-xs'>{tabSwitchNotice}</p> : null}
                 </div>

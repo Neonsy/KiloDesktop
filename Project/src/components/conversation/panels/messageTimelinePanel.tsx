@@ -6,12 +6,13 @@ import { buildTimelineEntries, isWithinBottomThreshold } from '@/web/components/
 import type { MessageTimelineEntry } from '@/web/components/conversation/messages/messageTimelineModel';
 import { Button } from '@/web/components/ui/button';
 
-import type { MessagePartRecord, MessageRecord } from '@/app/backend/persistence/types';
+import type { MessagePartRecord, MessageRecord, RunRecord } from '@/app/backend/persistence/types';
 
 interface MessageTimelinePanelProps {
     profileId: string;
     messages: MessageRecord[];
     partsByMessageId: Map<string, MessagePartRecord[]>;
+    run?: RunRecord;
     onEditMessage?: (entry: MessageTimelineEntry) => void;
     onBranchFromMessage?: (entry: MessageTimelineEntry) => void;
 }
@@ -20,6 +21,7 @@ export function MessageTimelinePanel({
     profileId,
     messages,
     partsByMessageId,
+    run,
     onEditMessage,
     onBranchFromMessage,
 }: MessageTimelinePanelProps) {
@@ -122,6 +124,8 @@ export function MessageTimelinePanel({
                                     <MessageTimelineItem
                                         profileId={profileId}
                                         entry={entry}
+                                        {...(run ? { runStatus: run.status } : {})}
+                                        {...(run?.errorMessage ? { runErrorMessage: run.errorMessage } : {})}
                                         canBranch={Boolean(onBranchFromMessage)}
                                         {...(onEditMessage ? { onEditMessage } : {})}
                                         {...(onBranchFromMessage ? { onBranchFromMessage } : {})}
