@@ -41,10 +41,6 @@ export function resolveSplashAssetUrl(input: {
     isPackaged: boolean;
     resourcesPath?: string;
 }): string {
-    if (!input.isPackaged && input.devServerUrl) {
-        return new URL('src/assets/appicon.png', ensureTrailingSlash(input.devServerUrl)).toString();
-    }
-
     return pathToFileURL(
         resolveSplashAssetPath({
             appPath: input.appPath,

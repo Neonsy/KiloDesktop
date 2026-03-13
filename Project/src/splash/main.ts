@@ -14,7 +14,7 @@ function initializeSplash(): void {
         status: INITIAL_BOOT_STATUS_SNAPSHOT,
     };
     const mascotImage = document.querySelector<HTMLImageElement>('[data-splash-mascot]');
-    if (mascotImage && bootstrapPayload.mascotSource) {
+    if (mascotImage && bootstrapPayload.mascotSource && mascotImage.src !== bootstrapPayload.mascotSource) {
         mascotImage.src = bootstrapPayload.mascotSource;
     }
 

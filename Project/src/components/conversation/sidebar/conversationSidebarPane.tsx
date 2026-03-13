@@ -23,6 +23,12 @@ import type { EntityId, TopLevelTab } from '@/shared/contracts';
 interface ConversationSidebarPaneProps {
     profileId: string;
     topLevelTab: TopLevelTab;
+    workspaceRoots: Array<{
+        fingerprint: string;
+        label: string;
+        absolutePath: string;
+    }>;
+    preferredWorkspaceFingerprint?: string;
     buckets: ConversationRecord[];
     threads: ThreadListRecord[];
     sessions: SessionSummaryRecord[];
@@ -97,6 +103,8 @@ interface ConversationSidebarPaneProps {
 export function ConversationSidebarPane({
     profileId,
     topLevelTab,
+    workspaceRoots,
+    preferredWorkspaceFingerprint,
     buckets,
     threads,
     sessions,
@@ -153,6 +161,8 @@ export function ConversationSidebarPane({
                 tags={tags}
                 threadTagIdsByThread={threadTagIdsByThread}
                 topLevelTab={topLevelTab}
+                workspaceRoots={workspaceRoots}
+                {...(preferredWorkspaceFingerprint ? { preferredWorkspaceFingerprint } : {})}
                 {...(selectedThreadId ? { selectedThreadId } : {})}
                 selectedTagIds={selectedTagIds}
                 scopeFilter={scopeFilter}
@@ -164,12 +174,6 @@ export function ConversationSidebarPane({
                 isAddingTag={isAddingTag}
                 isDeletingWorkspaceThreads={isDeletingWorkspaceThreads}
                 {...(statusMessage ? { statusMessage, statusTone } : {})}
-                onTopLevelTabChange={(nextTab) => {
-                    startTransition(() => {
-                        onSetTabSwitchNotice(undefined);
-                        onTopLevelTabChange(nextTab);
-                    });
-                }}
                 onSelectThread={(threadId) => {
                     startSelectionTransition(() => {
                         const targetThread = threads.find((thread) => thread.id === threadId);

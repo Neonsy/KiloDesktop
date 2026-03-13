@@ -1,6 +1,5 @@
 import { useProfileSettingsController } from '@/web/components/settings/profileSettings/useProfileSettingsController';
 import { ProfileCreateSection } from '@/web/components/settings/profileSettings/profileCreateSection';
-import { ProfileDangerSection } from '@/web/components/settings/profileSettings/profileDangerSection';
 import { ProfileSelectedSection } from '@/web/components/settings/profileSettings/profileSelectedSection';
 import { SettingsFeedbackBanner } from '@/web/components/settings/shared/settingsFeedbackBanner';
 import { SettingsSelectionRail } from '@/web/components/settings/shared/settingsSelectionRail';
@@ -57,15 +56,6 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                         message={controller.feedbackMessage}
                         tone={controller.feedbackTone}
                     />
-                    <ProfileCreateSection
-                        value={controller.newProfileName}
-                        isPending={controller.createMutation.isPending}
-                        onValueChange={controller.setNewProfileName}
-                        onCreate={() => {
-                            void controller.createProfile();
-                        }}
-                    />
-
                     {controller.selectedProfile ? (
                         <ProfileSelectedSection
                             activeProfileId={activeProfileId}
@@ -112,10 +102,12 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                         />
                     ) : null}
 
-                    <ProfileDangerSection
-                        isPending={controller.factoryResetMutation.isPending}
-                        onOpenFactoryReset={() => {
-                            controller.setConfirmFactoryResetOpen(true);
+                    <ProfileCreateSection
+                        value={controller.newProfileName}
+                        isPending={controller.createMutation.isPending}
+                        onValueChange={controller.setNewProfileName}
+                        onCreate={() => {
+                            void controller.createProfile();
                         }}
                     />
 
@@ -136,39 +128,6 @@ export function ProfileSettingsView({ activeProfileId, onProfileActivated }: Pro
                     void controller.deleteProfile();
                 }}
             />
-            <ConfirmDialog
-                open={controller.confirmFactoryResetOpen}
-                title='Factory Reset App Data'
-                message='This removes all app-owned data and recreates a fresh default profile. Type the confirmation phrase to continue.'
-                confirmLabel='Reset app data'
-                destructive
-                busy={controller.factoryResetMutation.isPending}
-                confirmDisabled={
-                    controller.factoryResetConfirmationText !== controller.factoryResetConfirmationPhrase
-                }
-                onCancel={() => {
-                    controller.setConfirmFactoryResetOpen(false);
-                    controller.setFactoryResetConfirmationText('');
-                }}
-                onConfirm={() => {
-                    void controller.factoryResetAppData();
-                }}>
-                <div className='space-y-2'>
-                    <p className='text-muted-foreground text-xs'>
-                        Enter <span className='font-semibold'>{controller.factoryResetConfirmationPhrase}</span> to
-                        confirm.
-                    </p>
-                    <input
-                        type='text'
-                        value={controller.factoryResetConfirmationText}
-                        onChange={(event) => {
-                            controller.setFactoryResetConfirmationText(event.target.value);
-                        }}
-                        className='border-border bg-background h-9 w-full rounded-md border px-2 text-sm'
-                        placeholder={controller.factoryResetConfirmationPhrase}
-                    />
-                </div>
-            </ConfirmDialog>
         </section>
     );
 }

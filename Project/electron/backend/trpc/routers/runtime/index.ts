@@ -1,8 +1,10 @@
 import type { RuntimeEventRecordV1 } from '@/app/backend/persistence/types';
+import { workspaceRootStore } from '@/app/backend/persistence/stores';
 import {
     profileInputSchema,
     runtimeFactoryResetInputSchema,
     runtimeEventsSubscriptionInputSchema,
+    runtimeRegisterWorkspaceRootInputSchema,
     runtimeResetInputSchema,
 } from '@/app/backend/runtime/contracts';
 import { runtimeEventBus } from '@/app/backend/runtime/services/runtimeEventBus';
@@ -55,6 +57,17 @@ export const runtimeRouter = router({
         const shellBootstrap = await runtimeShellBootstrapService.getShellBootstrap(input.profileId);
         return {
             workspaceRoots: shellBootstrap.workspaceRoots,
+        };
+    }),
+    registerWorkspaceRoot: publicProcedure.input(runtimeRegisterWorkspaceRootInputSchema).mutation(async ({ input }) => {
+        const workspaceRoot = await workspaceRootStore.resolveOrCreate(
+            input.profileId,
+            input.absolutePath,
+            input.label
+        );
+
+        return {
+            workspaceRoot,
         };
     }),
     subscribeEvents: publicProcedure.input(runtimeEventsSubscriptionInputSchema).subscription(async function* ({

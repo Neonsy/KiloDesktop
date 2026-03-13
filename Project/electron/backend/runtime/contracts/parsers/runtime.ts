@@ -12,6 +12,7 @@ import type {
     ContextBudgetInput,
     RuntimeFactoryResetInput,
     RuntimeEventsSubscriptionInput,
+    RuntimeRegisterWorkspaceRootInput,
     RuntimeResetInput,
     WindowStateSubscriptionInput,
 } from '@/app/backend/runtime/contracts/types';
@@ -109,8 +110,30 @@ export function parseContextBudgetInput(input: unknown): ContextBudgetInput {
     };
 }
 
+export function parseRuntimeRegisterWorkspaceRootInput(input: unknown): RuntimeRegisterWorkspaceRootInput {
+    const source = readObject(input, 'input');
+    const profileId = readOptionalString(source.profileId, 'profileId');
+    const absolutePath = readOptionalString(source.absolutePath, 'absolutePath');
+    const label = readOptionalString(source.label, 'label');
+
+    if (!profileId || profileId.trim().length === 0) {
+        throw new Error('Invalid "profileId": expected non-empty string.');
+    }
+
+    if (!absolutePath || absolutePath.trim().length === 0) {
+        throw new Error('Invalid "absolutePath": expected non-empty string.');
+    }
+
+    return {
+        profileId: profileId.trim(),
+        absolutePath: absolutePath.trim(),
+        ...(label?.trim().length ? { label: label.trim() } : {}),
+    };
+}
+
 export const runtimeEventsSubscriptionInputSchema = createParser(parseRuntimeEventsSubscriptionInput);
 export const windowStateSubscriptionInputSchema = createParser(parseWindowStateSubscriptionInput);
 export const runtimeResetInputSchema = createParser(parseRuntimeResetInput);
 export const runtimeFactoryResetInputSchema = createParser(parseRuntimeFactoryResetInput);
 export const contextBudgetInputSchema = createParser(parseContextBudgetInput);
+export const runtimeRegisterWorkspaceRootInputSchema = createParser(parseRuntimeRegisterWorkspaceRootInput);

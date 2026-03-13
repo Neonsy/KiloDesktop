@@ -19,6 +19,11 @@ function toWorkspaceLabel(absolutePath: string): string {
     return baseName.length > 0 ? baseName : absolutePath;
 }
 
+function resolveWorkspaceLabel(absolutePath: string, labelOverride?: string): string {
+    const trimmedLabel = labelOverride?.trim();
+    return trimmedLabel && trimmedLabel.length > 0 ? trimmedLabel : toWorkspaceLabel(absolutePath);
+}
+
 function mapWorkspaceRootRecord(row: {
     fingerprint: string;
     profile_id: string;
@@ -63,11 +68,12 @@ export class WorkspaceRootStore {
         return row ? mapWorkspaceRootRecord(row) : null;
     }
 
-    async resolveOrCreate(profileId: string, workspacePath: string): Promise<WorkspaceRootRecord> {
+    async resolveOrCreate(profileId: string, workspacePath: string, labelOverride?: string): Promise<WorkspaceRootRecord> {
         const { db } = getPersistence();
         const absolutePath = canonicalizeWorkspacePath(workspacePath);
         const pathKey = toPathKey(absolutePath);
         const now = nowIso();
+        const label = resolveWorkspaceLabel(absolutePath, labelOverride);
 
         const existing = await db
             .selectFrom('workspace_roots')
@@ -80,7 +86,7 @@ export class WorkspaceRootStore {
                 .updateTable('workspace_roots')
                 .set({
                     absolute_path: absolutePath,
-                    label: toWorkspaceLabel(absolutePath),
+                    label,
                     updated_at: now,
                 })
                 .where('profile_id', '=', profileId)
@@ -101,7 +107,7 @@ export class WorkspaceRootStore {
                 profile_id: profileId,
                 absolute_path: absolutePath,
                 path_key: pathKey,
-                label: toWorkspaceLabel(absolutePath),
+                label,
                 created_at: now,
                 updated_at: now,
             })

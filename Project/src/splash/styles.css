@@ -28,15 +28,6 @@ body {
     color: var(--text);
 }
 
-body::before {
-    content: '';
-    position: fixed;
-    inset: 16px;
-    border-radius: 32px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    pointer-events: none;
-}
-
 .splash-shell {
     width: min(360px, calc(100vw - 48px));
     padding: 38px 30px 30px;

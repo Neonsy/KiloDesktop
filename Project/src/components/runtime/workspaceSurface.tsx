@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 
 import { ConversationShell } from '@/web/components/conversation/shell';
 import {
@@ -6,14 +6,16 @@ import {
     getWorkspaceBootDiagnostics,
     isWorkspaceBootReady,
 } from '@/web/components/runtime/bootReadiness';
+import { WorkspaceAppRail } from '@/web/components/runtime/workspaceAppRail';
+import { WorkspaceCommandPalette } from '@/web/components/runtime/workspaceCommandPalette';
 import { useRendererBootReadySignal } from '@/web/components/runtime/useRendererBootReadySignal';
 import { useRendererBootStatusReporter } from '@/web/components/runtime/useRendererBootStatusReporter';
 import { useWorkspaceBootPrefetch } from '@/web/components/runtime/useWorkspaceBootPrefetch';
 import { WorkspaceBootDiagnosticsPanel } from '@/web/components/runtime/workspaceBootDiagnosticsPanel';
 import { useWorkspaceSurfaceController } from '@/web/components/runtime/workspaceSurfaceController';
 import { WorkspaceSurfaceHeader } from '@/web/components/runtime/workspaceSurfaceHeader';
-import { prefetchSettingsData } from '@/web/components/settings/settingsPrefetch';
-import { SettingsSheet } from '@/web/components/settings/settingsSheet';
+import { SettingsWorkspace } from '@/web/components/settings/settingsWorkspace';
+import { WorkspacesSurface } from '@/web/components/workspaces/workspacesSurface';
 import { trpc } from '@/web/trpc/client';
 
 import { BOOT_FORCE_SHOW_MS } from '@/app/shared/splashContract';
@@ -53,6 +55,9 @@ export function WorkspaceSurface() {
     const showBootDiagnostics =
         bootDiagnostics.hasCriticalError ||
         (readySignal.readySignalState !== 'sent' && bootElapsedMs >= BOOT_FORCE_SHOW_MS);
+    const openCommandPalette = useEffectEvent(() => {
+        controller.setIsCommandPaletteOpen(true);
+    });
 
     useRendererBootStatusReporter(bootDiagnostics.status);
 
@@ -72,63 +77,126 @@ export function WorkspaceSurface() {
         };
     }, [bootStartedAtMs, readySignal.readySignalState]);
 
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key.toLowerCase() !== 'k' || (!event.metaKey && !event.ctrlKey)) {
+                return;
+            }
+
+            const target = event.target;
+            if (
+                target instanceof HTMLElement &&
+                (target.tagName === 'INPUT' ||
+                    target.tagName === 'TEXTAREA' ||
+                    target.tagName === 'SELECT' ||
+                    target.isContentEditable)
+            ) {
+                return;
+            }
+
+            event.preventDefault();
+            openCommandPalette();
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [openCommandPalette]);
+
     return (
         <section className='flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden'>
             {showBootDiagnostics ? <WorkspaceBootDiagnosticsPanel status={bootDiagnostics.status} /> : null}
             <WorkspaceSurfaceHeader
+                appSection={controller.appSection}
                 profiles={controller.profiles}
                 resolvedProfileId={controller.resolvedProfileId}
                 isSwitchingProfile={controller.profileSetActiveMutation.isPending}
+                workspaceOptions={controller.workspaceRoots.map((workspaceRoot) => ({
+                    fingerprint: workspaceRoot.fingerprint,
+                    label: workspaceRoot.label,
+                }))}
+                selectedWorkspaceFingerprint={controller.currentWorkspaceFingerprint}
                 onProfileChange={(profileId) => {
                     void controller.selectProfile(profileId);
                 }}
-                onOpenSettings={() => {
-                    if (controller.resolvedProfileId) {
-                        prefetchSettingsData({
-                            profileId: controller.resolvedProfileId,
-                            trpcUtils: utils,
-                        });
-                    }
-                    startTransition(() => {
-                        controller.setShowSettings(true);
-                    });
+                onWorkspaceChange={controller.setCurrentWorkspaceFingerprint}
+                onOpenCommandPalette={() => {
+                    openCommandPalette();
                 }}
             />
 
-            <div className='min-h-0 min-w-0 flex-1 overflow-hidden'>
-                {controller.resolvedProfileId ? (
-                    <ConversationShell
-                        key={controller.resolvedProfileId}
-                        profileId={controller.resolvedProfileId}
-                        topLevelTab={controller.topLevelTab}
-                        modeKey={controller.activeModeKey}
-                        modes={controller.modes}
-                        onModeChange={(modeKey) => {
-                            void controller.selectMode(modeKey);
-                        }}
-                        onTopLevelTabChange={controller.setTopLevelTab}
-                        onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
-                        onBootChromeReadyChange={setConversationShellBootReadiness}
-                    />
-                ) : (
-                    <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
-                        Loading profile state...
-                    </div>
-                )}
+            <div className='bg-background flex min-h-0 min-w-0 flex-1 overflow-hidden'>
+                <WorkspaceAppRail appSection={controller.appSection} onSectionChange={controller.setAppSection} />
+
+                <div className='min-h-0 min-w-0 flex-1 overflow-hidden'>
+                    {controller.resolvedProfileId ? (
+                        <>
+                            {controller.appSection === 'sessions' ? (
+                                <ConversationShell
+                                    key={controller.resolvedProfileId}
+                                    profileId={controller.resolvedProfileId}
+                                    topLevelTab={controller.topLevelTab}
+                                    {...(controller.currentWorkspaceFingerprint
+                                        ? { selectedWorkspaceFingerprint: controller.currentWorkspaceFingerprint }
+                                        : {})}
+                                    modeKey={controller.activeModeKey}
+                                    modes={controller.modes}
+                                    onModeChange={(modeKey) => {
+                                        void controller.selectMode(modeKey);
+                                    }}
+                                    onTopLevelTabChange={controller.setTopLevelTab}
+                                    onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
+                                    onBootChromeReadyChange={setConversationShellBootReadiness}
+                                />
+                            ) : null}
+
+                            {controller.appSection === 'workspaces' ? (
+                                <WorkspacesSurface
+                                    profileId={controller.resolvedProfileId}
+                                    workspaceRoots={controller.workspaceRoots}
+                                    selectedWorkspaceFingerprint={controller.currentWorkspaceFingerprint}
+                                    onSelectedWorkspaceFingerprintChange={controller.setCurrentWorkspaceFingerprint}
+                                    onOpenSessions={() => {
+                                        controller.setAppSection('sessions');
+                                    }}
+                                />
+                            ) : null}
+
+                            {controller.appSection === 'settings' ? (
+                                <SettingsWorkspace
+                                    profileId={controller.resolvedProfileId}
+                                    onProfileActivated={(profileId) => {
+                                        controller.setResolvedProfile(profileId);
+                                    }}
+                                />
+                            ) : null}
+                        </>
+                    ) : (
+                        <div className='text-muted-foreground flex h-full items-center justify-center text-sm'>
+                            Loading profile state...
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {controller.resolvedProfileId ? (
-                <SettingsSheet
-                    open={controller.showSettings}
-                    profileId={controller.resolvedProfileId}
-                    onClose={() => {
-                        controller.setShowSettings(false);
-                    }}
-                    onProfileActivated={(profileId) => {
-                        controller.setResolvedProfile(profileId);
-                    }}
-                />
-            ) : null}
+            <WorkspaceCommandPalette
+                open={controller.isCommandPaletteOpen}
+                appSection={controller.appSection}
+                profiles={controller.profiles}
+                workspaceOptions={controller.workspaceRoots.map((workspaceRoot) => ({
+                    fingerprint: workspaceRoot.fingerprint,
+                    label: workspaceRoot.label,
+                }))}
+                onClose={() => {
+                    controller.setIsCommandPaletteOpen(false);
+                }}
+                onSectionChange={controller.setAppSection}
+                onProfileChange={(profileId) => {
+                    void controller.selectProfile(profileId);
+                }}
+                onWorkspaceChange={controller.setCurrentWorkspaceFingerprint}
+            />
         </section>
     );
 }

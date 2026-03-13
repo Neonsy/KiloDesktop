@@ -39,7 +39,7 @@ describe('splash preload bridge', () => {
     });
 
     it('exposes bootstrap payload and an onStatusChange bridge that replays the latest boot status', async () => {
-        process.argv.push('--neon-splash-mascot-source=https%3A%2F%2Flocalhost%3A5173%2Fsrc%2Fassets%2Fappicon.png');
+        process.argv.push('--neon-splash-mascot-source=file%3A%2F%2F%2FC%3A%2Frepo%2FProject%2Fsrc%2Fassets%2Fappicon.png');
 
         await import('@/app/main/preload/splash');
 
@@ -53,7 +53,7 @@ describe('splash preload bridge', () => {
         };
 
         expect(splashBridge.getBootstrapPayload()).toMatchObject({
-            mascotSource: 'https://localhost:5173/src/assets/appicon.png',
+            mascotSource: 'file:///C:/repo/Project/src/assets/appicon.png',
             status: expect.objectContaining({
                 stage: 'main_initializing',
             }),

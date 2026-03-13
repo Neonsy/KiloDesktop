@@ -57,6 +57,14 @@ describe('conversation sidebar layout', () => {
                 tags={tags}
                 threadTagIdsByThread={new Map([['thr_root', ['tag_ui']]])}
                 topLevelTab='chat'
+                workspaceRoots={[
+                    {
+                        fingerprint: 'ws_alpha',
+                        label: 'Workspace Alpha',
+                        absolutePath: 'C:\\Alpha',
+                    },
+                ]}
+                preferredWorkspaceFingerprint='ws_alpha'
                 selectedTagIds={[]}
                 scopeFilter='all'
                 sort='latest'
@@ -65,7 +73,6 @@ describe('conversation sidebar layout', () => {
                 isCreatingThread={false}
                 isAddingTag={false}
                 isDeletingWorkspaceThreads={false}
-                onTopLevelTabChange={vi.fn()}
                 onSelectThread={vi.fn()}
                 onToggleTagFilter={vi.fn()}
                 onToggleThreadFavorite={vi.fn(async () => {})}
@@ -80,9 +87,6 @@ describe('conversation sidebar layout', () => {
             />
         );
 
-        expect(html).toContain('Chat');
-        expect(html).toContain('Agent');
-        expect(html).toContain('Orchestrator');
         expect(html).toContain('Search threads, workspaces, or tabs');
         expect(html).toContain('Filters');
         expect(html).toContain('New');

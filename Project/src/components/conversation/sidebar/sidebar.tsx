@@ -18,6 +18,12 @@ interface ConversationSidebarProps {
     tags: TagRecord[];
     threadTagIdsByThread: Map<string, string[]>;
     topLevelTab: TopLevelTab;
+    workspaceRoots: Array<{
+        fingerprint: string;
+        label: string;
+        absolutePath: string;
+    }>;
+    preferredWorkspaceFingerprint?: string;
     selectedThreadId?: string;
     selectedTagIds: string[];
     scopeFilter: 'all' | 'workspace' | 'detached';
@@ -30,7 +36,6 @@ interface ConversationSidebarProps {
     isDeletingWorkspaceThreads: boolean;
     statusMessage?: string;
     statusTone?: 'info' | 'error';
-    onTopLevelTabChange: (topLevelTab: TopLevelTab) => void;
     onSelectThread: (threadId: string) => void;
     onPreviewThread?: (threadId: string) => void;
     onToggleTagFilter: (tagId: string) => void;
@@ -64,6 +69,8 @@ export function ConversationSidebar({
     tags,
     threadTagIdsByThread,
     topLevelTab,
+    workspaceRoots,
+    preferredWorkspaceFingerprint,
     selectedThreadId,
     selectedTagIds,
     scopeFilter,
@@ -76,7 +83,6 @@ export function ConversationSidebar({
     isDeletingWorkspaceThreads,
     statusMessage,
     statusTone = 'info',
-    onTopLevelTabChange,
     onSelectThread,
     onPreviewThread,
     onToggleTagFilter,
@@ -115,13 +121,15 @@ export function ConversationSidebar({
         <>
             <aside className='border-border/70 bg-card/40 flex min-h-0 w-[272px] flex-col border-r xl:w-[288px]'>
                 <SidebarRailHeader
-                    topLevelTab={topLevelTab}
                     {...(feedbackMessage ? { feedbackMessage } : {})}
                     {...(statusMessage ? { statusMessage, statusTone } : {})}
-                    onTopLevelTabChange={onTopLevelTabChange}
                     threadComposerAction={
                         <SidebarThreadComposer
                             topLevelTab={topLevelTab}
+                            workspaceRoots={workspaceRoots}
+                            {...(preferredWorkspaceFingerprint
+                                ? { preferredWorkspaceFingerprint }
+                                : {})}
                             isCreatingThread={isCreatingThread}
                             onCreateThread={async (input) => {
                                 setFeedbackMessage(undefined);

@@ -1,5 +1,7 @@
 import type { TopLevelTab } from '@/shared/contracts';
 
+export type WorkspaceAppSection = 'sessions' | 'workspaces' | 'settings';
+
 export const FALLBACK_MODE_BY_TAB: Record<TopLevelTab, string> = {
     chat: 'chat',
     agent: 'code',

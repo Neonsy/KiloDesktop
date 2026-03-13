@@ -2,12 +2,16 @@ import { useState } from 'react';
 
 import { useWorkspaceModeState } from '@/web/components/runtime/useWorkspaceModeState';
 import { useWorkspaceProfileState } from '@/web/components/runtime/useWorkspaceProfileState';
+import { BOOT_CRITICAL_QUERY_OPTIONS } from '@/web/components/runtime/startupQueryOptions';
+import { trpc } from '@/web/trpc/client';
 
 import type { TopLevelTab } from '@/shared/contracts';
+import type { WorkspaceAppSection } from '@/web/components/runtime/workspaceSurfaceModel';
 
 export function useWorkspaceSurfaceController() {
     const [topLevelTab, setTopLevelTab] = useState<TopLevelTab>('chat');
-    const [showSettings, setShowSettings] = useState(false);
+    const [appSection, setAppSection] = useState<WorkspaceAppSection>('sessions');
+    const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
     const [currentWorkspaceFingerprint, setCurrentWorkspaceFingerprint] = useState<string | undefined>(undefined);
 
     const profileState = useWorkspaceProfileState({
@@ -18,6 +22,21 @@ export function useWorkspaceSurfaceController() {
         topLevelTab,
         ...(currentWorkspaceFingerprint ? { workspaceFingerprint: currentWorkspaceFingerprint } : {}),
     });
+    const workspaceRootsQuery = trpc.runtime.listWorkspaceRoots.useQuery(
+        { profileId: profileState.resolvedProfileId ?? 'profile_missing' },
+        {
+            enabled: Boolean(profileState.resolvedProfileId),
+            ...BOOT_CRITICAL_QUERY_OPTIONS,
+        }
+    );
+    const workspaceRoots = workspaceRootsQuery.data?.workspaceRoots ?? [];
+    const resolvedWorkspaceFingerprint =
+        currentWorkspaceFingerprint && workspaceRoots.some((workspaceRoot) => workspaceRoot.fingerprint === currentWorkspaceFingerprint)
+            ? currentWorkspaceFingerprint
+            : undefined;
+    const selectedWorkspaceRoot = resolvedWorkspaceFingerprint
+        ? workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === resolvedWorkspaceFingerprint)
+        : undefined;
 
     return {
         profiles: profileState.profiles,
@@ -25,12 +44,16 @@ export function useWorkspaceSurfaceController() {
         profilePending: profileState.profilePending,
         profileErrorMessage: profileState.profileErrorMessage,
         hasProfiles: profileState.hasProfiles,
+        appSection,
+        setAppSection,
+        isCommandPaletteOpen,
+        setIsCommandPaletteOpen,
         topLevelTab,
         setTopLevelTab,
-        showSettings,
-        setShowSettings,
-        currentWorkspaceFingerprint,
+        currentWorkspaceFingerprint: resolvedWorkspaceFingerprint,
         setCurrentWorkspaceFingerprint,
+        workspaceRoots,
+        selectedWorkspaceRoot,
         modes: modeState.modes,
         activeModeKey: modeState.activeModeKey,
         hasResolvedInitialMode: modeState.hasResolvedInitialMode,

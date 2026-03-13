@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { TopLevelTab } from '@/shared/contracts';
 
@@ -11,6 +11,8 @@ interface CreateThreadInput {
 interface UseConversationSidebarStateInput {
     topLevelTab: TopLevelTab;
     isCreatingThread: boolean;
+    workspaceRoots: Array<{ fingerprint: string; absolutePath: string }>;
+    preferredWorkspaceFingerprint?: string;
     onCreateThread: (input: CreateThreadInput) => Promise<void>;
 }
 
@@ -25,9 +27,29 @@ function modeLabel(topLevelTab: TopLevelTab): string {
 }
 
 export function useConversationSidebarState(input: UseConversationSidebarStateInput) {
+    const initialWorkspaceFingerprint = input.preferredWorkspaceFingerprint ?? input.workspaceRoots[0]?.fingerprint;
     const [newThreadTitle, setNewThreadTitle] = useState('');
-    const [newThreadScope, setNewThreadScope] = useState<'detached' | 'workspace'>('detached');
-    const [newThreadWorkspace, setNewThreadWorkspace] = useState('');
+    const [newThreadScope, setNewThreadScope] = useState<'detached' | 'workspace'>(
+        input.topLevelTab === 'chat'
+            ? initialWorkspaceFingerprint
+                ? 'workspace'
+                : 'detached'
+            : 'workspace'
+    );
+    const [newThreadWorkspaceFingerprint, setNewThreadWorkspaceFingerprint] = useState<string | undefined>(
+        initialWorkspaceFingerprint
+    );
+
+    useEffect(() => {
+        if (
+            newThreadWorkspaceFingerprint &&
+            input.workspaceRoots.some((workspaceRoot) => workspaceRoot.fingerprint === newThreadWorkspaceFingerprint)
+        ) {
+            return;
+        }
+
+        setNewThreadWorkspaceFingerprint(input.preferredWorkspaceFingerprint ?? input.workspaceRoots[0]?.fingerprint);
+    }, [input.preferredWorkspaceFingerprint, input.workspaceRoots, newThreadWorkspaceFingerprint]);
 
     async function createThread(): Promise<void> {
         if (input.isCreatingThread) {
@@ -38,7 +60,11 @@ export function useConversationSidebarState(input: UseConversationSidebarStateIn
             newThreadTitle.trim().length > 0
                 ? newThreadTitle.trim()
                 : `New ${modeLabel(input.topLevelTab).toLowerCase()} thread`;
-        if (newThreadScope === 'workspace' && newThreadWorkspace.trim().length === 0) {
+        const selectedWorkspace = newThreadWorkspaceFingerprint
+            ? input.workspaceRoots.find((workspaceRoot) => workspaceRoot.fingerprint === newThreadWorkspaceFingerprint)
+            : undefined;
+
+        if (newThreadScope === 'workspace' && !selectedWorkspace?.absolutePath) {
             return;
         }
         if (newThreadScope === 'detached' && input.topLevelTab !== 'chat') {
@@ -48,8 +74,8 @@ export function useConversationSidebarState(input: UseConversationSidebarStateIn
         await input.onCreateThread({
             scope: newThreadScope,
             title: generatedTitle,
-            ...(newThreadScope === 'workspace' && newThreadWorkspace.trim().length > 0
-                ? { workspacePath: newThreadWorkspace.trim() }
+            ...(newThreadScope === 'workspace' && selectedWorkspace?.absolutePath
+                ? { workspacePath: selectedWorkspace.absolutePath }
                 : {}),
         });
         setNewThreadTitle('');
@@ -60,8 +86,8 @@ export function useConversationSidebarState(input: UseConversationSidebarStateIn
         setNewThreadTitle,
         newThreadScope,
         setNewThreadScope,
-        newThreadWorkspace,
-        setNewThreadWorkspace,
+        newThreadWorkspaceFingerprint,
+        setNewThreadWorkspaceFingerprint,
         createThread,
     };
 }

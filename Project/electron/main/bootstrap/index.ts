@@ -1,8 +1,9 @@
-import { app, BrowserWindow, Menu } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, type OpenDialogOptions } from 'electron';
 import { createIPCHandler, type CreateContextOptions } from 'electron-trpc-experimental/main';
 
 import { closePersistence, initializePersistence } from '@/app/backend/persistence/db';
 import { getSecretStoreInfo, initializeSecretStore } from '@/app/backend/secrets/store';
+import { PICK_DIRECTORY_CHANNEL } from '@/app/shared/desktopBridgeContract';
 import type { Context } from '@/app/backend/trpc/context';
 import type { AppRouter } from '@/app/backend/trpc/router';
 import { registerWindowStateBridge } from '@/app/backend/trpc/routers/system/windowControls';
@@ -132,6 +133,26 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
                 windows: [mainWindow],
                 createContext,
             });
+            ipcMain.handle(PICK_DIRECTORY_CHANNEL, async () => {
+                const ownerWindow = BrowserWindow.getFocusedWindow() ?? mainWindow ?? undefined;
+                const dialogOptions: OpenDialogOptions = {
+                    title: 'Choose Workspace Folder',
+                    properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'],
+                };
+                const result = ownerWindow
+                    ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+                    : await dialog.showOpenDialog(dialogOptions);
+                const absolutePath = result.filePaths[0];
+
+                if (result.canceled || !absolutePath) {
+                    return { canceled: true } as const;
+                }
+
+                return {
+                    canceled: false as const,
+                    absolutePath,
+                };
+            });
             reportMainBootStatus({
                 stage: 'renderer_connecting',
                 blockingPrerequisite: 'renderer_first_report',
@@ -147,6 +168,7 @@ export function bootstrapMainProcess(deps: BootstrapDeps, importMetaUrl: string)
         .catch((error: unknown) => handleStartupFailure(error));
 
     app.on('before-quit', () => {
+        ipcMain.removeHandler(PICK_DIRECTORY_CHANNEL);
         closePersistence();
         void flushAppLogger();
     });

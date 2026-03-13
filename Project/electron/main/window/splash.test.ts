@@ -30,14 +30,14 @@ describe('splash window', () => {
         ).toBe('C:\\Program Files\\NeonConductor\\resources\\assets\\appicon.png');
     });
 
-    it('resolves a browser-safe dev mascot URL for the splash renderer', () => {
+    it('resolves a local file URL for the dev mascot so the splash does not wait on the dev server', () => {
         expect(
             resolveSplashAssetUrl({
                 appPath: 'C:\\repo\\Project',
                 devServerUrl: 'http://localhost:5173',
                 isPackaged: false,
             })
-        ).toBe('http://localhost:5173/src/assets/appicon.png');
+        ).toBe('file:///C:/repo/Project/src/assets/appicon.png');
     });
 
     it('resolves a file URL for the packaged mascot', () => {
@@ -124,7 +124,7 @@ describe('splash window', () => {
                 isPackaged: false,
             })
         ).toMatchObject({
-            mascotSource: 'http://localhost:5173/src/assets/appicon.png',
+            mascotSource: 'file:///C:/repo/Project/src/assets/appicon.png',
             status: expect.objectContaining({
                 stage: 'main_initializing',
             }),

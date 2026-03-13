@@ -26,6 +26,11 @@ export interface RuntimeEventsSubscriptionInput {
 
 export type RuntimeShellBootstrapInput = ProfileInput;
 
+export interface RuntimeRegisterWorkspaceRootInput extends ProfileInput {
+    absolutePath: string;
+    label?: string;
+}
+
 export interface WorkspaceRootRecord {
     fingerprint: string;
     profileId: string;
@@ -137,6 +142,10 @@ export interface RuntimeFactoryResetResult {
     counts: RuntimeResetCounts;
     cleanupCounts: RuntimeFactoryResetCleanupCounts;
     resetProfileId: string;
+}
+
+export interface RuntimeRegisterWorkspaceRootResult {
+    workspaceRoot: WorkspaceRootRecord;
 }
 
 export interface ContextBudgetInput {

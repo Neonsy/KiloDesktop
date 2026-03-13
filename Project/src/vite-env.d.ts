@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import type { BootStatusSnapshot } from '@/app/shared/splashContract';
+import type { PickDirectoryResult } from '@/app/shared/desktopBridgeContract';
 
 declare module '*.wasm?url' {
     const wasmAssetUrl: string;
@@ -9,6 +10,9 @@ declare module '*.wasm?url' {
 
 declare global {
     interface Window {
+        neonDesktop?: {
+            pickDirectory(): Promise<PickDirectoryResult>;
+        };
         neonSplash?: {
             getBootstrapPayload(): {
                 mascotSource: string | null;

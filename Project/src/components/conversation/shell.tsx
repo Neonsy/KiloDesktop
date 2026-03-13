@@ -45,6 +45,7 @@ import {
 interface ConversationShellProps {
     profileId: string;
     topLevelTab: TopLevelTab;
+    selectedWorkspaceFingerprint?: string;
     modeKey: string;
     modes: Array<{ id: string; modeKey: string; label: string }>;
     onModeChange: (modeKey: string) => void;
@@ -56,6 +57,7 @@ interface ConversationShellProps {
 export function ConversationShell({
     profileId,
     topLevelTab,
+    selectedWorkspaceFingerprint,
     modeKey,
     modes,
     onModeChange,
@@ -661,6 +663,7 @@ export function ConversationShell({
             ...(streamErrorMessage !== undefined ? { streamErrorMessage } : {}),
             lastSequence: queries.shellBootstrapQuery.data?.lastSequence ?? 0,
             tabSwitchNotice,
+            topLevelTab,
         },
         panel: {
             profileId,
@@ -793,6 +796,8 @@ export function ConversationShell({
             <ConversationSidebarPane
                 profileId={profileId}
                 topLevelTab={topLevelTab}
+                workspaceRoots={queries.shellBootstrapQuery.data?.workspaceRoots ?? []}
+                {...(selectedWorkspaceFingerprint ? { preferredWorkspaceFingerprint: selectedWorkspaceFingerprint } : {})}
                 buckets={queries.listBucketsQuery.data?.buckets ?? []}
                 threads={sidebarState.visibleThreads}
                 sessions={queries.sessionsQuery.data?.sessions ?? []}
@@ -836,6 +841,7 @@ export function ConversationShell({
 
             <ConversationWorkspaceSection
                 {...workspaceSectionProps}
+                onTopLevelTabChange={onTopLevelTabChange}
             />
 
             <MessageEditDialog
