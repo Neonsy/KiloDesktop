@@ -127,14 +127,26 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
                 );
                 return;
             }
+            const catalogStateReason =
+                result.reason === 'catalog_sync_failed' || result.reason === 'catalog_empty_after_normalization'
+                    ? result.reason
+                    : undefined;
 
-            input.setStatusMessage(`Catalog synced (${String(result.modelCount)} models).`);
+            input.setStatusMessage(
+                result.modelCount > 0
+                    ? `Catalog synced (${String(result.modelCount)} models).`
+                    : catalogStateReason === 'catalog_empty_after_normalization'
+                      ? 'Catalog refreshed, but no usable models were found.'
+                      : undefined
+            );
             patchProviderCache({
                 utils,
                 profileId: input.profileId,
                 providerId: selectedProviderId,
                 defaults: result.defaults,
                 models: result.models,
+                ...(catalogStateReason ? { catalogStateReason } : {}),
+                ...(result.detail ? { catalogStateDetail: result.detail } : {}),
                 ...(result.provider ? { provider: result.provider } : {}),
             });
             void utils.runtime.getShellBootstrap.invalidate({ profileId: input.profileId });

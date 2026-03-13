@@ -272,6 +272,8 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             latency?: number;
             tps?: number;
         }>;
+        reason: 'provider_not_found' | 'catalog_sync_failed' | 'catalog_empty_after_normalization' | null;
+        detail?: string;
     }>();
     expectTypeOf<Outputs['provider'][typeof OPENAI_USAGE_PROCEDURE]>().toExtend<{
         usage: {

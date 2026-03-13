@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 const runtimeOptions = {
     reasoning: {
@@ -22,7 +23,7 @@ describe('resolveRunCache', () => {
             profileId: 'profile_local_default',
             sessionId: 'sess_test',
             providerId: 'kilo',
-            modelId: 'kilo/auto',
+            modelId: kiloFrontierModelId,
             modelCapabilities: {
                 supportsTools: true,
                 supportsReasoning: true,

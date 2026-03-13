@@ -23,6 +23,7 @@ type ProviderExecutionPreferenceData = Awaited<ReturnType<TrpcUtils['provider'][
 type ProviderModelProvidersData = Awaited<ReturnType<TrpcUtils['provider']['listModelProviders']['fetch']>>;
 type ProviderRoutingPreferenceData = Awaited<ReturnType<TrpcUtils['provider']['getModelRoutingPreference']['fetch']>>;
 type ShellBootstrapData = Awaited<ReturnType<TrpcUtils['runtime']['getShellBootstrap']['fetch']>>;
+type EmptyCatalogStateReason = 'catalog_sync_failed' | 'catalog_empty_after_normalization';
 
 function replaceProvider(
     current: ProviderListData | undefined,
@@ -73,6 +74,8 @@ export function patchProviderCache(input: {
     provider?: ProviderListItem;
     defaults?: { providerId: string; modelId: string };
     models?: ProviderModelRecord[];
+    catalogStateReason?: EmptyCatalogStateReason;
+    catalogStateDetail?: string;
     authState?: ProviderAuthStateRecord;
     accountContext?: ProviderAccountContextData;
     connectionProfile?: ProviderConnectionProfileResult;
@@ -112,15 +115,40 @@ export function patchProviderCache(input: {
     }
 
     if (input.models) {
+        const nextModels = input.models;
         input.utils.provider.listModels.setData(
             {
                 profileId: input.profileId,
                 providerId: input.providerId,
             },
-            {
-                models: input.models,
-                reason: null,
-            } satisfies ProviderModelsData
+            (current: ProviderModelsData | undefined) => {
+                if (nextModels.length > 0) {
+                    return {
+                        models: nextModels,
+                        reason: null,
+                    } satisfies ProviderModelsData;
+                }
+
+                if (input.catalogStateReason !== undefined) {
+                    return {
+                        models: nextModels,
+                        reason: input.catalogStateReason,
+                        ...(input.catalogStateDetail ? { detail: input.catalogStateDetail } : {}),
+                    } satisfies ProviderModelsData;
+                }
+
+                const preservedReason: EmptyCatalogStateReason =
+                    current?.reason === 'catalog_sync_failed' || current?.reason === 'catalog_empty_after_normalization'
+                        ? current.reason
+                        : 'catalog_empty_after_normalization';
+                const preservedDetail = preservedReason === current?.reason ? current.detail : undefined;
+
+                return {
+                    models: nextModels,
+                    reason: preservedReason,
+                    ...(preservedDetail ? { detail: preservedDetail } : {}),
+                } satisfies ProviderModelsData;
+            }
         );
     }
 

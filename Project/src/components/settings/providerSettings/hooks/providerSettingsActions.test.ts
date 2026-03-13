@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createProviderSettingsActions } from '@/web/components/settings/providerSettings/hooks/providerSettingsActions';
+import { kiloFrontierModelId, kiloSmallModelId } from '@/shared/kiloModels';
 
 describe('provider settings actions', () => {
     it('omits pinnedProviderId when saving dynamic Kilo routing', async () => {
@@ -9,7 +10,7 @@ describe('provider settings actions', () => {
         const actions = createProviderSettingsActions({
             profileId: 'profile_default',
             selectedProviderId: 'kilo',
-            selectedModelId: 'kilo/auto',
+            selectedModelId: kiloFrontierModelId,
             currentOptionProfileId: 'gateway',
             activeAuthFlow: undefined,
             kiloModelProviderIds: ['openai'],
@@ -40,24 +41,24 @@ describe('provider settings actions', () => {
         expect(mutateAsync).toHaveBeenNthCalledWith(1, {
             profileId: 'profile_default',
             providerId: 'kilo',
-            modelId: 'kilo/auto',
+            modelId: kiloFrontierModelId,
             routingMode: 'dynamic',
             sort: 'price',
         });
         expect(mutateAsync).toHaveBeenNthCalledWith(2, {
             profileId: 'profile_default',
             providerId: 'kilo',
-            modelId: 'kilo/auto',
+            modelId: kiloFrontierModelId,
             routingMode: 'dynamic',
             sort: 'latency',
         });
 
-        await actions.setDefaultModel('kilo/code');
+        await actions.setDefaultModel(kiloSmallModelId);
 
         expect(setDefaultMutateAsync).toHaveBeenCalledWith({
             profileId: 'profile_default',
             providerId: 'kilo',
-            modelId: 'kilo/code',
+            modelId: kiloSmallModelId,
         });
     });
 

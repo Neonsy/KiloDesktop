@@ -156,6 +156,7 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
     const selectedIsDefaultProvider = defaults?.providerId === resolvedSelectedProviderId;
     const selectedIsDefaultModel = selectedIsDefaultProvider && defaults?.modelId === selectedModelId;
     const kiloModelProviders = kiloModelProvidersQuery.data?.providers ?? [];
+    const catalogStateDetail = listModelsQuery.data && 'detail' in listModelsQuery.data ? listModelsQuery.data.detail : undefined;
 
     return {
         providerItems,
@@ -171,6 +172,8 @@ export function useProviderSettingsQueries(input: UseProviderSettingsQueriesInpu
         kiloAccountContext,
         selectedProviderUsageSummary,
         selectedIsDefaultModel,
+        catalogStateReason: listModelsQuery.data?.reason ?? null,
+        catalogStateDetail,
         openAISubscriptionUsage: openAISubscriptionUsageQuery.data?.usage,
         openAISubscriptionRateLimits: openAISubscriptionRateLimitsQuery.data?.rateLimits,
         providersQuery,

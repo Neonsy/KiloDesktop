@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { useConversationRunTarget } from '@/web/components/conversation/shell/workspace/useConversationRunTarget';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
@@ -149,6 +150,40 @@ describe('useConversationRunTarget', () => {
         expect(state.resolvedRunTarget).toEqual({
             providerId: 'openai',
             modelId: 'openai/gpt-5-tools',
+        });
+    });
+
+    it('keeps the fresh Kilo default when usable Kilo models exist even if another provider model is available', () => {
+        const state = useConversationRunTarget({
+            providers: [
+                createProvider({ id: 'kilo', label: 'Kilo', authMethod: 'device_code', authState: 'authenticated' }),
+                createProvider({ id: 'moonshot', label: 'Moonshot', authMethod: 'api_key', authState: 'configured' }),
+            ],
+            providerModels: [
+                createModel({
+                    id: kiloFrontierModelId,
+                    providerId: 'kilo',
+                    label: 'Kilo Auto Frontier',
+                    supportsTools: true,
+                }),
+                createModel({
+                    id: 'moonshot/kimi-k2',
+                    providerId: 'moonshot',
+                    label: 'Kimi K2',
+                    supportsTools: true,
+                }),
+            ],
+            defaults: {
+                providerId: 'kilo',
+                modelId: 'kilo/auto',
+            },
+            runs: [],
+            requiresTools: false,
+        });
+
+        expect(state.resolvedRunTarget).toEqual({
+            providerId: 'kilo',
+            modelId: kiloFrontierModelId,
         });
     });
 });

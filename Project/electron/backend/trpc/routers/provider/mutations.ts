@@ -16,6 +16,7 @@ import {
     type RuntimeProviderId,
 } from '@/app/backend/runtime/contracts';
 import { publicProcedure } from '@/app/backend/trpc/init';
+import { resolveEmptyCatalogState } from '@/app/backend/trpc/routers/provider/catalogState';
 import {
     emitProviderStatusEvent,
     emitProviderSyncEvent,
@@ -388,6 +389,7 @@ export const providerMutationProcedures = {
         if (models.isErr()) {
             throwWithCode(models.error.code, models.error.message);
         }
+        const emptyCatalogState = models.value.length === 0 ? await resolveEmptyCatalogState(input.profileId, input.providerId) : null;
 
         await emitProviderSyncEvent({
             providerId: input.providerId,
@@ -397,7 +399,8 @@ export const providerMutationProcedures = {
                 providerId: input.providerId,
                 ok: result.value.ok,
                 status: result.value.status,
-                reason: result.value.reason ?? null,
+                reason: emptyCatalogState?.reason ?? result.value.reason ?? null,
+                detail: emptyCatalogState?.detail ?? result.value.detail ?? null,
                 modelCount: result.value.modelCount,
                 defaults,
                 models: models.value,
@@ -407,6 +410,7 @@ export const providerMutationProcedures = {
 
         return {
             ...result.value,
+            ...(emptyCatalogState ? { reason: emptyCatalogState.reason, detail: emptyCatalogState.detail } : {}),
             defaults,
             models: models.value,
             ...(provider ? { provider } : {}),

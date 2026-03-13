@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveRuntimeProtocol } from '@/app/backend/runtime/services/runExecution/protocol';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 const { resolveProviderNativeRuntimeSpecializationMock, resolveProviderRuntimePathContextMock } = vi.hoisted(() => ({
     resolveProviderNativeRuntimeSpecializationMock: vi.fn(),
@@ -152,7 +153,7 @@ describe('resolveRuntimeProtocol', () => {
         const result = await resolveRuntimeProtocol({
             profileId: 'profile_local_default',
             providerId: 'kilo',
-            modelId: 'kilo/auto',
+            modelId: kiloFrontierModelId,
             modelCapabilities: {
                 supportsTools: true,
                 supportsReasoning: true,
@@ -234,7 +235,7 @@ describe('resolveRuntimeProtocol', () => {
         const result = await resolveRuntimeProtocol({
             profileId: 'profile_local_default',
             providerId: 'kilo',
-            modelId: 'kilo/auto',
+            modelId: kiloFrontierModelId,
             modelCapabilities: {
                 supportsTools: true,
                 supportsReasoning: true,

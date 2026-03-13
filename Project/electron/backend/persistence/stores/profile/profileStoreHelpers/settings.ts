@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import type { ProfileStoreDb } from '@/app/backend/persistence/stores/profile/profileStoreHelpers/types';
+import { canonicalizeProviderModelId, kiloFrontierModelId } from '@/shared/kiloModels';
 import { isJsonString, parseJsonValue } from '@/app/backend/persistence/stores/shared/utils';
 
 const FALLBACK_DEFAULT_PROVIDER_ID = 'kilo';
-const FALLBACK_DEFAULT_MODEL_ID = 'kilo/auto';
+const FALLBACK_DEFAULT_MODEL_ID = kiloFrontierModelId;
 
 async function resolveDefaultProviderAndModel(
     tx: ProfileStoreDb,
@@ -34,7 +35,15 @@ async function resolveDefaultProviderAndModel(
     return {
         providerId:
             typeof providerId === 'string' && providerId.trim().length > 0 ? providerId : FALLBACK_DEFAULT_PROVIDER_ID,
-        modelId: typeof modelId === 'string' && modelId.trim().length > 0 ? modelId : FALLBACK_DEFAULT_MODEL_ID,
+        modelId:
+            typeof modelId === 'string' && modelId.trim().length > 0
+                ? canonicalizeProviderModelId(
+                      typeof providerId === 'string' && providerId.trim().length > 0
+                          ? providerId
+                          : FALLBACK_DEFAULT_PROVIDER_ID,
+                      modelId
+                  )
+                : FALLBACK_DEFAULT_MODEL_ID,
     };
 }
 

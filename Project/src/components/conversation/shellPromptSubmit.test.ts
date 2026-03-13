@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { submitPrompt } from '@/web/components/conversation/shell/actions/promptSubmit';
 import { DEFAULT_RUN_OPTIONS } from '@/web/components/conversation/shell/workspace/helpers';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 describe('submitPrompt', () => {
     it('starts plan mode and clears prompt state on success', async () => {
@@ -97,7 +98,7 @@ describe('submitPrompt', () => {
             workspaceFingerprint: undefined,
             resolvedRunTarget: {
                 providerId: 'kilo',
-                modelId: 'kilo/auto',
+                modelId: kiloFrontierModelId,
             },
             runtimeOptions: DEFAULT_RUN_OPTIONS,
             providerById: new Map([

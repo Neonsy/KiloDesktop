@@ -69,6 +69,12 @@ export type ProviderCredentialValueView = ProviderCredentialValue | null;
 
 export type ProviderModelOption = ModelPickerOption;
 
+export type ProviderCatalogStateReason =
+    | 'provider_not_found'
+    | 'catalog_sync_failed'
+    | 'catalog_empty_after_normalization'
+    | null;
+
 export interface KiloRoutingDraft {
     routingMode: KiloRoutingMode;
     sort: KiloDynamicSort;

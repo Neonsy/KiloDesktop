@@ -9,8 +9,6 @@ import electronUpdater, { type ProgressInfo } from 'electron-updater';
 
 import { appLog } from '@/app/main/logging';
 
-const { autoUpdater } = electronUpdater;
-
 export type UpdateChannel = 'stable' | 'beta' | 'alpha';
 type UpdateRequestKind = 'startup' | 'manual' | 'switch';
 
@@ -65,6 +63,10 @@ let switchStatus: SwitchStatusPayload = {
     message: '',
     canInteract: true,
 };
+
+function getAutoUpdater() {
+    return electronUpdater.autoUpdater;
+}
 
 function isUpdaterEnabled(): boolean {
     return app.isPackaged || process.env['UPDATER_ENABLED'] === '1';
@@ -124,6 +126,7 @@ function toUpdaterChannel(channel: UpdateChannel): 'latest' | 'beta' | 'alpha' {
 
 function applyChannel(channel: UpdateChannel): void {
     currentChannel = channel;
+    const autoUpdater = getAutoUpdater();
     autoUpdater.channel = toUpdaterChannel(channel);
     autoUpdater.allowPrerelease = channel !== 'stable';
 }
@@ -193,6 +196,7 @@ function configureFeedForChannel(channel: UpdateChannel, applyResolvedChannel = 
         feedBaseUrl,
     });
 
+    const autoUpdater = getAutoUpdater();
     autoUpdater.setFeedURL({
         provider: 'generic',
         url: feedBaseUrl,
@@ -206,7 +210,7 @@ function configureFeedForChannel(channel: UpdateChannel, applyResolvedChannel = 
 
 async function checkForUpdatesForSelectedChannel(channel: UpdateChannel, applyResolvedChannel = true): Promise<void> {
     configureFeedForChannel(channel, applyResolvedChannel);
-    await autoUpdater.checkForUpdates();
+    await getAutoUpdater().checkForUpdates();
 }
 
 function beginActiveRequest(kind: UpdateRequestKind, channel: UpdateChannel, message: string): void {
@@ -258,7 +262,7 @@ function startSwitchFlow(channel: UpdateChannel, options: { feedConfigured?: boo
     beginActiveRequest('switch', channel, toBusyMessage('switch'));
 
     const checkPromise = options.feedConfigured
-        ? autoUpdater.checkForUpdates()
+        ? getAutoUpdater().checkForUpdates()
         : checkForUpdatesForSelectedChannel(channel, false);
 
     void checkPromise.catch((error: unknown) => {
@@ -321,7 +325,7 @@ export function restartToApplyUpdate(): UpdateActionResult {
     }
 
     app.removeAllListeners('window-all-closed');
-    autoUpdater.quitAndInstall(true, true);
+    getAutoUpdater().quitAndInstall(true, true);
 
     return {
         started: true,
@@ -478,6 +482,7 @@ export function initAutoUpdater(): void {
         canInteract: true,
     };
 
+    const autoUpdater = getAutoUpdater();
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
 

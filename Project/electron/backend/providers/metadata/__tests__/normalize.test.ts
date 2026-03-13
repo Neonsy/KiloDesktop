@@ -6,6 +6,7 @@ import {
     type ProviderMetadataOverrideEntry,
 } from '@/app/backend/providers/metadata/overrides';
 import type { NormalizedModelMetadata, ProviderCatalogModel } from '@/app/backend/providers/types';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 function createCatalogModel(overrides?: Partial<ProviderCatalogModel>): ProviderCatalogModel {
     return {
@@ -52,8 +53,8 @@ describe('provider metadata normalization', () => {
     it('derives safe metadata hints from pricing/raw payloads without overriding explicit values', () => {
         const result = normalizeCatalogMetadata('kilo', [
             createCatalogModel({
-                modelId: 'kilo/auto',
-                label: 'Kilo Auto',
+                modelId: kiloFrontierModelId,
+                label: 'Kilo Auto Frontier',
                 upstreamProvider: 'openai',
                 capabilities: {
                     supportsTools: true,
@@ -90,7 +91,7 @@ describe('provider metadata normalization', () => {
         }
         expect(model).toMatchObject({
             providerId: 'kilo',
-            modelId: 'kilo/auto',
+            modelId: kiloFrontierModelId,
             contextLength: 200000,
             inputPrice: 0.000001,
             outputPrice: 0.000003,
@@ -173,8 +174,8 @@ describe('provider metadata normalization', () => {
     it('drops Kilo gateway rows that are missing routed upstream family metadata', () => {
         const result = normalizeCatalogMetadata('kilo', [
             createCatalogModel({
-                modelId: 'kilo/auto',
-                label: 'Kilo Auto',
+                modelId: kiloFrontierModelId,
+                label: 'Kilo Auto Frontier',
                 upstreamProvider: 'kilo',
                 capabilities: {
                     supportsTools: true,

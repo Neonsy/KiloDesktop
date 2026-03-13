@@ -17,6 +17,10 @@ import {
     getPersistence,
     waitForRunStatus,
 } from '@/app/backend/trpc/__tests__/runtime-contracts.shared';
+import {
+    kiloBalancedModelId,
+    kiloFrontierModelId,
+} from '@/shared/kiloModels';
 
 registerRuntimeContractHooks();
 
@@ -698,9 +702,8 @@ describe('runtime contracts: provider and account flows', () => {
                         json: () => ({
                             data: [
                                 {
-                                    id: 'kilo/auto',
-                                    name: 'Kilo Auto',
-                                    owned_by: 'kilo',
+                                    id: kiloFrontierModelId,
+                                    name: 'Kilo Auto Frontier',
                                     context_length: 200000,
                                     supported_parameters: ['tools', 'reasoning'],
                                     architecture: {
@@ -708,7 +711,40 @@ describe('runtime contracts: provider and account flows', () => {
                                         output_modalities: ['text'],
                                     },
                                     opencode: {
-                                        prompt: 'codex',
+                                        prompt: 'anthropic',
+                                    },
+                                    pricing: {},
+                                },
+                                {
+                                    id: 'moonshotai/kimi-k2.5',
+                                    name: 'Kimi K2.5',
+                                    context_length: 128000,
+                                    supported_parameters: ['tools'],
+                                    architecture: {
+                                        input_modalities: ['text'],
+                                        output_modalities: ['text'],
+                                    },
+                                    pricing: {},
+                                },
+                                {
+                                    id: 'z-ai/glm-5',
+                                    name: 'GLM-5',
+                                    context_length: 128000,
+                                    supported_parameters: ['tools'],
+                                    architecture: {
+                                        input_modalities: ['text'],
+                                        output_modalities: ['text'],
+                                    },
+                                    pricing: {},
+                                },
+                                {
+                                    id: 'google/gemini-3.1-pro-preview',
+                                    name: 'Gemini 3.1 Pro Preview',
+                                    context_length: 128000,
+                                    supported_parameters: ['tools'],
+                                    architecture: {
+                                        input_modalities: ['text', 'image'],
+                                        output_modalities: ['text'],
                                     },
                                     pricing: {},
                                 },
@@ -723,7 +759,14 @@ describe('runtime contracts: provider and account flows', () => {
                         status: 200,
                         statusText: 'OK',
                         json: () => ({
-                            data: [{ id: 'openai', label: 'OpenAI' }],
+                            data: [
+                                { id: 'openai', label: 'OpenAI' },
+                                { id: 'anthropic', label: 'Anthropic' },
+                                { id: 'google-ai-studio', label: 'Google AI Studio' },
+                                { id: 'google-vertex', label: 'Vertex AI' },
+                                { id: 'moonshotai', label: 'Moonshot AI' },
+                                { id: 'z-ai', label: 'Z.AI' },
+                            ],
                         }),
                     });
                 }
@@ -734,7 +777,11 @@ describe('runtime contracts: provider and account flows', () => {
                         status: 200,
                         statusText: 'OK',
                         json: () => ({
-                            data: [{ provider: 'openai', models: ['openai/gpt-5-codex'] }],
+                            data: [
+                                { provider: 'moonshotai', models: ['moonshotai/kimi-k2.5'] },
+                                { provider: 'z-ai', models: ['z-ai/glm-5'] },
+                                { provider: 'google-ai-studio', models: ['google/gemini-3.1-pro-preview'] },
+                            ],
                         }),
                     });
                 }
@@ -760,22 +807,31 @@ describe('runtime contracts: provider and account flows', () => {
             providerId: 'kilo',
         });
         expect(syncResult.ok).toBe(true);
-        expect(syncResult.modelCount).toBe(1);
+        expect(syncResult.modelCount).toBe(4);
 
         const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
-        const kiloAuto = models.models.find((model) => model.id === 'kilo/auto');
-        expect(kiloAuto).toBeDefined();
-        if (!kiloAuto) {
-            throw new Error('Expected kilo/auto model in synced catalog.');
+        const frontier = models.models.find((model) => model.id === kiloFrontierModelId);
+        expect(frontier).toBeDefined();
+        if (!frontier) {
+            throw new Error('Expected Kilo frontier model in synced catalog.');
         }
-        expect(kiloAuto.supportsTools).toBe(true);
-        expect(kiloAuto.supportsReasoning).toBe(true);
-        expect(kiloAuto.supportsVision).toBe(true);
-        expect(kiloAuto.inputModalities.includes('image')).toBe(true);
-        expect(kiloAuto.promptFamily).toBe('codex');
-        expect(kiloAuto.contextLength).toBe(200000);
-        expect(kiloAuto.apiFamily).toBe('kilo_gateway');
-        expect(kiloAuto.routedApiFamily).toBe('openai_compatible');
+        expect(frontier.supportsTools).toBe(true);
+        expect(frontier.supportsReasoning).toBe(true);
+        expect(frontier.supportsVision).toBe(true);
+        expect(frontier.inputModalities.includes('image')).toBe(true);
+        expect(frontier.promptFamily).toBe('anthropic');
+        expect(frontier.contextLength).toBe(200000);
+        expect(frontier.apiFamily).toBe('kilo_gateway');
+        expect(frontier.routedApiFamily).toBe('anthropic_messages');
+        expect(models.models.find((model) => model.id === 'moonshotai/kimi-k2.5')?.routedApiFamily).toBe(
+            'openai_compatible'
+        );
+        expect(models.models.find((model) => model.id === 'z-ai/glm-5')?.routedApiFamily).toBe(
+            'openai_compatible'
+        );
+        expect(models.models.find((model) => model.id === 'google/gemini-3.1-pro-preview')?.routedApiFamily).toBe(
+            'google_generativeai'
+        );
     });
 
     it('keeps distinct kilo model ids when discovery returns the same visible label twice', async () => {
@@ -791,9 +847,8 @@ describe('runtime contracts: provider and account flows', () => {
                         json: () => ({
                             data: [
                                 {
-                                    id: 'kilo/auto-openai',
-                                    name: 'Kilo Auto Free',
-                                    owned_by: 'openai',
+                                    id: kiloBalancedModelId,
+                                    name: 'Kilo Auto Balanced',
                                     context_length: 200000,
                                     supported_parameters: ['tools'],
                                     architecture: {
@@ -803,14 +858,16 @@ describe('runtime contracts: provider and account flows', () => {
                                     pricing: {},
                                 },
                                 {
-                                    id: 'kilo/auto-anthropic',
-                                    name: 'Kilo Auto Free',
-                                    owned_by: 'anthropic',
+                                    id: kiloFrontierModelId,
+                                    name: 'Kilo Auto Balanced',
                                     context_length: 200000,
                                     supported_parameters: ['reasoning'],
                                     architecture: {
                                         input_modalities: ['text'],
                                         output_modalities: ['text'],
+                                    },
+                                    opencode: {
+                                        prompt: 'anthropic',
                                     },
                                     pricing: {},
                                 },
@@ -826,8 +883,8 @@ describe('runtime contracts: provider and account flows', () => {
                         statusText: 'OK',
                         json: () => ({
                             data: [
-                                { id: 'openai', label: 'OpenAI' },
                                 { id: 'anthropic', label: 'Anthropic' },
+                                { id: 'openai', label: 'OpenAI' },
                             ],
                         }),
                     });
@@ -840,8 +897,8 @@ describe('runtime contracts: provider and account flows', () => {
                         statusText: 'OK',
                         json: () => ({
                             data: [
-                                { provider: 'openai', models: ['kilo/auto-openai'] },
-                                { provider: 'anthropic', models: ['kilo/auto-anthropic'] },
+                                { provider: 'openai', models: [kiloBalancedModelId] },
+                                { provider: 'anthropic', models: [kiloFrontierModelId] },
                             ],
                         }),
                     });
@@ -871,13 +928,204 @@ describe('runtime contracts: provider and account flows', () => {
         expect(syncResult.modelCount).toBe(2);
 
         const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
-        expect(models.models.some((model) => model.id === 'kilo/auto-openai')).toBe(true);
-        expect(models.models.some((model) => model.id === 'kilo/auto-anthropic')).toBe(true);
-        expect(models.models.filter((model) => model.label === 'Kilo Auto Free')).toHaveLength(2);
-        expect(models.models.find((model) => model.id === 'kilo/auto-openai')?.routedApiFamily).toBe('openai_compatible');
-        expect(models.models.find((model) => model.id === 'kilo/auto-anthropic')?.routedApiFamily).toBe(
+        expect(models.models.some((model) => model.id === kiloBalancedModelId)).toBe(true);
+        expect(models.models.some((model) => model.id === kiloFrontierModelId)).toBe(true);
+        expect(models.models.filter((model) => model.label === 'Kilo Auto Balanced')).toHaveLength(2);
+        expect(models.models.find((model) => model.id === kiloBalancedModelId)?.routedApiFamily).toBe(
+            'openai_compatible'
+        );
+        expect(models.models.find((model) => model.id === kiloFrontierModelId)?.routedApiFamily).toBe(
             'anthropic_messages'
         );
+    });
+
+    it('keeps Kilo models backed by supported Moonshot upstreams instead of dropping them during normalization', async () => {
+        const caller = createCaller();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                if (url.endsWith('/models')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [
+                                {
+                                    id: 'moonshot/kimi-k2',
+                                    name: 'Kimi K2',
+                                    owned_by: 'moonshot',
+                                    context_length: 200000,
+                                    supported_parameters: ['tools'],
+                                    architecture: {
+                                        input_modalities: ['text'],
+                                        output_modalities: ['text'],
+                                    },
+                                    pricing: {},
+                                },
+                            ],
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/providers')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [],
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/models-by-provider')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [],
+                        }),
+                    });
+                }
+
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found',
+                    json: () => ({}),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'kilo',
+            apiKey: 'kilo-api-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const syncResult = await caller.provider.syncCatalog({
+            profileId,
+            providerId: 'kilo',
+        });
+        expect(syncResult.ok).toBe(true);
+        expect(syncResult.modelCount).toBe(1);
+
+        const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
+        const kimi = models.models.find((model) => model.id === 'moonshot/kimi-k2');
+        expect(kimi).toBeDefined();
+        expect(kimi?.routedApiFamily).toBe('openai_compatible');
+    });
+
+    it('reports when a synced Kilo catalog produced zero usable models after normalization', async () => {
+        const caller = createCaller();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                if (url.endsWith('/models')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [
+                                {
+                                    id: 'mystery/model',
+                                    name: 'Mystery Model',
+                                    owned_by: 'mystery-provider',
+                                    context_length: 200000,
+                                    supported_parameters: ['tools'],
+                                    architecture: {
+                                        input_modalities: ['text'],
+                                        output_modalities: ['text'],
+                                    },
+                                    pricing: {},
+                                },
+                            ],
+                        }),
+                    });
+                }
+
+                if (url.endsWith('/providers') || url.endsWith('/models-by-provider')) {
+                    return Promise.resolve({
+                        ok: true,
+                        status: 200,
+                        statusText: 'OK',
+                        json: () => ({
+                            data: [],
+                        }),
+                    });
+                }
+
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found',
+                    json: () => ({}),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'kilo',
+            apiKey: 'kilo-api-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const syncResult = await caller.provider.syncCatalog({
+            profileId,
+            providerId: 'kilo',
+        });
+        expect(syncResult.ok).toBe(true);
+        expect(syncResult.modelCount).toBe(0);
+        expect(syncResult.reason).toBe('catalog_empty_after_normalization');
+
+        const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
+        expect(models.models).toHaveLength(0);
+        expect(models.reason).toBe('catalog_empty_after_normalization');
+    });
+
+    it('surfaces catalog sync failure details when the first kilo model sync produces no persisted catalog', async () => {
+        const caller = createCaller();
+        vi.stubGlobal(
+            'fetch',
+            vi.fn((url: string) => {
+                if (url.endsWith('/models')) {
+                    return Promise.resolve({
+                        ok: false,
+                        status: 502,
+                        statusText: 'Bad Gateway',
+                        json: () => ({
+                            error: {
+                                message: 'gateway unavailable',
+                            },
+                        }),
+                    });
+                }
+
+                return Promise.resolve({
+                    ok: false,
+                    status: 404,
+                    statusText: 'Not Found',
+                    json: () => ({}),
+                });
+            })
+        );
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'kilo',
+            apiKey: 'kilo-api-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const models = await caller.provider.listModels({ profileId, providerId: 'kilo' });
+        expect(models.models).toHaveLength(0);
+        expect(models.reason).toBe('catalog_sync_failed');
+        expect(models.detail).toContain('502 Bad Gateway');
     });
 
     it('persists kilo browser auth and exposes the stored session token through provider credential queries', async () => {

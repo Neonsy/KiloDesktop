@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
+import { kiloFrontierModelId } from '@/shared/kiloModels';
 
 vi.mock('@/web/components/conversation/panels/messageFlowPanel', () => ({
     MessageFlowPanel: () => createElement('div', undefined, 'timeline'),
@@ -75,7 +76,7 @@ describe('session workspace panel layout', () => {
                 isResolvingPermission: false,
                 canCreateSession: true,
                 selectedProviderId: 'kilo',
-                selectedModelId: 'kilo/auto',
+                selectedModelId: kiloFrontierModelId,
                 topLevelTab: 'chat',
                 activeModeKey: 'chat',
                 modes: [],

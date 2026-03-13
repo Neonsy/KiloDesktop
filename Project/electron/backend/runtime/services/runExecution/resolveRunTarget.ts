@@ -7,6 +7,7 @@ import {
     type RunExecutionResult,
 } from '@/app/backend/runtime/services/runExecution/errors';
 import type { ResolvedRunTarget } from '@/app/backend/runtime/services/runExecution/types';
+import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
 function tryAssertProviderId(value: string): RuntimeProviderId | undefined {
     const supportedProviderIdResult = toSupportedProviderIdResult(value);
@@ -44,13 +45,17 @@ export async function resolveRunTarget(input: {
         providerId = inferredProviderId;
     }
 
+    if (providerId && modelId) {
+        modelId = canonicalizeProviderModelId(providerId, modelId);
+    }
+
     if (!providerId) {
         providerId = tryAssertProviderId(defaults.providerId);
     }
 
     if (providerId && !modelId) {
         if (defaults.providerId === providerId && defaults.modelId.trim().length > 0) {
-            modelId = defaults.modelId;
+            modelId = canonicalizeProviderModelId(providerId, defaults.modelId);
         }
     }
 

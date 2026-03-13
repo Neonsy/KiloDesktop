@@ -4,6 +4,12 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ModelCapabilityBadge, ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import { Button } from '@/web/components/ui/button';
 import { cn } from '@/web/lib/utils';
+import {
+    kiloBalancedModelId,
+    kiloFreeModelId,
+    kiloFrontierModelId,
+    kiloSmallModelId,
+} from '@/shared/kiloModels';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
 
@@ -147,11 +153,13 @@ function sortGroupedOptions(options: ModelPickerOption[]): ModelGroup[] {
         })
         .map((group) => ({
             ...group,
-            options: [...group.options].sort((left, right) => {
-                const preferredOrder = new Map<string, number>([
-                    ['kilo/auto', 0],
-                    ['kilo/code', 1],
-                ]);
+                options: [...group.options].sort((left, right) => {
+                    const preferredOrder = new Map<string, number>([
+                        [kiloFrontierModelId, 0],
+                        [kiloBalancedModelId, 1],
+                        [kiloFreeModelId, 2],
+                        [kiloSmallModelId, 3],
+                    ]);
                 const leftOrder = preferredOrder.get(left.id) ?? Number.MAX_SAFE_INTEGER;
                 const rightOrder = preferredOrder.get(right.id) ?? Number.MAX_SAFE_INTEGER;
                 if (leftOrder !== rightOrder) {
@@ -164,12 +172,20 @@ function sortGroupedOptions(options: ModelPickerOption[]): ModelGroup[] {
 }
 
 function getModelDescription(option: ModelPickerOption): string {
-    if (option.id === 'kilo/auto') {
-        return 'Recommended starting point with automatic Kilo routing.';
+    if (option.id === kiloFrontierModelId) {
+        return 'Recommended starting point with automatic Kilo routing to the best model for the task.';
     }
 
-    if (option.id === 'kilo/code') {
-        return 'Coding-focused Kilo quick pick.';
+    if (option.id === kiloBalancedModelId) {
+        return 'Automatic Kilo routing tuned for a balanced mix of price and performance.';
+    }
+
+    if (option.id === kiloFreeModelId) {
+        return 'Automatic Kilo routing limited to free models.';
+    }
+
+    if (option.id === kiloSmallModelId) {
+        return 'Automatic Kilo routing tuned toward smaller, coding-oriented models.';
     }
 
     if (option.providerId === 'kilo') {

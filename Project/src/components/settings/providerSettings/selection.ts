@@ -1,6 +1,7 @@
 import type { ProviderListItem } from '@/web/components/settings/providerSettings/types';
 
 import type { ProviderModelRecord } from '@/app/backend/persistence/types';
+import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
 
@@ -30,15 +31,23 @@ export function resolveSelectedModelId(input: {
         return input.selectedModelId;
     }
 
-    if (input.selectedModelId && input.models.some((model) => model.id === input.selectedModelId)) {
-        return input.selectedModelId;
+    const canonicalSelectedModelId = input.selectedModelId
+        ? canonicalizeProviderModelId(input.selectedProviderId, input.selectedModelId)
+        : input.selectedModelId;
+    if (canonicalSelectedModelId && input.models.some((model) => model.id === canonicalSelectedModelId)) {
+        return canonicalSelectedModelId;
     }
 
+    const canonicalDefaultModelId =
+        input.defaults?.providerId === input.selectedProviderId
+            ? canonicalizeProviderModelId(input.selectedProviderId, input.defaults.modelId)
+            : undefined;
     if (
         input.defaults?.providerId === input.selectedProviderId &&
-        input.models.some((model) => model.id === input.defaults?.modelId)
+        canonicalDefaultModelId &&
+        input.models.some((model) => model.id === canonicalDefaultModelId)
     ) {
-        return input.defaults.modelId;
+        return canonicalDefaultModelId;
     }
 
     return input.models[0]?.id ?? '';

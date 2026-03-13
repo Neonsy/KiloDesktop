@@ -44,21 +44,68 @@ function hasProviderNativeHint(raw: Record<string, unknown>): boolean {
     return typeof providerSettings?.['providerNativeId'] === 'string';
 }
 
+function mapPromptFamilyToRoutedApiFamily(promptFamily: string): ProviderRoutedApiFamily | undefined {
+    if (promptFamily === 'anthropic') {
+        return 'anthropic_messages';
+    }
+
+    if (promptFamily === 'google' || promptFamily === 'gemini') {
+        return 'google_generativeai';
+    }
+
+    if (promptFamily === 'openai' || promptFamily === 'codex') {
+        return 'openai_compatible';
+    }
+
+    return undefined;
+}
+
 function mapUpstreamProviderToRoutedApiFamily(providerId: string): ProviderRoutedApiFamily {
     if (providerId === 'anthropic') {
         return 'anthropic_messages';
     }
 
-    if (providerId === 'google' || providerId === 'google-ai-studio' || providerId === 'vertex-ai') {
+    if (
+        providerId === 'google' ||
+        providerId === 'google-ai-studio' ||
+        providerId === 'google-vertex' ||
+        providerId === 'vertex-ai'
+    ) {
         return 'google_generativeai';
     }
 
     return 'openai_compatible';
 }
 
+function isRecognizedUpstreamProvider(providerId: string): boolean {
+    return (
+        providerId === 'anthropic' ||
+        providerId === 'google' ||
+        providerId === 'google-ai-studio' ||
+        providerId === 'google-vertex' ||
+        providerId === 'vertex-ai' ||
+        providerId === 'openai' ||
+        providerId === 'moonshotai' ||
+        providerId === 'moonshot' ||
+        providerId === 'z-ai' ||
+        providerId === 'zai' ||
+        providerId === 'kilo' ||
+        providerId === 'kilo-auto'
+    );
+}
+
+function getModelNamespace(modelId: string): string | undefined {
+    const slashIndex = modelId.indexOf('/');
+    if (slashIndex <= 0) {
+        return undefined;
+    }
+
+    return modelId.slice(0, slashIndex).trim().toLowerCase() || undefined;
+}
+
 function deriveKiloRoutedApiFamily(
     model: KiloGatewayModel,
-    input: NormalizeKiloModelInput
+    _input: NormalizeKiloModelInput
 ): ProviderRoutedApiFamily | undefined {
     const explicitFamily =
         parseExplicitRoutedApiFamily(model.raw['routed_api_family']) ??
@@ -74,21 +121,24 @@ function deriveKiloRoutedApiFamily(
     }
 
     const upstreamProvider = model.upstreamProvider?.trim().toLowerCase();
-    if (!upstreamProvider) {
-        return undefined;
+    if (upstreamProvider && isRecognizedUpstreamProvider(upstreamProvider)) {
+        return mapUpstreamProviderToRoutedApiFamily(upstreamProvider);
     }
 
-    if (upstreamProvider === 'kilo') {
-        return 'openai_compatible';
+    const promptFamily = model.promptFamily?.trim().toLowerCase();
+    if (promptFamily) {
+        const promptFamilyRoutedApiFamily = mapPromptFamilyToRoutedApiFamily(promptFamily);
+        if (promptFamilyRoutedApiFamily) {
+            return promptFamilyRoutedApiFamily;
+        }
     }
 
-    const providerMembership = input.modelsByProviderIndex.get(upstreamProvider)?.has(model.id) ?? false;
-    const providerListed = input.providerIds.has(upstreamProvider);
-    if (!providerMembership && !providerListed) {
-        return undefined;
+    const modelNamespace = getModelNamespace(model.id);
+    if (modelNamespace && isRecognizedUpstreamProvider(modelNamespace)) {
+        return mapUpstreamProviderToRoutedApiFamily(modelNamespace);
     }
 
-    return mapUpstreamProviderToRoutedApiFamily(upstreamProvider);
+    return undefined;
 }
 
 export function normalizeKiloModel(model: KiloGatewayModel, input: NormalizeKiloModelInput): ProviderCatalogModel {

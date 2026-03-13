@@ -226,6 +226,8 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         models: {
             selectedModelId: queries.selectedModelId,
             options: queries.modelOptions,
+            catalogStateReason: queries.catalogStateReason,
+            catalogStateDetail: queries.catalogStateDetail,
             isDefaultModel: queries.selectedIsDefaultModel,
             isSavingDefault: mutations.setDefaultMutation.isPending,
             isSyncingCatalog: mutations.syncCatalogMutation.isPending,

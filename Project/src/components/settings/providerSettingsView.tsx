@@ -131,6 +131,10 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                             selectedProviderId={selectedProvider.id}
                             selectedModelId={controller.models.selectedModelId}
                             models={controller.models.options}
+                            catalogStateReason={controller.models.catalogStateReason}
+                            {...(controller.models.catalogStateDetail
+                                ? { catalogStateDetail: controller.models.catalogStateDetail }
+                                : {})}
                             isDefaultModel={controller.models.isDefaultModel}
                             isSavingDefault={controller.models.isSavingDefault}
                             isSyncingCatalog={controller.models.isSyncingCatalog}

@@ -8,6 +8,7 @@ import {
 
 import type { ProviderModelRecord, RunRecord } from '@/app/backend/persistence/types';
 import type { ProviderListItem } from '@/app/backend/providers/service/types';
+import { canonicalizeProviderModelId } from '@/shared/kiloModels';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
 
@@ -59,7 +60,8 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
     const hasCompatibleOptions = modelOptions.some((option) => isCompatibleModelOption(option));
 
     function getOption(providerId: RuntimeProviderId, modelId: string): ModelPickerOption | undefined {
-        return optionsByKey.get(`${providerId}:${modelId}`);
+        const canonicalModelId = canonicalizeProviderModelId(providerId, modelId);
+        return optionsByKey.get(`${providerId}:${canonicalModelId}`);
     }
 
     function modelExists(providerId: RuntimeProviderId, modelId: string): boolean {
@@ -80,10 +82,11 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
 
     let resolvedRunTarget: RunTargetSelection | undefined;
     if (input.sessionOverride?.providerId && input.sessionOverride.modelId) {
-        if (modelExists(input.sessionOverride.providerId, input.sessionOverride.modelId)) {
+        const modelId = canonicalizeProviderModelId(input.sessionOverride.providerId, input.sessionOverride.modelId);
+        if (modelExists(input.sessionOverride.providerId, modelId)) {
             resolvedRunTarget = {
                 providerId: input.sessionOverride.providerId,
-                modelId: input.sessionOverride.modelId,
+                modelId,
             };
         }
     }
@@ -101,7 +104,7 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
 
             resolvedRunTarget = {
                 providerId: run.providerId,
-                modelId: run.modelId,
+                modelId: canonicalizeProviderModelId(run.providerId, run.modelId),
             };
             break;
         }
@@ -115,7 +118,7 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
     ) {
         resolvedRunTarget = {
             providerId: input.defaults.providerId,
-            modelId: input.defaults.modelId,
+            modelId: canonicalizeProviderModelId(input.defaults.providerId, input.defaults.modelId),
         };
     }
 
@@ -138,7 +141,13 @@ export function useConversationRunTarget(input: UseConversationRunTargetInput) {
     }
 
     const selectedProviderIdForComposer = input.sessionOverride?.providerId ?? resolvedRunTarget?.providerId;
-    const selectedModelIdForComposer = input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId;
+    const selectedModelIdForComposer =
+        selectedProviderIdForComposer && (input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId)
+            ? canonicalizeProviderModelId(
+                  selectedProviderIdForComposer,
+                  input.sessionOverride?.modelId ?? resolvedRunTarget?.modelId ?? ''
+              )
+            : undefined;
     const selectedModelForComposer =
         selectedProviderIdForComposer && selectedModelIdForComposer
             ? (modelsByProvider.get(selectedProviderIdForComposer) ?? []).find(

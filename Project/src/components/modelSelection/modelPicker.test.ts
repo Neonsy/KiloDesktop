@@ -4,6 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { ModelPickerOption } from '@/web/components/modelSelection/modelCapabilities';
 import {
+    kiloBalancedModelId,
+    kiloFrontierModelId,
+    kiloSmallModelId,
+} from '@/shared/kiloModels';
+import {
     getModelLabelCollisionIndex,
     getOptionDisplayText,
     ModelPicker,
@@ -34,18 +39,18 @@ describe('model picker', () => {
         const html = renderToStaticMarkup(
             createElement(ModelPicker, {
                 providerId: 'kilo',
-                selectedModelId: 'kilo/auto',
+                selectedModelId: kiloFrontierModelId,
                 models: [
                     createOption({
-                        id: 'kilo/auto',
-                        label: 'Kilo Auto',
+                        id: kiloFrontierModelId,
+                        label: 'Kilo Auto Frontier',
                         price: 12,
                         latency: 90,
                         tps: 120,
                     }),
                     createOption({
-                        id: 'kilo/code',
-                        label: 'Kilo Code',
+                        id: kiloSmallModelId,
+                        label: 'Kilo Auto Small',
                     }),
                 ],
                 ariaLabel: 'Model',
@@ -55,7 +60,7 @@ describe('model picker', () => {
         );
 
         expect(html).toContain('<button');
-        expect(html).toContain('Kilo Auto');
+        expect(html).toContain('Kilo Auto Frontier');
         expect(html).not.toContain('<select');
         expect(html).not.toContain('price 12');
     });
@@ -86,11 +91,11 @@ describe('model picker', () => {
         const html = renderToStaticMarkup(
             createElement(ModelPicker, {
                 providerId: undefined,
-                selectedModelId: 'kilo/auto',
+                selectedModelId: kiloFrontierModelId,
                 models: [
                     createOption({
-                        id: 'kilo/auto',
-                        label: 'Kilo Auto',
+                        id: kiloFrontierModelId,
+                        label: 'Kilo Auto Frontier',
                         providerId: 'kilo',
                         providerLabel: 'Kilo',
                     }),
@@ -108,34 +113,34 @@ describe('model picker', () => {
         );
 
         expect(html).toContain('<button');
-        expect(html).toContain('Kilo Auto');
+        expect(html).toContain('Kilo Auto Frontier');
         expect(html).not.toContain('<select');
     });
 
     it('disambiguates same-label kilo models with secondary context', () => {
         const models = [
             createOption({
-                id: 'kilo/auto-openai',
-                label: 'Kilo Auto Free',
+                id: kiloBalancedModelId,
+                label: 'Kilo Auto Balanced',
                 providerId: 'kilo',
                 sourceProvider: 'OpenAI',
             }),
             createOption({
-                id: 'kilo/auto-anthropic',
-                label: 'Kilo Auto Free',
+                id: kiloFrontierModelId,
+                label: 'Kilo Auto Balanced',
                 providerId: 'kilo',
                 sourceProvider: 'Anthropic',
             }),
         ];
         const collisionIndex = getModelLabelCollisionIndex(models);
 
-        expect(getOptionDisplayText(models[0]!, collisionIndex)).toBe('Kilo Auto Free · OpenAI');
-        expect(getOptionDisplayText(models[1]!, collisionIndex)).toBe('Kilo Auto Free · Anthropic');
+        expect(getOptionDisplayText(models[0]!, collisionIndex)).toBe('Kilo Auto Balanced · OpenAI');
+        expect(getOptionDisplayText(models[1]!, collisionIndex)).toBe('Kilo Auto Balanced · Anthropic');
 
         const html = renderToStaticMarkup(
             createElement(ModelPicker, {
                 providerId: 'kilo',
-                selectedModelId: 'kilo/auto-anthropic',
+                selectedModelId: kiloFrontierModelId,
                 models,
                 ariaLabel: 'Model',
                 placeholder: 'Select model',
@@ -143,20 +148,20 @@ describe('model picker', () => {
             })
         );
 
-        expect(html).toContain('Kilo Auto Free · Anthropic');
+        expect(html).toContain('Kilo Auto Balanced · Anthropic');
     });
 
     it('keeps non-collided kilo labels unchanged', () => {
         const models = [
             createOption({
-                id: 'kilo/auto',
-                label: 'Kilo Auto',
+                id: kiloFrontierModelId,
+                label: 'Kilo Auto Frontier',
                 providerId: 'kilo',
             }),
         ];
         const collisionIndex = getModelLabelCollisionIndex(models);
 
-        expect(getOptionDisplayText(models[0]!, collisionIndex)).toBe('Kilo Auto');
+        expect(getOptionDisplayText(models[0]!, collisionIndex)).toBe('Kilo Auto Frontier');
     });
 
     it('switches to the popover picker when capability badges or incompatibility reasons are present', () => {

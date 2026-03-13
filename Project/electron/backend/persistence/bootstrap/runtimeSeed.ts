@@ -4,11 +4,18 @@ import {
     toStaticProviderCatalogModel,
 } from '@/app/backend/providers/metadata/staticCatalog/registry';
 import { getDefaultEndpointProfile } from '@/app/backend/providers/registry';
+import {
+    kiloBalancedModelId,
+    kiloFreeModelId,
+    kiloFrontierModelId,
+    kiloSmallModelId,
+} from '@/shared/kiloModels';
 
 import type { DatabaseSync } from 'node:sqlite';
+import type { ProviderRoutedApiFamily } from '@/app/backend/providers/types';
 
 const DEFAULT_PROVIDER_ID = 'kilo';
-const DEFAULT_MODEL_ID = 'kilo/auto';
+const DEFAULT_MODEL_ID = kiloFrontierModelId;
 
 const PROVIDER_SEED = [
     { id: 'kilo', label: 'Kilo', supportsByok: 0 },
@@ -23,22 +30,38 @@ const KILO_MODEL_SEED: Array<{
     label: string;
     supportsTools: boolean;
     supportsReasoning: boolean;
-    routedApiFamily: 'openai_compatible';
+    routedApiFamily: ProviderRoutedApiFamily;
     contextLength?: number;
     maxOutputTokens?: number;
 }> = [
     {
-        id: 'kilo/auto',
+        id: kiloFrontierModelId,
         providerId: 'kilo',
-        label: 'Kilo Auto',
+        label: 'Kilo Auto Frontier',
+        supportsTools: true,
+        supportsReasoning: true,
+        routedApiFamily: 'anthropic_messages',
+    },
+    {
+        id: kiloBalancedModelId,
+        providerId: 'kilo',
+        label: 'Kilo Auto Balanced',
         supportsTools: true,
         supportsReasoning: true,
         routedApiFamily: 'openai_compatible',
     },
     {
-        id: 'kilo/code',
+        id: kiloFreeModelId,
         providerId: 'kilo',
-        label: 'Kilo Code',
+        label: 'Kilo Auto Free',
+        supportsTools: true,
+        supportsReasoning: true,
+        routedApiFamily: 'openai_compatible',
+    },
+    {
+        id: kiloSmallModelId,
+        providerId: 'kilo',
+        label: 'Kilo Auto Small',
         supportsTools: true,
         supportsReasoning: true,
         routedApiFamily: 'openai_compatible',
@@ -336,7 +359,7 @@ export function seedRuntimeData(sqlite: DatabaseSync, defaultProfileId: string):
             model.routedApiFamily,
             JSON.stringify(['text']),
             JSON.stringify(['text']),
-            null,
+            model.id === kiloFrontierModelId ? 'anthropic' : model.id === kiloSmallModelId ? 'codex' : null,
             null,
             model.contextLength ?? null,
             '{}',

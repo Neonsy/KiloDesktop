@@ -6,11 +6,14 @@ import type { ProviderModelOption } from '@/web/components/settings/providerSett
 import { Button } from '@/web/components/ui/button';
 
 import type { RuntimeProviderId } from '@/shared/contracts';
+import type { ProviderCatalogStateReason } from '@/web/components/settings/providerSettings/types';
 
 interface ProviderDefaultModelSectionProps {
     selectedProviderId: RuntimeProviderId | undefined;
     selectedModelId: string;
     models: ProviderModelOption[];
+    catalogStateReason: ProviderCatalogStateReason;
+    catalogStateDetail?: string;
     isDefaultModel: boolean;
     isSavingDefault: boolean;
     isSyncingCatalog: boolean;
@@ -22,6 +25,8 @@ export function ProviderDefaultModelSection({
     selectedProviderId,
     selectedModelId,
     models,
+    catalogStateReason,
+    catalogStateDetail,
     isDefaultModel,
     isSavingDefault,
     isSyncingCatalog,
@@ -31,6 +36,24 @@ export function ProviderDefaultModelSection({
     const isKilo = selectedProviderId === 'kilo';
     const selectedModel = models.find((model) => model.id === selectedModelId);
     const selectedModelNotes = selectedModel ? getModelRuntimeNotes(selectedModel).slice(0, 2) : [];
+    const catalogStateMessage =
+        models.length > 0
+            ? null
+            : catalogStateReason === 'catalog_sync_failed'
+              ? catalogStateDetail
+                  ? `Catalog sync failed: ${catalogStateDetail}`
+                  : 'Catalog sync failed before any usable models were stored.'
+              : catalogStateReason === 'catalog_empty_after_normalization'
+                ? catalogStateDetail
+                    ? `Catalog refreshed, but no usable models were found: ${catalogStateDetail}`
+                    : isKilo
+                      ? 'Catalog refreshed, but none of the returned Kilo models are currently usable in NeonConductor.'
+                      : 'Catalog refreshed, but none of the returned models are currently usable.'
+              : catalogStateReason === 'provider_not_found'
+                ? 'This provider is no longer available for the current profile.'
+                : isKilo
+                  ? 'No usable Kilo models are available yet. Refresh the catalog or check your account setup.'
+                  : 'No models are currently available for this provider.';
 
     return (
         <section className='border-border/70 bg-card/40 space-y-3 rounded-2xl border p-4'>
@@ -81,6 +104,18 @@ export function ProviderDefaultModelSection({
                 {selectedModelNotes.length > 0 ? (
                     <p className='text-muted-foreground text-[11px] leading-5'>
                         Runtime notes: {selectedModelNotes.join(' ')}
+                    </p>
+                ) : null}
+                {catalogStateMessage ? (
+                    <p
+                        className={`text-[11px] leading-5 ${
+                            catalogStateReason === 'catalog_sync_failed' ||
+                            catalogStateReason === 'catalog_empty_after_normalization' ||
+                            catalogStateReason === 'provider_not_found'
+                                ? 'text-destructive'
+                                : 'text-muted-foreground'
+                        }`}>
+                        {catalogStateMessage}
                     </p>
                 ) : null}
             </div>

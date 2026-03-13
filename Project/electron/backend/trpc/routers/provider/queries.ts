@@ -11,6 +11,7 @@ import {
     providerListModelsInputSchema,
     providerListProvidersInputSchema,
 } from '@/app/backend/runtime/contracts';
+import { resolveEmptyCatalogState } from '@/app/backend/trpc/routers/provider/catalogState';
 import { publicProcedure } from '@/app/backend/trpc/init';
 import { isProviderNotFoundCode, mapAuthErrorToOperationalCode, throwWithCode } from '@/app/backend/trpc/routers/provider/shared';
 
@@ -42,6 +43,15 @@ export const providerQueryProcedures = {
             }
 
             throwWithCode(modelsResult.error.code, modelsResult.error.message);
+        }
+
+        if (modelsResult.value.length === 0) {
+            const catalogState = await resolveEmptyCatalogState(input.profileId, input.providerId);
+            return {
+                models: modelsResult.value,
+                reason: catalogState.reason,
+                detail: catalogState.detail,
+            };
         }
 
         return {
