@@ -4,7 +4,7 @@ import {
 } from '@/web/components/settings/providerSettings/hooks/providerSettingsState';
 import type { ActiveAuthFlow } from '@/web/components/settings/providerSettings/types';
 
-import type { RuntimeProviderId } from '@/shared/contracts';
+import type { OpenAIExecutionMode, RuntimeProviderId } from '@/shared/contracts';
 
 export function createProviderSettingsActions(input: {
     profileId: string;
@@ -50,6 +50,13 @@ export function createProviderSettingsActions(input: {
                 optionProfileId: string;
                 baseUrlOverride?: string | null;
                 organizationId?: string | null;
+            }) => Promise<void>;
+        };
+        setExecutionPreferenceMutation: {
+            mutateAsync: (input: {
+                profileId: string;
+                providerId: 'openai';
+                mode: OpenAIExecutionMode;
             }) => Promise<void>;
         };
         setOrganizationMutation: {
@@ -202,6 +209,17 @@ export function createProviderSettingsActions(input: {
                 providerId: input.selectedProviderId,
                 optionProfileId: input.currentOptionProfileId,
                 baseUrlOverride: normalizedBaseUrlOverride.length > 0 ? normalizedBaseUrlOverride : null,
+            });
+        },
+        changeExecutionPreference: async (mode: OpenAIExecutionMode) => {
+            if (input.selectedProviderId !== 'openai') {
+                return;
+            }
+
+            await input.mutations.setExecutionPreferenceMutation.mutateAsync({
+                profileId: input.profileId,
+                providerId: 'openai',
+                mode,
             });
         },
         changeOrganization: async (organizationId?: string) => {

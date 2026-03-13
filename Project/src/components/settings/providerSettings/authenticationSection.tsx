@@ -5,7 +5,7 @@ import { ProviderConnectionDetailsSection } from '@/web/components/settings/prov
 import { ProviderCredentialSection } from '@/web/components/settings/providerSettings/authentication/providerCredentialSection';
 import type { ActiveAuthFlow, ProviderAuthStateView } from '@/web/components/settings/providerSettings/types';
 
-import type { RuntimeProviderId } from '@/shared/contracts';
+import type { OpenAIExecutionMode, RuntimeProviderId } from '@/shared/contracts';
 
 interface ProviderAuthenticationSectionProps {
     selectedProviderId: RuntimeProviderId | undefined;
@@ -18,6 +18,13 @@ interface ProviderAuthenticationSectionProps {
     supportsCustomBaseUrl: boolean;
     baseUrlOverrideValue: string;
     resolvedBaseUrl: string | null;
+    executionPreference:
+        | {
+              mode: OpenAIExecutionMode;
+              canUseRealtimeWebSocket: boolean;
+              disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
+          }
+        | undefined;
     apiKeyCta?: { label: string; url: string };
     credentialSummary?: {
         hasStoredCredential: boolean;
@@ -27,11 +34,13 @@ interface ProviderAuthenticationSectionProps {
     activeAuthFlow: ActiveAuthFlow | undefined;
     isSavingApiKey: boolean;
     isSavingConnectionProfile: boolean;
+    isSavingExecutionPreference: boolean;
     isStartingAuth: boolean;
     isPollingAuth: boolean;
     isCancellingAuth: boolean;
     isOpeningVerificationPage: boolean;
     onConnectionProfileChange: (value: string) => void;
+    onExecutionPreferenceChange: (mode: OpenAIExecutionMode) => void;
     onSaveApiKey: (value: string) => Promise<void>;
     onSaveBaseUrlOverride: (value: string) => Promise<void>;
     onLoadStoredCredential: () => Promise<string | undefined>;
@@ -64,16 +73,19 @@ export function ProviderAuthenticationSection({
     supportsCustomBaseUrl,
     baseUrlOverrideValue,
     resolvedBaseUrl,
+    executionPreference,
     apiKeyCta,
     credentialSummary,
     activeAuthFlow,
     isSavingApiKey,
     isSavingConnectionProfile,
+    isSavingExecutionPreference,
     isStartingAuth,
     isPollingAuth,
     isCancellingAuth,
     isOpeningVerificationPage,
     onConnectionProfileChange,
+    onExecutionPreferenceChange,
     onSaveApiKey,
     onSaveBaseUrlOverride,
     onLoadStoredCredential,
@@ -235,13 +247,17 @@ export function ProviderAuthenticationSection({
                     </div>
 
                     <ProviderConnectionDetailsSection
+                        selectedProviderId={selectedProviderId}
                         connectionProfileValue={connectionProfileValue}
                         connectionProfileOptions={connectionProfileOptions}
                         supportsCustomBaseUrl={supportsCustomBaseUrl}
                         baseUrlOverrideValue={baseUrlOverrideInput}
                         resolvedBaseUrl={resolvedBaseUrl}
+                        executionPreference={executionPreference}
                         isSavingConnectionProfile={isSavingConnectionProfile}
+                        isSavingExecutionPreference={isSavingExecutionPreference}
                         onConnectionProfileChange={onConnectionProfileChange}
+                        onExecutionPreferenceChange={onExecutionPreferenceChange}
                         onBaseUrlOverrideChange={setBaseUrlOverrideInput}
                         onSaveBaseUrlOverride={saveBaseUrlOverride}
                     />

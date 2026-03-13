@@ -68,6 +68,7 @@
         "tailwind-merge": "^3.5.0",
         "tiktoken": "^1.0.22",
         "unified": "^11.0.5",
+        "ws": "^8.19.0",
         "zustand": "^5.0.11"
     },
     "devDependencies": {
@@ -91,6 +92,7 @@
         "@types/node": "^25.5.0",
         "@types/react": "^19.2.14",
         "@types/react-dom": "^19.2.3",
+        "@types/ws": "^8.18.1",
         "@vitejs/plugin-react": "^6.0.0",
         "@vitest/eslint-plugin": "^1.6.11",
         "babel-plugin-react-compiler": "^1.0.0",

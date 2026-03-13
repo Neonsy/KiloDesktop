@@ -4,6 +4,7 @@ import {
     providerGetCredentialInputSchema,
     providerGetAccountContextInputSchema,
     providerGetConnectionProfileInputSchema,
+    providerGetExecutionPreferenceInputSchema,
     providerGetModelRoutingPreferenceInputSchema,
     providerListAuthMethodsInputSchema,
     providerListModelProvidersInputSchema,
@@ -101,6 +102,21 @@ export const providerQueryProcedures = {
             connectionProfile: connectionProfileResult.value,
         };
     }),
+    getExecutionPreference: publicProcedure
+        .input(providerGetExecutionPreferenceInputSchema)
+        .query(async ({ input }) => {
+            const executionPreferenceResult = await providerManagementService.getExecutionPreference(
+                input.profileId,
+                input.providerId
+            );
+            if (executionPreferenceResult.isErr()) {
+                throwWithCode(executionPreferenceResult.error.code, executionPreferenceResult.error.message);
+            }
+
+            return {
+                executionPreference: executionPreferenceResult.value,
+            };
+        }),
     getModelRoutingPreference: publicProcedure
         .input(providerGetModelRoutingPreferenceInputSchema)
         .query(async ({ input }) => {

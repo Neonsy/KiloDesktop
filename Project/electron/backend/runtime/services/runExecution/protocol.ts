@@ -7,6 +7,7 @@ import type {
 } from '@/app/backend/providers/types';
 import type { RuntimeProviderId, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
 import type { ProviderAuthMethod } from '@/app/backend/runtime/contracts';
+import type { OpenAIExecutionMode, TopLevelTab } from '@/app/backend/runtime/contracts';
 import type { RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
 import type { RunTransportResolution } from '@/app/backend/runtime/services/runExecution/types';
 
@@ -24,6 +25,8 @@ interface ResolveRuntimeProtocolInput {
     modelCapabilities: ProviderModelCapabilities;
     authMethod: ProviderAuthMethod | 'none';
     runtimeOptions: RuntimeRunOptions;
+    topLevelTab?: TopLevelTab;
+    openAIExecutionMode?: OpenAIExecutionMode;
 }
 
 export async function resolveRuntimeProtocol(

@@ -36,6 +36,12 @@ export interface ProviderListItem {
         resolvedBaseUrl: string | null;
         organizationId?: string | null;
     };
+    executionPreference?: {
+        providerId: RuntimeProviderId;
+        mode: 'standard_http' | 'realtime_websocket';
+        canUseRealtimeWebSocket: boolean;
+        disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
+    };
     apiKeyCta: {
         label: string;
         url: string;

@@ -14,6 +14,7 @@ import type {
 import { providerMetadataOrchestrator } from '@/app/backend/providers/metadata/orchestrator';
 import { getProviderDefinition } from '@/app/backend/providers/registry';
 import { getConnectionProfileState, resolveApiKeyCta } from '@/app/backend/providers/service/endpointProfiles';
+import { getExecutionPreferenceState } from '@/app/backend/providers/service/executionPreferences';
 import {
     errProviderService,
     okProviderService,
@@ -58,6 +59,10 @@ export async function listProviders(profileId: string): Promise<ProviderListItem
             const apiKeyCta = apiKeyCtaResult.isErr()
                 ? { label: 'Get API Key', url: 'https://kilocode.ai' }
                 : apiKeyCtaResult.value;
+            const executionPreferenceResult =
+                provider.id === 'openai'
+                    ? await getExecutionPreferenceState(profileId, provider.id)
+                    : null;
             return {
                 ...provider,
                 isDefault: defaults.providerId === provider.id,
@@ -69,6 +74,9 @@ export async function listProviders(profileId: string): Promise<ProviderListItem
                     ...(authState.organizationId ? { organizationId: authState.organizationId } : {}),
                 },
                 apiKeyCta,
+                ...(executionPreferenceResult && executionPreferenceResult.isOk()
+                    ? { executionPreference: executionPreferenceResult.value }
+                    : {}),
                 features: {
                     catalogStrategy: definition.catalogStrategy,
                     supportsKiloRouting: definition.supportsKiloRouting,

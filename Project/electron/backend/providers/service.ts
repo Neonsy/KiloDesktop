@@ -5,6 +5,10 @@ import type { ProviderAccountContextResult, PollAuthResult, StartAuthResult } fr
 import { providerMetadataOrchestrator } from '@/app/backend/providers/metadata/orchestrator';
 import { providerAuthExecutionService } from '@/app/backend/providers/providerAuthExecutionService';
 import { getProviderDefinition } from '@/app/backend/providers/registry';
+import {
+    getExecutionPreferenceState,
+    setExecutionPreferenceState,
+} from '@/app/backend/providers/service/executionPreferences';
 import { syncCatalog } from '@/app/backend/providers/service/catalogSync';
 import { getConnectionProfileState, setConnectionProfileState } from '@/app/backend/providers/service/endpointProfiles';
 import { errProviderService, okProviderService, type ProviderServiceResult } from '@/app/backend/providers/service/errors';
@@ -218,6 +222,35 @@ class ProviderManagementService {
             ...stateResult.value,
             ...(authState.organizationId ? { organizationId: authState.organizationId } : {}),
         });
+    }
+
+    async getExecutionPreference(
+        profileId: string,
+        providerId: RuntimeProviderId
+    ) {
+        if (providerId !== 'openai') {
+            return errProviderService(
+                'invalid_payload',
+                `Provider "${providerId}" does not support execution mode overrides.`
+            );
+        }
+
+        return getExecutionPreferenceState(profileId, 'openai');
+    }
+
+    async setExecutionPreference(
+        profileId: string,
+        providerId: RuntimeProviderId,
+        mode: import('@/app/backend/runtime/contracts').OpenAIExecutionMode
+    ) {
+        if (providerId !== 'openai') {
+            return errProviderService(
+                'invalid_payload',
+                `Provider "${providerId}" does not support execution mode overrides.`
+            );
+        }
+
+        return setExecutionPreferenceState(profileId, 'openai', mode);
     }
 
     async setConnectionProfile(

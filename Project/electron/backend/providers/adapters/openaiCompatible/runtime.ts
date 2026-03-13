@@ -13,6 +13,7 @@ import {
 import {
     streamProviderNativeRuntime,
 } from '@/app/backend/providers/adapters/providerNative';
+import { streamOpenAIRealtimeWebSocketRuntime } from '@/app/backend/providers/adapters/openaiCompatible/realtimeWebsocket';
 import { resolveRuntimeFamilyExecutionPath } from '@/app/backend/providers/runtimeFamilies';
 import {
     consumeChatCompletionsStreamResponse,
@@ -32,8 +33,8 @@ interface OpenAICompatibleRuntimeConfig {
     resolveEndpoints: (
         input: ProviderRuntimeInput
     ) =>
-        | Promise<{ chatCompletionsUrl: string; responsesUrl: string }>
-        | { chatCompletionsUrl: string; responsesUrl: string };
+        | Promise<{ chatCompletionsUrl: string; responsesUrl: string; baseUrl?: string }>
+        | { chatCompletionsUrl: string; responsesUrl: string; baseUrl?: string };
 }
 
 function toUpstreamModelId(modelId: string, modelPrefix: string): string {
@@ -446,6 +447,47 @@ export async function streamOpenAICompatibleRuntime(
     const token = tokenResult.value;
     const startedAt = Date.now();
     const endpoints = await config.resolveEndpoints(input);
+
+    if (config.providerId === 'openai' && input.runtimeOptions.execution.openAIExecutionMode === 'realtime_websocket') {
+        if (!endpoints.baseUrl) {
+            return failWithLog(
+                input,
+                config,
+                'realtime websocket',
+                'request_failed',
+                'OpenAI Realtime WebSocket execution requires a resolved OpenAI base URL.'
+            );
+        }
+
+        await emitRuntimeLifecycleSelection({
+            handlers,
+            transportSelection: {
+                selected: 'openai_realtime_websocket',
+                requested: input.runtimeOptions.transport.family,
+                degraded: false,
+            },
+            cacheResult: input.cache,
+        });
+
+        const result = await streamOpenAIRealtimeWebSocketRuntime({
+            runtimeInput: input,
+            handlers,
+            baseUrl: endpoints.baseUrl,
+            token,
+            startedAt,
+        });
+        if (result.isErr()) {
+            return failWithLog(
+                input,
+                config,
+                'realtime websocket',
+                result.error.code,
+                result.error.message
+            );
+        }
+
+        return okProviderAdapter(undefined);
+    }
 
     if (input.toolProtocol === 'openai_chat_completions') {
         await emitRuntimeLifecycleSelection({

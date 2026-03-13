@@ -1,5 +1,6 @@
 import { streamOpenAICompatibleRuntime } from '@/app/backend/providers/adapters/openaiCompatible/runtime';
-import { resolveOpenAIEndpoints } from '@/app/backend/providers/adapters/openai/endpoints';
+import { resolveOpenAIEndpoints, resolveOpenAIEndpointsFromBaseUrl } from '@/app/backend/providers/adapters/openai/endpoints';
+import { resolveProviderRuntimePathContext } from '@/app/backend/providers/runtimePathContext';
 import type {
     ProviderAdapterResult,
     ProviderRuntimeHandlers,
@@ -14,6 +15,13 @@ export async function streamOpenAIRuntime(
         providerId: 'openai',
         modelPrefix: 'openai/',
         label: 'OpenAI',
-        resolveEndpoints: () => resolveOpenAIEndpoints(),
+        resolveEndpoints: async (runtimeInput) => {
+            const runtimePathResult = await resolveProviderRuntimePathContext(runtimeInput.profileId, 'openai');
+            if (runtimePathResult.isErr() || !runtimePathResult.value.resolvedBaseUrl) {
+                return resolveOpenAIEndpoints();
+            }
+
+            return resolveOpenAIEndpointsFromBaseUrl(runtimePathResult.value.resolvedBaseUrl);
+        },
     });
 }

@@ -2,6 +2,7 @@ import type { ProviderRecord } from '@/app/backend/persistence/types';
 import type { ProviderCatalogStrategy } from '@/app/backend/providers/registry';
 import type {
     ProviderConnectionProfile,
+    ProviderExecutionPreference,
     KiloModelProviderInfo,
     ProviderAuthMethod,
     ProviderCredentialSummary,
@@ -15,6 +16,7 @@ export interface ProviderListItem extends ProviderRecord {
     authState: string;
     availableAuthMethods: ProviderAuthMethod[];
     connectionProfile: ProviderConnectionProfile;
+    executionPreference?: ProviderExecutionPreference;
     apiKeyCta: {
         label: string;
         url: string;

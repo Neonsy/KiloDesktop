@@ -164,6 +164,7 @@ export class RunExecutionService {
             toolProtocol: prepared.runtimeProtocol,
             ...(prepared.apiFamily ? { apiFamily: prepared.apiFamily } : {}),
             ...(prepared.routedApiFamily ? { routedApiFamily: prepared.routedApiFamily } : {}),
+            ...(prepared.openAIExecutionMode ? { openAIExecutionMode: prepared.openAIExecutionMode } : {}),
             authMethod: prepared.resolvedAuth.authMethod,
             runtimeOptions: input.runtimeOptions,
             cache: prepared.resolvedCache,

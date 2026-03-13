@@ -223,6 +223,10 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         profileId: string;
         providerId: string;
     }>();
+    expectTypeOf<Inputs['provider']['getExecutionPreference']>().toExtend<{
+        profileId: string;
+        providerId: string;
+    }>();
     expectTypeOf<Inputs['provider']['getDefaults']>().toExtend<{
         profileId: string;
     }>();
@@ -240,6 +244,7 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
             supportsReasoning: boolean;
             supportsVision: boolean;
             supportsPromptCache?: boolean;
+            supportsRealtimeWebSocket?: boolean;
             apiFamily?:
                 | 'openai_compatible'
                 | 'kilo_gateway'
@@ -355,6 +360,11 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
         optionProfileId: string;
         baseUrlOverride?: string | null;
         organizationId?: string | null;
+    }>();
+    expectTypeOf<Inputs['provider']['setExecutionPreference']>().toExtend<{
+        profileId: string;
+        providerId: 'openai';
+        mode: 'standard_http' | 'realtime_websocket';
     }>();
     expectTypeOf<Inputs['provider']['getModelRoutingPreference']>().toExtend<{
         profileId: string;
@@ -507,9 +517,18 @@ test('AppRouter exposes runtime procedure contracts to clients', () => {
     }>();
     expectTypeOf<Outputs['runtime']['getShellBootstrap']>().toExtend<{
         lastSequence: number;
+        providers: Array<{
+            executionPreference?: {
+                providerId: string;
+                mode: 'standard_http' | 'realtime_websocket';
+                canUseRealtimeWebSocket: boolean;
+                disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
+            };
+        }>;
         providerModels: Array<{
             id: string;
             supportsPromptCache?: boolean;
+            supportsRealtimeWebSocket?: boolean;
             apiFamily?:
                 | 'openai_compatible'
                 | 'kilo_gateway'

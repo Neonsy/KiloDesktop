@@ -12,6 +12,7 @@ import type {
     KiloAccountContext,
     MarketplacePackage,
     ModeDefinition,
+    OpenAIExecutionMode,
     ProviderAuthFlowStatus,
     ProviderAuthFlowType,
     ProviderAuthMethod,
@@ -128,6 +129,7 @@ export interface ProviderModelRecord {
     supportsAudioInput: boolean;
     supportsAudioOutput: boolean;
     supportsPromptCache?: boolean;
+    supportsRealtimeWebSocket?: boolean;
     toolProtocol?: ProviderToolProtocol;
     apiFamily?: ProviderApiFamily;
     routedApiFamily?: ProviderRoutedApiFamily;
@@ -158,6 +160,13 @@ export interface ProviderAuthStateRecord {
     lastErrorCode?: string;
     lastErrorMessage?: string;
     updatedAt: string;
+}
+
+export interface ProviderExecutionPreferenceRecord {
+    providerId: 'openai';
+    mode: OpenAIExecutionMode;
+    canUseRealtimeWebSocket: boolean;
+    disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
 }
 
 export interface ProviderAuthFlowRecord {

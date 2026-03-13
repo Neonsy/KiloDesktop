@@ -1,9 +1,10 @@
 import { kiloRoutingPreferenceStore, providerStore } from '@/app/backend/persistence/stores';
 import type { ProviderRuntimeInput } from '@/app/backend/providers/types';
+import { getExecutionPreferenceState } from '@/app/backend/providers/service/executionPreferences';
 import { resolveRunCache } from '@/app/backend/runtime/services/runExecution/cacheKey';
 import { validateRunCapabilities } from '@/app/backend/runtime/services/runExecution/capabilities';
 import { buildRunContext } from '@/app/backend/runtime/services/runExecution/contextBuilder';
-import type { RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
+import type { RunExecutionErrorCode, RunExecutionResult } from '@/app/backend/runtime/services/runExecution/errors';
 import { errRunExecution, okRunExecution } from '@/app/backend/runtime/services/runExecution/errors';
 import { resolveModeExecution } from '@/app/backend/runtime/services/runExecution/mode';
 import { resolveRunAuth } from '@/app/backend/runtime/services/runExecution/resolveRunAuth';
@@ -11,12 +12,35 @@ import { resolveRuntimeProtocol } from '@/app/backend/runtime/services/runExecut
 import { resolveFirstRunnableRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunnableTarget';
 import { resolveRunTarget } from '@/app/backend/runtime/services/runExecution/resolveRunTarget';
 import { resolveRuntimeToolsForMode } from '@/app/backend/runtime/services/runExecution/tools';
+import type { ProviderServiceErrorCode } from '@/app/backend/providers/service/errors';
 import type {
     PreparedRunStart,
     ResolvedRunAuth,
     ResolvedRunTarget,
     StartRunInput,
 } from '@/app/backend/runtime/services/runExecution/types';
+
+function mapProviderServiceErrorCodeToRunExecutionCode(
+    code: ProviderServiceErrorCode
+): RunExecutionErrorCode {
+    if (code === 'request_failed') {
+        return 'provider_request_failed';
+    }
+
+    if (code === 'request_unavailable') {
+        return 'provider_request_unavailable';
+    }
+
+    if (code === 'provider_model_missing') {
+        return 'provider_model_missing';
+    }
+
+    if (code === 'invalid_payload') {
+        return 'invalid_payload';
+    }
+
+    return 'provider_not_supported';
+}
 
 export async function prepareRunStart(input: StartRunInput): Promise<RunExecutionResult<PreparedRunStart>> {
     const resolvedModeResult = await resolveModeExecution({
@@ -134,6 +158,17 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         );
     }
 
+    const openAIExecutionPreferenceResult =
+        activeTarget.providerId === 'openai'
+            ? await getExecutionPreferenceState(input.profileId, activeTarget.providerId)
+            : null;
+    if (openAIExecutionPreferenceResult?.isErr()) {
+        return errRunExecution(
+            mapProviderServiceErrorCodeToRunExecutionCode(openAIExecutionPreferenceResult.error.code),
+            openAIExecutionPreferenceResult.error.message
+        );
+    }
+
     const runtimeProtocolResult = await resolveRuntimeProtocol({
         profileId: input.profileId,
         providerId: activeTarget.providerId,
@@ -141,6 +176,10 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         modelCapabilities,
         authMethod: resolvedAuth.authMethod,
         runtimeOptions: input.runtimeOptions,
+        topLevelTab: input.topLevelTab,
+        ...(openAIExecutionPreferenceResult?.isOk()
+            ? { openAIExecutionMode: openAIExecutionPreferenceResult.value.mode }
+            : {}),
     });
     if (runtimeProtocolResult.isErr()) {
         return errRunExecution(runtimeProtocolResult.error.code, runtimeProtocolResult.error.message, {
@@ -224,6 +263,9 @@ export async function prepareRunStart(input: StartRunInput): Promise<RunExecutio
         resolvedAuth,
         resolvedCache: resolvedCacheResult.value,
         initialTransport: runtimeProtocolResult.value.transport,
+        ...(openAIExecutionPreferenceResult?.isOk()
+            ? { openAIExecutionMode: openAIExecutionPreferenceResult.value.mode }
+            : {}),
         toolDefinitions,
         ...(runContext ? { runContext } : {}),
         ...(kiloRouting ? { kiloRouting } : {}),

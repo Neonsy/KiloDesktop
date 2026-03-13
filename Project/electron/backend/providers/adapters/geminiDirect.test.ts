@@ -61,6 +61,7 @@ function createRuntimeInput(overrides?: Partial<ProviderRuntimeInput>): Provider
             transport: {
                 family: 'auto',
             },
+            execution: {},
         },
         cache: {
             strategy: 'auto',

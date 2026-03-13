@@ -9,6 +9,7 @@ import type {
     ComposerImageAttachmentInput,
     EntityId,
     ModeDefinition,
+    OpenAIExecutionMode,
     ResolvedContextState,
     ProviderAuthMethod,
     RuntimeProviderId,
@@ -148,6 +149,7 @@ export interface PreparedRunStart {
     resolvedAuth: ResolvedRunAuth;
     resolvedCache: RunCacheResolution;
     initialTransport: RunTransportResolution;
+    openAIExecutionMode?: OpenAIExecutionMode;
     toolDefinitions: ProviderRuntimeToolDefinition[];
     runContext?: RunContext;
     kiloRouting?: ResolvedKiloRouting;

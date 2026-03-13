@@ -628,4 +628,309 @@ describe('resolveRuntimeProtocol', () => {
         }
         expect(result.error.code).toBe('runtime_option_invalid');
     });
+
+    it('selects the OpenAI realtime websocket transport for realtime-capable OpenAI models', async () => {
+        resolveProviderRuntimePathContextMock.mockResolvedValueOnce({
+            isOk: () => true,
+            isErr: () => false,
+            value: {
+                profileId: 'profile_local_default',
+                providerId: 'openai',
+                optionProfileId: 'default',
+                resolvedBaseUrl: 'https://api.openai.com/v1',
+            },
+        });
+
+        const result = await resolveRuntimeProtocol({
+            profileId: 'profile_local_default',
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+            modelCapabilities: {
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                supportsRealtimeWebSocket: true,
+                toolProtocol: 'openai_responses',
+                apiFamily: 'openai_compatible',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+            },
+            authMethod: 'api_key',
+            topLevelTab: 'agent',
+            openAIExecutionMode: 'realtime_websocket',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+        });
+
+        expect(result.isOk()).toBe(true);
+        if (result.isErr()) {
+            throw new Error(result.error.message);
+        }
+        expect(result.value.transport.selected).toBe('openai_realtime_websocket');
+    });
+
+    it('rejects OpenAI realtime websocket mode for chat runs', async () => {
+        const result = await resolveRuntimeProtocol({
+            profileId: 'profile_local_default',
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+            modelCapabilities: {
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                supportsRealtimeWebSocket: true,
+                toolProtocol: 'openai_responses',
+                apiFamily: 'openai_compatible',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+            },
+            authMethod: 'api_key',
+            topLevelTab: 'chat',
+            openAIExecutionMode: 'realtime_websocket',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isOk()) {
+            throw new Error('Expected chat-mode realtime websocket selection to fail closed.');
+        }
+        expect(result.error.code).toBe('runtime_option_invalid');
+        expect(result.error.action).toMatchObject({
+            code: 'runtime_options_invalid',
+            detail: 'chat_mode_not_supported',
+        });
+    });
+
+    it('rejects OpenAI realtime websocket mode when auth is not API-key based', async () => {
+        const result = await resolveRuntimeProtocol({
+            profileId: 'profile_local_default',
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+            modelCapabilities: {
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                supportsRealtimeWebSocket: true,
+                toolProtocol: 'openai_responses',
+                apiFamily: 'openai_compatible',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+            },
+            authMethod: 'oauth_pkce',
+            topLevelTab: 'agent',
+            openAIExecutionMode: 'realtime_websocket',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isOk()) {
+            throw new Error('Expected non-API-key realtime websocket selection to fail closed.');
+        }
+        expect(result.error.code).toBe('runtime_option_invalid');
+        expect(result.error.action).toMatchObject({
+            code: 'runtime_options_invalid',
+            detail: 'api_key_required',
+        });
+    });
+
+    it('rejects OpenAI realtime websocket mode for non-OpenAI providers', async () => {
+        const result = await resolveRuntimeProtocol({
+            profileId: 'profile_local_default',
+            providerId: 'moonshot',
+            modelId: 'moonshot/kimi-k2-turbo-preview',
+            modelCapabilities: {
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                supportsRealtimeWebSocket: true,
+                toolProtocol: 'openai_responses',
+                apiFamily: 'openai_compatible',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+            },
+            authMethod: 'api_key',
+            topLevelTab: 'agent',
+            openAIExecutionMode: 'realtime_websocket',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isOk()) {
+            throw new Error('Expected non-OpenAI realtime websocket selection to fail closed.');
+        }
+        expect(result.error.code).toBe('runtime_option_invalid');
+        expect(result.error.action).toMatchObject({
+            code: 'runtime_options_invalid',
+            detail: 'provider_not_supported',
+        });
+    });
+
+    it('rejects OpenAI realtime websocket mode for custom base URLs', async () => {
+        resolveProviderRuntimePathContextMock.mockResolvedValueOnce({
+            isOk: () => true,
+            isErr: () => false,
+            value: {
+                profileId: 'profile_local_default',
+                providerId: 'openai',
+                optionProfileId: 'default',
+                resolvedBaseUrl: 'https://custom-openai-gateway.example/v1',
+            },
+        });
+
+        const result = await resolveRuntimeProtocol({
+            profileId: 'profile_local_default',
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+            modelCapabilities: {
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: false,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                supportsRealtimeWebSocket: true,
+                toolProtocol: 'openai_responses',
+                apiFamily: 'openai_compatible',
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+            },
+            authMethod: 'api_key',
+            topLevelTab: 'agent',
+            openAIExecutionMode: 'realtime_websocket',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isOk()) {
+            throw new Error('Expected custom-base realtime websocket selection to fail closed.');
+        }
+        expect(result.error.code).toBe('runtime_option_invalid');
+        expect(result.error.action).toMatchObject({
+            code: 'runtime_options_invalid',
+            detail: 'base_url_not_supported',
+        });
+    });
+
+    it('rejects OpenAI realtime websocket mode for non-realtime-capable models', async () => {
+        resolveProviderRuntimePathContextMock.mockResolvedValueOnce({
+            isOk: () => true,
+            isErr: () => false,
+            value: {
+                profileId: 'profile_local_default',
+                providerId: 'openai',
+                optionProfileId: 'default',
+                resolvedBaseUrl: 'https://api.openai.com/v1',
+            },
+        });
+
+        const result = await resolveRuntimeProtocol({
+            profileId: 'profile_local_default',
+            providerId: 'openai',
+            modelId: 'openai/gpt-5',
+            modelCapabilities: {
+                supportsTools: true,
+                supportsReasoning: true,
+                supportsVision: true,
+                supportsAudioInput: false,
+                supportsAudioOutput: false,
+                supportsRealtimeWebSocket: false,
+                toolProtocol: 'openai_responses',
+                apiFamily: 'openai_compatible',
+                inputModalities: ['text', 'image'],
+                outputModalities: ['text'],
+            },
+            authMethod: 'api_key',
+            topLevelTab: 'agent',
+            openAIExecutionMode: 'realtime_websocket',
+            runtimeOptions: {
+                reasoning: {
+                    effort: 'none',
+                    summary: 'none',
+                    includeEncrypted: false,
+                },
+                cache: {
+                    strategy: 'auto',
+                },
+                transport: {
+                    family: 'auto',
+                },
+            },
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isOk()) {
+            throw new Error('Expected non-realtime-capable model to fail closed.');
+        }
+        expect(result.error.code).toBe('runtime_option_invalid');
+        expect(result.error.action).toMatchObject({
+            code: 'runtime_options_invalid',
+            detail: 'model_not_realtime_capable',
+        });
+    });
 });

@@ -105,6 +105,7 @@ function parseSelectedTransport(value: string | null): ProviderRuntimeTransportF
     if (
         value === 'openai_responses' ||
         value === 'openai_chat_completions' ||
+        value === 'openai_realtime_websocket' ||
         value === 'kilo_gateway' ||
         value === 'provider_native' ||
         value === 'anthropic_messages' ||

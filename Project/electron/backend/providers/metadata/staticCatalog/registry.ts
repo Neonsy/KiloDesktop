@@ -14,6 +14,7 @@ export interface StaticProviderModelDefinition {
     supportsAudioInput?: boolean;
     supportsAudioOutput?: boolean;
     supportsPromptCache?: boolean;
+    supportsRealtimeWebSocket?: boolean;
     toolProtocol?: ProviderToolProtocol;
     apiFamily?: ProviderApiFamily;
     inputModalities?: Array<'text' | 'audio' | 'image' | 'video' | 'pdf'>;
@@ -36,6 +37,38 @@ const TEXT_OUTPUT: Array<'text'> = ['text'];
 const TEXT_IMAGE_INPUT: Array<'text' | 'image'> = ['text', 'image'];
 
 const OPENAI_MODELS: StaticProviderModelDefinition[] = [
+    {
+        providerId: 'openai',
+        modelId: 'openai/gpt-realtime',
+        label: 'GPT Realtime',
+        availabilityByEndpointProfile: { default: true },
+        supportsTools: true,
+        supportsReasoning: true,
+        supportsRealtimeWebSocket: true,
+        toolProtocol: 'openai_responses',
+        apiFamily: 'openai_compatible',
+        inputModalities: TEXT_INPUT,
+        outputModalities: TEXT_OUTPUT,
+        contextLength: 128_000,
+        sourceNote: STATIC_SOURCE_NOTE,
+        updatedAt: STATIC_UPDATED_AT,
+    },
+    {
+        providerId: 'openai',
+        modelId: 'openai/gpt-realtime-mini',
+        label: 'GPT Realtime Mini',
+        availabilityByEndpointProfile: { default: true },
+        supportsTools: true,
+        supportsReasoning: true,
+        supportsRealtimeWebSocket: true,
+        toolProtocol: 'openai_responses',
+        apiFamily: 'openai_compatible',
+        inputModalities: TEXT_INPUT,
+        outputModalities: TEXT_OUTPUT,
+        contextLength: 128_000,
+        sourceNote: STATIC_SOURCE_NOTE,
+        updatedAt: STATIC_UPDATED_AT,
+    },
     {
         providerId: 'openai',
         modelId: 'openai/gpt-5',
@@ -416,6 +449,9 @@ export function toStaticProviderCatalogModel(
             ...(definition.supportsPromptCache !== undefined
                 ? { supportsPromptCache: definition.supportsPromptCache }
                 : {}),
+            ...(definition.supportsRealtimeWebSocket !== undefined
+                ? { supportsRealtimeWebSocket: definition.supportsRealtimeWebSocket }
+                : {}),
             ...(definition.toolProtocol ? { toolProtocol: definition.toolProtocol } : {}),
             ...(definition.apiFamily ? { apiFamily: definition.apiFamily } : {}),
         },
@@ -426,6 +462,9 @@ export function toStaticProviderCatalogModel(
             updatedAt: definition.updatedAt,
             endpointProfile,
             recommended: isRecommendedForEndpoint(definition, endpointProfile),
+            ...(definition.supportsRealtimeWebSocket !== undefined
+                ? { supports_realtime_websocket: definition.supportsRealtimeWebSocket }
+                : {}),
             ...(definition.maxOutputTokens !== undefined ? { max_output_tokens: definition.maxOutputTokens } : {}),
         },
     };

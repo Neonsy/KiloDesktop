@@ -13,6 +13,7 @@ import type {
     ProviderRuntimeUsage,
 } from '@/app/backend/providers/types';
 import type { EntityId, KiloDynamicSort, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { OpenAIExecutionMode } from '@/app/backend/runtime/contracts';
 import { InvariantError } from '@/app/backend/runtime/services/common/fatalErrors';
 import {
     errRunExecution,
@@ -100,6 +101,7 @@ export interface ExecuteRunInput {
     toolProtocol: ProviderRuntimeInput['toolProtocol'];
     apiFamily?: ProviderApiFamily;
     routedApiFamily?: ProviderRoutedApiFamily;
+    openAIExecutionMode?: OpenAIExecutionMode;
     authMethod: ProviderAuthMethod | 'none';
     runtimeOptions: StartRunInput['runtimeOptions'];
     contextMessages?: RunContextMessage[];
@@ -416,13 +418,18 @@ export async function executeRun(input: ExecuteRunInput): Promise<RunExecutionRe
             promptText: input.prompt,
             ...(conversationMessages.length > 0 ? { contextMessages: conversationMessages } : {}),
             ...(input.toolDefinitions.length > 0 ? { tools: input.toolDefinitions, toolChoice: 'auto' as const } : {}),
-            runtimeOptions: input.runtimeOptions,
             cache: input.cache,
             authMethod: input.authMethod,
             ...(input.apiKey ? { apiKey: input.apiKey } : {}),
             ...(input.accessToken ? { accessToken: input.accessToken } : {}),
             ...(input.organizationId ? { organizationId: input.organizationId } : {}),
             ...(input.kiloRouting ? { kiloRouting: input.kiloRouting } : {}),
+            runtimeOptions: {
+                ...input.runtimeOptions,
+                execution: {
+                    ...(input.openAIExecutionMode ? { openAIExecutionMode: input.openAIExecutionMode } : {}),
+                },
+            },
             signal: input.signal,
         };
 

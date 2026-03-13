@@ -24,6 +24,7 @@ describe('provider settings actions', () => {
                 syncCatalogMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setModelRoutingPreferenceMutation: { mutateAsync },
                 setConnectionProfileMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                setExecutionPreferenceMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setOrganizationMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setApiKeyMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 startAuthMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
@@ -78,6 +79,7 @@ describe('provider settings actions', () => {
                 syncCatalogMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setModelRoutingPreferenceMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setConnectionProfileMutation: { mutateAsync: setConnectionProfileMutateAsync },
+                setExecutionPreferenceMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setOrganizationMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 setApiKeyMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
                 startAuthMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
@@ -94,6 +96,43 @@ describe('provider settings actions', () => {
             providerId: 'openai',
             optionProfileId: 'default',
             baseUrlOverride: 'https://custom-openai-gateway.example/v1',
+        });
+    });
+
+    it('persists OpenAI execution preference changes through the dedicated mutation', async () => {
+        const setExecutionPreferenceMutateAsync = vi.fn().mockResolvedValue(undefined);
+        const actions = createProviderSettingsActions({
+            profileId: 'profile_default',
+            selectedProviderId: 'openai',
+            selectedModelId: 'openai/gpt-realtime',
+            currentOptionProfileId: 'default',
+            activeAuthFlow: undefined,
+            kiloModelProviderIds: [],
+            kiloRoutingDraft: undefined,
+            setSelectedProviderId: vi.fn(),
+            setStatusMessage: vi.fn(),
+            onPreviewProvider: vi.fn(),
+            mutations: {
+                setDefaultMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                syncCatalogMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                setModelRoutingPreferenceMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                setConnectionProfileMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                setExecutionPreferenceMutation: { mutateAsync: setExecutionPreferenceMutateAsync },
+                setOrganizationMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                setApiKeyMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                startAuthMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                pollAuthMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                cancelAuthMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+                openExternalUrlMutation: { mutateAsync: vi.fn().mockResolvedValue(undefined) },
+            },
+        });
+
+        await actions.changeExecutionPreference('realtime_websocket');
+
+        expect(setExecutionPreferenceMutateAsync).toHaveBeenCalledWith({
+            profileId: 'profile_default',
+            providerId: 'openai',
+            mode: 'realtime_websocket',
         });
     });
 });

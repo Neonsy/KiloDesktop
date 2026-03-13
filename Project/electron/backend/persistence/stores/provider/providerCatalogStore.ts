@@ -226,6 +226,7 @@ export class ProviderCatalogStore {
                 'input_modalities_json',
                 'output_modalities_json',
                 'prompt_family',
+                'raw_json',
             ])
             .where('profile_id', '=', profileId)
             .where('provider_id', '=', providerId)
@@ -241,6 +242,11 @@ export class ProviderCatalogStore {
         const toolProtocol = parseToolProtocol(row.tool_protocol);
         const apiFamily = parseApiFamily(row.api_family);
         const routedApiFamily = parseRoutedApiFamily(row.routed_api_family);
+        const raw = JSON.parse(row.raw_json) as Record<string, unknown>;
+        const supportsRealtimeWebSocket =
+            typeof raw['supports_realtime_websocket'] === 'boolean'
+                ? raw['supports_realtime_websocket']
+                : undefined;
 
         return {
             supportsTools: row.supports_tools === 1,
@@ -254,6 +260,7 @@ export class ProviderCatalogStore {
                     ? outputModalities.includes('audio')
                     : row.supports_audio_output === 1,
             ...(row.supports_prompt_cache !== null ? { supportsPromptCache: row.supports_prompt_cache === 1 } : {}),
+            ...(supportsRealtimeWebSocket !== undefined ? { supportsRealtimeWebSocket } : {}),
             ...(toolProtocol ? { toolProtocol } : {}),
             ...(apiFamily ? { apiFamily } : {}),
             ...(routedApiFamily ? { routedApiFamily } : {}),
@@ -270,7 +277,10 @@ export class ProviderCatalogStore {
     ): Promise<ReplaceCatalogModelsResult> {
         const { db } = getPersistence();
         const updatedAt = nowIso();
-        const normalizedModels = models.map(normalizeComparableModel);
+        const dedupedModels = Array.from(
+            models.reduce((accumulator, model) => accumulator.set(model.modelId, model), new Map<string, ProviderCatalogModelUpsert>()).values()
+        );
+        const normalizedModels = dedupedModels.map(normalizeComparableModel);
 
         const existingRows = await db
             .selectFrom('provider_model_catalog')
@@ -326,6 +336,7 @@ export class ProviderCatalogStore {
 
         await db
             .insertInto('provider_model_catalog')
+            .orReplace()
             .values(
                 normalizedModels.map((model) => ({
                     profile_id: profileId,

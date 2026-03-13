@@ -165,6 +165,7 @@ async function summarizeReplayMessages(input: {
         transport: {
             family: 'auto' as const,
         },
+        execution: {},
     };
     const runtimeProtocol = await resolveRuntimeProtocol({
         profileId: input.profileId,

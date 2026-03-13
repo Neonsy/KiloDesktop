@@ -1,6 +1,7 @@
 import type {
     KiloDynamicSort,
     KiloRoutingMode,
+    OpenAIExecutionMode,
     ProviderAuthMethod,
     ProviderSecretKind,
     RuntimeProviderId,
@@ -96,6 +97,10 @@ export type ProviderGetAccountContextInput = ProviderByIdInput;
 
 export type ProviderGetConnectionProfileInput = ProviderByIdInput;
 
+export interface ProviderGetExecutionPreferenceInput extends ProfileInput {
+    providerId: 'openai';
+}
+
 export interface ProviderSetConnectionProfileInput extends ProviderByIdInput {
     optionProfileId: string;
     baseUrlOverride?: string | null;
@@ -115,6 +120,18 @@ export interface ProviderConnectionProfile {
     baseUrlOverride?: string;
     resolvedBaseUrl: string | null;
     organizationId?: string | null;
+}
+
+export interface ProviderExecutionPreference {
+    providerId: 'openai';
+    mode: OpenAIExecutionMode;
+    canUseRealtimeWebSocket: boolean;
+    disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
+}
+
+export interface ProviderSetExecutionPreferenceInput extends ProfileInput {
+    providerId: 'openai';
+    mode: OpenAIExecutionMode;
 }
 
 export interface ProviderSetOrganizationInput extends ProfileInput {

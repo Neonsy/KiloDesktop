@@ -346,6 +346,7 @@ CREATE TABLE "runs" (
         transport_selected IN (
             'openai_responses',
             'openai_chat_completions',
+            'openai_realtime_websocket',
             'kilo_gateway',
             'provider_native',
             'anthropic_messages',

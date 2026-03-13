@@ -8,6 +8,7 @@ import {
     providerSetApiKeyInputSchema,
     providerSetDefaultInputSchema,
     providerSetConnectionProfileInputSchema,
+    providerSetExecutionPreferenceInputSchema,
     providerSetModelRoutingPreferenceInputSchema,
     providerSetOrganizationInputSchema,
     providerStartAuthInputSchema,
@@ -189,6 +190,35 @@ export const providerMutationProcedures = {
                 connectionProfile: connectionProfileResult.value,
                 defaults,
                 models: models.value,
+                ...(provider ? { provider } : {}),
+            };
+        }),
+    setExecutionPreference: publicProcedure
+        .input(providerSetExecutionPreferenceInputSchema)
+        .mutation(async ({ input }) => {
+            const executionPreferenceResult = await providerManagementService.setExecutionPreference(
+                input.profileId,
+                input.providerId,
+                input.mode
+            );
+            if (executionPreferenceResult.isErr()) {
+                throwWithCode(executionPreferenceResult.error.code, executionPreferenceResult.error.message);
+            }
+
+            const provider = await getProviderListItem(input.profileId, input.providerId);
+            await emitProviderUpsertEvent({
+                providerId: input.providerId,
+                eventType: 'provider.execution-preference.set',
+                payload: {
+                    profileId: input.profileId,
+                    providerId: input.providerId,
+                    executionPreference: executionPreferenceResult.value,
+                    ...(provider ? { provider } : {}),
+                },
+            });
+
+            return {
+                executionPreference: executionPreferenceResult.value,
                 ...(provider ? { provider } : {}),
             };
         }),

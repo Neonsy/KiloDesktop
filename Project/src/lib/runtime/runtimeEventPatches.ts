@@ -32,6 +32,7 @@ import {
     executionEnvironmentModes,
     kiloDynamicSorts,
     kiloRoutingModes,
+    openAIExecutionModes,
     providerAuthMethods,
     providerAuthStates,
     providerIds,
@@ -318,6 +319,7 @@ function readProviderListItem(value: unknown): ProviderListItem | undefined {
     const connectionProfileValue = value['connectionProfile'];
     const apiKeyCtaValue = value['apiKeyCta'];
     const featuresValue = value['features'];
+    const executionPreferenceValue = value['executionPreference'];
     if (
         !id ||
         !label ||
@@ -369,6 +371,30 @@ function readProviderListItem(value: unknown): ProviderListItem | undefined {
         connectionProfileValue['organizationId'] === null
             ? null
             : readString(connectionProfileValue['organizationId']);
+    const executionPreference: ProviderListItem['executionPreference'] =
+        isRecord(executionPreferenceValue) &&
+        readLiteral(executionPreferenceValue['providerId'], ['openai'] as const) &&
+        readLiteral(executionPreferenceValue['mode'], openAIExecutionModes) &&
+        readBoolean(executionPreferenceValue['canUseRealtimeWebSocket']) !== undefined
+            ? {
+                  providerId: 'openai',
+                  mode: readLiteral(executionPreferenceValue['mode'], openAIExecutionModes)!,
+                  canUseRealtimeWebSocket: readBoolean(executionPreferenceValue['canUseRealtimeWebSocket'])!,
+                  ...(readLiteral(executionPreferenceValue['disabledReason'], [
+                      'provider_not_supported',
+                      'api_key_required',
+                      'base_url_not_supported',
+                  ] as const)
+                      ? {
+                            disabledReason: readLiteral(executionPreferenceValue['disabledReason'], [
+                                'provider_not_supported',
+                                'api_key_required',
+                                'base_url_not_supported',
+                            ] as const)!,
+                        }
+                      : {}),
+              }
+            : undefined;
     if (
         !connectionProfileOptionValue ||
         !connectionProfileLabel ||
@@ -402,6 +428,7 @@ function readProviderListItem(value: unknown): ProviderListItem | undefined {
             resolvedBaseUrl: resolvedBaseUrl ?? null,
             ...(organizationId !== undefined ? { organizationId } : {}),
         },
+        ...(executionPreference ? { executionPreference } : {}),
         apiKeyCta: {
             label: apiKeyCtaLabel,
             url: apiKeyCtaUrl,
@@ -423,7 +450,7 @@ function readProviderAuthState(value: unknown): ProviderAuthStateRecord | undefi
     }
 
     const profileId = readString(value['profileId']);
-    const providerId = readLiteral(value['providerId'], providerIds);
+    const providerId = readLiteral(value['providerId'], ['openai'] as const);
     const authMethod = readLiteral(value['authMethod'], [...providerAuthMethods, 'none'] as const);
     const authState = readLiteral(value['authState'], providerAuthStates);
     const updatedAt = readString(value['updatedAt']);
@@ -491,6 +518,31 @@ function readConnectionProfile(value: unknown): ProviderConnectionProfileResult 
         resolvedBaseUrl: resolvedBaseUrl ?? null,
         ...(organizationId !== undefined ? { organizationId } : {}),
     };
+}
+
+function readExecutionPreference(value: unknown): ProviderListItem['executionPreference'] | undefined {
+    if (!isRecord(value)) {
+        return undefined;
+    }
+
+    const providerId = readLiteral(value['providerId'], providerIds);
+    const mode = readLiteral(value['mode'], openAIExecutionModes);
+    const canUseRealtimeWebSocket = readBoolean(value['canUseRealtimeWebSocket']);
+    const disabledReason = readLiteral(value['disabledReason'], [
+        'provider_not_supported',
+        'api_key_required',
+        'base_url_not_supported',
+    ] as const);
+    if (!providerId || !mode || canUseRealtimeWebSocket === undefined) {
+        return undefined;
+    }
+
+    return {
+        providerId: 'openai',
+        mode,
+        canUseRealtimeWebSocket,
+        ...(disabledReason ? { disabledReason } : {}),
+    } satisfies NonNullable<ProviderListItem['executionPreference']>;
 }
 
 function readDiffArtifact(value: unknown): DiffRecord['artifact'] | undefined {
@@ -808,6 +860,7 @@ function readRunRecord(value: unknown): RunRecord | undefined {
                       [
                           'openai_responses',
                           'openai_chat_completions',
+                          'openai_realtime_websocket',
                           'kilo_gateway',
                           'provider_native',
                           'anthropic_messages',
@@ -1188,11 +1241,12 @@ export function applyRuntimeEventPatches(
         const models = readProviderModels(event.payload['models']);
         const state = readProviderAuthState(event.payload['state']);
         const connectionProfile = readConnectionProfile(event.payload['connectionProfile']);
+        const executionPreference = readExecutionPreference(event.payload['executionPreference']);
         const preference = readRoutingPreference(event.payload['preference']);
         const providers = readModelProviderOptions(event.payload['providers']);
         const modelId = readString(event.payload['modelId']);
 
-        if (!provider && !defaults && !models && !state && !connectionProfile && !preference && !providers) {
+        if (!provider && !defaults && !models && !state && !connectionProfile && !executionPreference && !preference && !providers) {
             return false;
         }
 
@@ -1205,6 +1259,7 @@ export function applyRuntimeEventPatches(
             ...(models ? { models } : {}),
             ...(state ? { authState: state } : {}),
             ...(connectionProfile ? { connectionProfile } : {}),
+            ...(executionPreference ? { executionPreference } : {}),
             ...(preference ? { routingPreference: preference } : {}),
             ...(providers ? { routingProviders: providers } : {}),
             ...(modelId ? { routingModelId: modelId } : {}),

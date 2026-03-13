@@ -42,7 +42,14 @@ export type RuntimeCompatibilityIssue =
           providerId?: RuntimeProviderId | string;
           modelId?: string;
           modeKey?: string;
-          detail?: 'attachments_not_allowed' | 'generic';
+          detail?:
+              | 'attachments_not_allowed'
+              | 'generic'
+              | 'chat_mode_not_supported'
+              | 'model_not_realtime_capable'
+              | 'api_key_required'
+              | 'base_url_not_supported'
+              | 'provider_not_supported';
       };
 
 export type RunStartRejectionAction = RuntimeCompatibilityIssue;

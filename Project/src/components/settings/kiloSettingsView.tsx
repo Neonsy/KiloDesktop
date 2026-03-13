@@ -150,10 +150,12 @@ export function KiloSettingsView({ profileId }: KiloSettingsViewProps) {
                         supportsCustomBaseUrl={selectedProvider.features.supportsCustomBaseUrl}
                         baseUrlOverrideValue={selectedProvider.connectionProfile.baseUrlOverride ?? ''}
                         resolvedBaseUrl={selectedProvider.connectionProfile.resolvedBaseUrl}
+                        executionPreference={undefined}
                         apiKeyCta={selectedProvider.apiKeyCta}
                         activeAuthFlow={controller.authentication.activeAuthFlow}
                         isSavingApiKey={controller.authentication.isSavingApiKey}
                         isSavingConnectionProfile={controller.authentication.isSavingConnectionProfile}
+                        isSavingExecutionPreference={false}
                         isStartingAuth={controller.authentication.isStartingAuth}
                         isPollingAuth={controller.authentication.isPollingAuth}
                         isCancellingAuth={controller.authentication.isCancellingAuth}
@@ -161,6 +163,7 @@ export function KiloSettingsView({ profileId }: KiloSettingsViewProps) {
                         onConnectionProfileChange={(value) => {
                             void controller.authentication.changeConnectionProfile(value);
                         }}
+                        onExecutionPreferenceChange={() => {}}
                         onSaveApiKey={(value) => {
                             return controller.authentication.saveApiKey(value);
                         }}

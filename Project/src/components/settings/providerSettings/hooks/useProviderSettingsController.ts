@@ -112,6 +112,9 @@ export function useProviderSettingsController(profileId: string, options?: Provi
             setConnectionProfileMutation: {
                 mutateAsync: ignoreMutationResult(mutations.setConnectionProfileMutation.mutateAsync),
             },
+            setExecutionPreferenceMutation: {
+                mutateAsync: ignoreMutationResult(mutations.setExecutionPreferenceMutation.mutateAsync),
+            },
             setOrganizationMutation: {
                 mutateAsync: ignoreMutationResult(mutations.setOrganizationMutation.mutateAsync),
             },
@@ -144,6 +147,7 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         mutations.setDefaultMutation.error?.message ??
         mutations.setApiKeyMutation.error?.message ??
         mutations.setConnectionProfileMutation.error?.message ??
+        mutations.setExecutionPreferenceMutation.error?.message ??
         mutations.syncCatalogMutation.error?.message ??
         mutations.setModelRoutingPreferenceMutation.error?.message ??
         mutations.setOrganizationMutation.error?.message ??
@@ -155,6 +159,7 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         mutations.setDefaultMutation.error ??
         mutations.setApiKeyMutation.error ??
         mutations.setConnectionProfileMutation.error ??
+        mutations.setExecutionPreferenceMutation.error ??
         mutations.syncCatalogMutation.error ??
         mutations.setModelRoutingPreferenceMutation.error ??
         mutations.setOrganizationMutation.error ??
@@ -198,14 +203,17 @@ export function useProviderSettingsController(profileId: string, options?: Provi
         authentication: {
             methods: queries.selectedProvider?.availableAuthMethods ?? [],
             credentialSummary: queries.credentialSummary,
+            executionPreference: queries.selectedProvider?.executionPreference,
             activeAuthFlow,
             isSavingApiKey: mutations.setApiKeyMutation.isPending,
             isSavingConnectionProfile: mutations.setConnectionProfileMutation.isPending,
+            isSavingExecutionPreference: mutations.setExecutionPreferenceMutation.isPending,
             isStartingAuth: mutations.startAuthMutation.isPending,
             isPollingAuth: mutations.pollAuthMutation.isPending,
             isCancellingAuth: mutations.cancelAuthMutation.isPending,
             isOpeningVerificationPage: mutations.openExternalUrlMutation.isPending,
             changeConnectionProfile: actions.changeConnectionProfile,
+            changeExecutionPreference: actions.changeExecutionPreference,
             saveApiKey: actions.saveApiKey,
             saveBaseUrlOverride: actions.saveBaseUrlOverride,
             loadStoredCredential,

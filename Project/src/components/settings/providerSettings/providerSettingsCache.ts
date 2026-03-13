@@ -19,6 +19,7 @@ type ProviderModelsData = Awaited<ReturnType<TrpcUtils['provider']['listModels']
 type ProviderAuthStateData = Awaited<ReturnType<TrpcUtils['provider']['getAuthState']['fetch']>>;
 type ProviderAccountContextData = Awaited<ReturnType<TrpcUtils['provider']['getAccountContext']['fetch']>>;
 type ProviderConnectionProfileData = Awaited<ReturnType<TrpcUtils['provider']['getConnectionProfile']['fetch']>>;
+type ProviderExecutionPreferenceData = Awaited<ReturnType<TrpcUtils['provider']['getExecutionPreference']['fetch']>>;
 type ProviderModelProvidersData = Awaited<ReturnType<TrpcUtils['provider']['listModelProviders']['fetch']>>;
 type ProviderRoutingPreferenceData = Awaited<ReturnType<TrpcUtils['provider']['getModelRoutingPreference']['fetch']>>;
 type ShellBootstrapData = Awaited<ReturnType<TrpcUtils['runtime']['getShellBootstrap']['fetch']>>;
@@ -75,6 +76,7 @@ export function patchProviderCache(input: {
     authState?: ProviderAuthStateRecord;
     accountContext?: ProviderAccountContextData;
     connectionProfile?: ProviderConnectionProfileResult;
+    executionPreference?: ProviderListItem['executionPreference'];
     routingPreference?: KiloModelRoutingPreference;
     routingProviders?: KiloModelProviderOption[];
     routingModelId?: string;
@@ -157,6 +159,18 @@ export function patchProviderCache(input: {
         );
     }
 
+    if (input.executionPreference && input.providerId === 'openai') {
+        input.utils.provider.getExecutionPreference.setData(
+            {
+                profileId: input.profileId,
+                providerId: 'openai',
+            },
+            {
+                executionPreference: input.executionPreference,
+            } satisfies ProviderExecutionPreferenceData
+        );
+    }
+
     if (input.routingPreference && input.routingModelId) {
         input.utils.provider.getModelRoutingPreference.setData(
             {
@@ -183,7 +197,7 @@ export function patchProviderCache(input: {
         );
     }
 
-    if (input.provider || input.defaults || input.models || authState) {
+    if (input.provider || input.defaults || input.models || authState || input.executionPreference) {
         input.utils.runtime.getShellBootstrap.setData(
             { profileId: input.profileId },
             (current: ShellBootstrapData | undefined) => {
@@ -193,15 +207,22 @@ export function patchProviderCache(input: {
 
                 const nextProviders = current.providers.map((provider) => {
                     const replacedProvider = input.provider && provider.id === input.provider.id ? input.provider : provider;
-                    if (authState && replacedProvider.id === input.providerId) {
+                    const withExecutionPreference =
+                        input.executionPreference && replacedProvider.id === input.providerId
+                            ? {
+                                  ...replacedProvider,
+                                  executionPreference: input.executionPreference,
+                              }
+                            : replacedProvider;
+                    if (authState && withExecutionPreference.id === input.providerId) {
                         return {
-                            ...replacedProvider,
+                            ...withExecutionPreference,
                             authState: authState.authState,
                             authMethod: authState.authMethod,
                         };
                     }
 
-                    return replacedProvider;
+                    return withExecutionPreference;
                 });
 
                 return {

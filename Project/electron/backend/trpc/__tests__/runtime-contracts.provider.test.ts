@@ -1562,6 +1562,153 @@ describe('runtime contracts: provider and account flows', () => {
         expect(openAiProvider?.connectionProfile.resolvedBaseUrl).toBe('https://custom-openai-gateway.example/v1');
     });
 
+    it('persists OpenAI execution preference and projects eligibility through provider settings contracts', async () => {
+        const caller = createCaller();
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-realtime-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const initialPreference = await caller.provider.getExecutionPreference({
+            profileId,
+            providerId: 'openai',
+        });
+        expect(initialPreference.executionPreference.canUseRealtimeWebSocket).toBe(true);
+        expect(initialPreference.executionPreference.mode).toBe('standard_http');
+
+        const updatedPreference = await caller.provider.setExecutionPreference({
+            profileId,
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+        });
+        expect(updatedPreference.executionPreference).toEqual({
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+            canUseRealtimeWebSocket: true,
+        });
+
+        const providers = await caller.provider.listProviders({ profileId });
+        const openAiProvider = providers.providers.find((provider) => provider.id === 'openai');
+        expect(openAiProvider?.executionPreference).toEqual({
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+            canUseRealtimeWebSocket: true,
+        });
+    });
+
+    it('rejects chat runs when OpenAI realtime websocket mode is selected', async () => {
+        const caller = createCaller();
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-realtime-chat-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const preference = await caller.provider.setExecutionPreference({
+            profileId,
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+        });
+        expect(preference.executionPreference.mode).toBe('realtime_websocket');
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'detached',
+            title: 'Realtime websocket chat thread',
+            kind: 'local',
+            topLevelTab: 'chat',
+        });
+
+        const started = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Try realtime in chat',
+            topLevelTab: 'chat',
+            modeKey: 'chat',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+        });
+
+        expect(started.accepted).toBe(false);
+        if (started.accepted) {
+            throw new Error('Expected chat-mode realtime websocket run to be rejected.');
+        }
+        expect(started.code).toBe('runtime_option_invalid');
+        expect(started.action).toEqual({
+            code: 'runtime_options_invalid',
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+            detail: 'chat_mode_not_supported',
+        });
+    });
+
+    it('rejects realtime websocket mode when the OpenAI provider uses a custom base URL override', async () => {
+        const caller = createCaller();
+
+        const configured = await caller.provider.setApiKey({
+            profileId,
+            providerId: 'openai',
+            apiKey: 'openai-realtime-custom-base-url-key',
+        });
+        expect(configured.success).toBe(true);
+
+        const updatedProfile = await caller.provider.setConnectionProfile({
+            profileId,
+            providerId: 'openai',
+            optionProfileId: 'default',
+            baseUrlOverride: 'https://custom-openai-gateway.example/v1',
+        });
+        expect(updatedProfile.connectionProfile.resolvedBaseUrl).toBe('https://custom-openai-gateway.example/v1');
+
+        const preference = await caller.provider.setExecutionPreference({
+            profileId,
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+        });
+        expect(preference.executionPreference).toEqual({
+            providerId: 'openai',
+            mode: 'realtime_websocket',
+            canUseRealtimeWebSocket: false,
+            disabledReason: 'base_url_not_supported',
+        });
+
+        const created = await createSessionInScope(caller, profileId, {
+            scope: 'workspace',
+            workspaceFingerprint: 'ws_realtime_custom_base_url',
+            title: 'Realtime websocket custom base URL thread',
+            kind: 'local',
+            topLevelTab: 'agent',
+        });
+
+        const started = await caller.session.startRun({
+            profileId,
+            sessionId: created.session.id,
+            prompt: 'Try realtime on a custom base URL',
+            topLevelTab: 'agent',
+            modeKey: 'code',
+            runtimeOptions: defaultRuntimeOptions,
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+        });
+
+        expect(started.accepted).toBe(false);
+        if (started.accepted) {
+            throw new Error('Expected custom-base URL realtime websocket run to fail closed.');
+        }
+        expect(started.code).toBe('runtime_option_invalid');
+        expect(started.action).toEqual({
+            code: 'runtime_options_invalid',
+            providerId: 'openai',
+            modelId: 'openai/gpt-realtime',
+            detail: 'base_url_not_supported',
+        });
+    });
+
     it('returns the correct moonshot model set immediately after endpoint profile changes', async () => {
         const caller = createCaller();
 

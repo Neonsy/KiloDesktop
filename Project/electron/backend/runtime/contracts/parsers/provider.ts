@@ -1,4 +1,4 @@
-import { kiloDynamicSorts, kiloRoutingModes } from '@/app/backend/runtime/contracts/enums';
+import { kiloDynamicSorts, kiloRoutingModes, openAIExecutionModes } from '@/app/backend/runtime/contracts/enums';
 import {
     createParser,
     readEnumValue,
@@ -17,6 +17,7 @@ import type {
     ProviderClearAuthInput,
     ProviderCompleteAuthInput,
     ProviderGetCredentialInput,
+    ProviderGetExecutionPreferenceInput,
     ProviderGetConnectionProfileInput,
     ProviderGetAccountContextInput,
     ProviderListAuthMethodsInput,
@@ -26,6 +27,7 @@ import type {
     ProviderPollAuthInput,
     ProviderRefreshAuthInput,
     ProviderSetConnectionProfileInput,
+    ProviderSetExecutionPreferenceInput,
     ProviderGetModelRoutingPreferenceInput,
     ProviderSetModelRoutingPreferenceInput,
     ProviderSetApiKeyInput,
@@ -168,6 +170,19 @@ export function parseProviderGetConnectionProfileInput(input: unknown): Provider
     return parseProviderByIdInput(input);
 }
 
+export function parseProviderGetExecutionPreferenceInput(input: unknown): ProviderGetExecutionPreferenceInput {
+    const source = readObject(input, 'input');
+    const providerId = readProviderId(source.providerId, 'providerId');
+    if (providerId !== 'openai') {
+        throw new Error('Invalid "providerId": execution preference is supported only for "openai".');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        providerId,
+    };
+}
+
 export function parseProviderSetConnectionProfileInput(input: unknown): ProviderSetConnectionProfileInput {
     const source = readObject(input, 'input');
     const baseUrlOverride =
@@ -181,6 +196,20 @@ export function parseProviderSetConnectionProfileInput(input: unknown): Provider
         optionProfileId: readString(source.optionProfileId, 'optionProfileId'),
         ...(baseUrlOverride !== undefined ? { baseUrlOverride } : {}),
         ...(organizationId !== undefined ? { organizationId } : {}),
+    };
+}
+
+export function parseProviderSetExecutionPreferenceInput(input: unknown): ProviderSetExecutionPreferenceInput {
+    const source = readObject(input, 'input');
+    const providerId = readProviderId(source.providerId, 'providerId');
+    if (providerId !== 'openai') {
+        throw new Error('Invalid "providerId": execution preference is supported only for "openai".');
+    }
+
+    return {
+        profileId: readProfileId(source),
+        providerId,
+        mode: readEnumValue(source.mode, 'mode', openAIExecutionModes),
     };
 }
 
@@ -260,7 +289,9 @@ export const providerCancelAuthInputSchema = createParser(parseProviderCancelAut
 export const providerRefreshAuthInputSchema = createParser(parseProviderRefreshAuthInput);
 export const providerGetAccountContextInputSchema = createParser(parseProviderGetAccountContextInput);
 export const providerGetConnectionProfileInputSchema = createParser(parseProviderGetConnectionProfileInput);
+export const providerGetExecutionPreferenceInputSchema = createParser(parseProviderGetExecutionPreferenceInput);
 export const providerSetConnectionProfileInputSchema = createParser(parseProviderSetConnectionProfileInput);
+export const providerSetExecutionPreferenceInputSchema = createParser(parseProviderSetExecutionPreferenceInput);
 export const providerSetOrganizationInputSchema = createParser(parseProviderSetOrganizationInput);
 export const providerGetModelRoutingPreferenceInputSchema = createParser(parseProviderGetModelRoutingPreferenceInput);
 export const providerSetModelRoutingPreferenceInputSchema = createParser(parseProviderSetModelRoutingPreferenceInput);

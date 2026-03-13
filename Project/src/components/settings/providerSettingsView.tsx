@@ -84,16 +84,21 @@ export function ProviderSettingsView({ profileId }: ProviderSettingsViewProps) {
                             supportsCustomBaseUrl={selectedProvider.features.supportsCustomBaseUrl}
                             baseUrlOverrideValue={selectedProvider.connectionProfile.baseUrlOverride ?? ''}
                             resolvedBaseUrl={selectedProvider.connectionProfile.resolvedBaseUrl}
+                            executionPreference={controller.authentication.executionPreference}
                             apiKeyCta={selectedProvider.apiKeyCta}
                             activeAuthFlow={controller.authentication.activeAuthFlow}
                             isSavingApiKey={controller.authentication.isSavingApiKey}
                             isSavingConnectionProfile={controller.authentication.isSavingConnectionProfile}
+                            isSavingExecutionPreference={controller.authentication.isSavingExecutionPreference}
                             isStartingAuth={controller.authentication.isStartingAuth}
                             isPollingAuth={controller.authentication.isPollingAuth}
                             isCancellingAuth={controller.authentication.isCancellingAuth}
                             isOpeningVerificationPage={controller.authentication.isOpeningVerificationPage}
                             onConnectionProfileChange={(value) => {
                                 void controller.authentication.changeConnectionProfile(value);
+                            }}
+                            onExecutionPreferenceChange={(mode) => {
+                                void controller.authentication.changeExecutionPreference(mode);
                             }}
                             onSaveApiKey={(value) => {
                                 return controller.authentication.saveApiKey(value);

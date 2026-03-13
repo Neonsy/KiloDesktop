@@ -1,6 +1,6 @@
 const DEFAULT_OPENAI_BASE_URL = 'https://api.openai.com/v1';
 
-function normalizeBaseUrl(baseUrl: string): string {
+export function normalizeOpenAIBaseUrl(baseUrl: string): string {
     return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
 }
 
@@ -9,19 +9,28 @@ function trimOptional(value: string | undefined): string | undefined {
     return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
+export function isOfficialOpenAIBaseUrl(baseUrl: string | null | undefined): boolean {
+    const trimmed = trimOptional(baseUrl ?? undefined);
+    if (!trimmed) {
+        return false;
+    }
+
+    return normalizeOpenAIBaseUrl(trimmed) === DEFAULT_OPENAI_BASE_URL;
+}
+
 function deriveBaseUrlFromEndpoint(endpoint: string | undefined, suffix: string): string | null {
     const normalizedEndpoint = trimOptional(endpoint);
     if (!normalizedEndpoint || !normalizedEndpoint.endsWith(suffix)) {
         return null;
     }
 
-    return normalizeBaseUrl(normalizedEndpoint.slice(0, -suffix.length));
+    return normalizeOpenAIBaseUrl(normalizedEndpoint.slice(0, -suffix.length));
 }
 
 export function resolveOpenAIBaseUrl(): string {
     const explicitBaseUrl = trimOptional(process.env['OPENAI_BASE_URL']);
     if (explicitBaseUrl) {
-        return normalizeBaseUrl(explicitBaseUrl);
+        return normalizeOpenAIBaseUrl(explicitBaseUrl);
     }
 
     const chatDerivedBaseUrl = deriveBaseUrlFromEndpoint(
@@ -58,4 +67,22 @@ export function resolveOpenAIEndpoints(): {
         responsesUrl: trimOptional(process.env['OPENAI_RESPONSES_ENDPOINT']) ?? `${baseUrl}/responses`,
         baseUrl,
     };
+}
+
+export function resolveOpenAIEndpointsFromBaseUrl(baseUrl: string): {
+    chatCompletionsUrl: string;
+    responsesUrl: string;
+    baseUrl: string;
+} {
+    return {
+        chatCompletionsUrl: `${normalizeOpenAIBaseUrl(baseUrl)}/chat/completions`,
+        responsesUrl: `${normalizeOpenAIBaseUrl(baseUrl)}/responses`,
+        baseUrl: normalizeOpenAIBaseUrl(baseUrl),
+    };
+}
+
+export function buildOpenAIRealtimeWebSocketUrl(baseUrl: string, modelId: string): string {
+    const normalizedBaseUrl = normalizeOpenAIBaseUrl(baseUrl);
+    const websocketBaseUrl = normalizedBaseUrl.replace(/^http:/i, 'ws:').replace(/^https:/i, 'wss:');
+    return `${websocketBaseUrl}/realtime?model=${encodeURIComponent(modelId)}`;
 }

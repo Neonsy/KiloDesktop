@@ -27,6 +27,7 @@ export interface ProviderCatalogModelUpsert {
     supportsAudioInput?: boolean;
     supportsAudioOutput?: boolean;
     supportsPromptCache?: boolean;
+    supportsRealtimeWebSocket?: boolean;
     toolProtocol?: ProviderToolProtocol;
     apiFamily?: ProviderApiFamily;
     routedApiFamily?: ProviderRoutedApiFamily;
@@ -51,6 +52,7 @@ export interface ComparableCatalogModel {
     supportsAudioInput: boolean;
     supportsAudioOutput: boolean;
     supportsPromptCache: boolean | null;
+    supportsRealtimeWebSocket: boolean | null;
     toolProtocol: ProviderToolProtocol | null;
     apiFamily: ProviderApiFamily | null;
     routedApiFamily: ProviderRoutedApiFamily | null;
@@ -324,6 +326,15 @@ function extractKiloReasoningEfforts(input: {
     return variantEfforts.length > 0 ? variantEfforts : undefined;
 }
 
+function extractSupportsRealtimeWebSocket(raw: Record<string, unknown>): boolean | undefined {
+    const direct = raw['supports_realtime_websocket'];
+    if (typeof direct === 'boolean') {
+        return direct;
+    }
+
+    return undefined;
+}
+
 export function mapProviderCatalogModel(row: ProviderCatalogModelRow): ProviderModelRecord {
     const inputModalities = parseModalities(row.input_modalities_json);
     const outputModalities = parseModalities(row.output_modalities_json);
@@ -347,6 +358,7 @@ export function mapProviderCatalogModel(row: ProviderCatalogModelRow): ProviderM
         supportsReasoning,
         raw,
     });
+    const supportsRealtimeWebSocket = extractSupportsRealtimeWebSocket(raw);
 
     return {
         id: row.model_id,
@@ -363,6 +375,7 @@ export function mapProviderCatalogModel(row: ProviderCatalogModelRow): ProviderM
         supportsAudioOutput:
             row.supports_audio_output === null ? outputModalities.includes('audio') : row.supports_audio_output === 1,
         ...(row.supports_prompt_cache !== null ? { supportsPromptCache: row.supports_prompt_cache === 1 } : {}),
+        ...(supportsRealtimeWebSocket !== undefined ? { supportsRealtimeWebSocket } : {}),
         ...(toolProtocol ? { toolProtocol } : {}),
         ...(apiFamily ? { apiFamily } : {}),
         ...(routedApiFamily ? { routedApiFamily } : {}),
@@ -407,6 +420,7 @@ export function normalizeComparableModel(model: ProviderCatalogModelUpsert): Com
         supportsAudioInput: model.supportsAudioInput ?? false,
         supportsAudioOutput: model.supportsAudioOutput ?? false,
         supportsPromptCache: model.supportsPromptCache ?? null,
+        supportsRealtimeWebSocket: model.supportsRealtimeWebSocket ?? null,
         toolProtocol: model.toolProtocol ?? null,
         apiFamily: model.apiFamily ?? null,
         routedApiFamily: model.routedApiFamily ?? null,
@@ -451,6 +465,7 @@ export function mapComparableModelFromExistingRow(row: ExistingCatalogModelRow):
         supportsAudioInput: row.supports_audio_input === null ? false : row.supports_audio_input === 1,
         supportsAudioOutput: row.supports_audio_output === null ? false : row.supports_audio_output === 1,
         supportsPromptCache: row.supports_prompt_cache === null ? null : row.supports_prompt_cache === 1,
+        supportsRealtimeWebSocket: extractSupportsRealtimeWebSocket(parseJsonObject(row.raw_json)) ?? null,
         toolProtocol: parseToolProtocol(row.tool_protocol) ?? null,
         apiFamily: parseApiFamily(row.api_family) ?? null,
         routedApiFamily: parseRoutedApiFamily(row.routed_api_family) ?? null,

@@ -1,5 +1,6 @@
 import { supportsDirectAnthropicRuntimeContext } from '@/app/backend/providers/adapters/anthropicDirect';
 import { supportsDirectGeminiRuntimeContext } from '@/app/backend/providers/adapters/geminiDirect';
+import { isOfficialOpenAIBaseUrl } from '@/app/backend/providers/adapters/openai/endpoints';
 import {
     resolveProviderNativeRuntimeSpecialization,
     supportsProviderNativeRuntimeContext,
@@ -15,6 +16,7 @@ import type {
 } from '@/app/backend/providers/types';
 import type { RuntimeProviderId, RuntimeRunOptions } from '@/app/backend/runtime/contracts';
 import type { ProviderAuthMethod } from '@/app/backend/runtime/contracts';
+import type { OpenAIExecutionMode, TopLevelTab } from '@/app/backend/runtime/contracts';
 import {
     errRunExecution,
     okRunExecution,
@@ -51,6 +53,8 @@ interface ResolveRuntimeFamilyInput {
     modelCapabilities: ProviderModelCapabilities;
     authMethod: ProviderAuthMethod | 'none';
     runtimeOptions: RuntimeRunOptions;
+    topLevelTab?: TopLevelTab;
+    openAIExecutionMode?: OpenAIExecutionMode;
 }
 
 interface RuntimeFamilyDefinition {
@@ -76,13 +80,14 @@ function invalidRuntimeOption(input: {
     providerId: RuntimeProviderId;
     modelId: string;
     message: string;
+    detail?: 'attachments_not_allowed' | 'generic' | 'chat_mode_not_supported' | 'model_not_realtime_capable' | 'api_key_required' | 'base_url_not_supported' | 'provider_not_supported';
 }): RunExecutionResult<never> {
     return errRunExecution('runtime_option_invalid', input.message, {
         action: {
             code: 'runtime_options_invalid',
             providerId: input.providerId,
             modelId: input.modelId,
-            detail: 'generic',
+            detail: input.detail ?? 'generic',
         },
     });
 }
@@ -155,6 +160,78 @@ const runtimeFamilyDefinitions: Record<ProviderToolProtocol, RuntimeFamilyDefini
                     providerId: input.providerId,
                     modelId: input.modelId,
                     message: `Model "${input.modelId}" requires the OpenAI responses protocol and cannot run with chat-completions transport.`,
+                });
+            }
+
+            if (input.openAIExecutionMode === 'realtime_websocket') {
+                if (input.providerId !== 'openai') {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: `Realtime WebSocket mode is only supported for the OpenAI provider.`,
+                        detail: 'provider_not_supported',
+                    });
+                }
+
+                if (input.topLevelTab === 'chat') {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: `Realtime WebSocket mode is not supported for chat runs.`,
+                        detail: 'chat_mode_not_supported',
+                    });
+                }
+
+                if (input.runtimeOptions.transport.family !== 'auto') {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: `Realtime WebSocket mode requires automatic transport selection.`,
+                    });
+                }
+
+                if (input.authMethod !== 'api_key') {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: `Realtime WebSocket mode requires API key authentication.`,
+                        detail: 'api_key_required',
+                    });
+                }
+
+                const runtimePathResult = await resolveProviderRuntimePathContext(input.profileId, input.providerId);
+                if (runtimePathResult.isErr()) {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: runtimePathResult.error.message,
+                    });
+                }
+
+                if (!isOfficialOpenAIBaseUrl(runtimePathResult.value.resolvedBaseUrl)) {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: `Realtime WebSocket mode requires the official OpenAI base URL.`,
+                        detail: 'base_url_not_supported',
+                    });
+                }
+
+                if (input.modelCapabilities.supportsRealtimeWebSocket !== true) {
+                    return invalidRuntimeOption({
+                        providerId: input.providerId,
+                        modelId: input.modelId,
+                        message: `Model "${input.modelId}" is not marked as OpenAI Realtime WebSocket capable.`,
+                        detail: 'model_not_realtime_capable',
+                    });
+                }
+
+                return okRunExecution({
+                    toolProtocol: 'openai_responses',
+                    transport: buildTransport({
+                        runtimeOptions: input.runtimeOptions,
+                        selected: 'openai_realtime_websocket',
+                    }),
                 });
             }
 

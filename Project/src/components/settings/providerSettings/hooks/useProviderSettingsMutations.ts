@@ -141,6 +141,24 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
         },
     });
 
+    const setExecutionPreferenceMutation = trpc.provider.setExecutionPreference.useMutation({
+        onSuccess: ({ executionPreference, provider }) => {
+            input.setStatusMessage(
+                executionPreference.mode === 'realtime_websocket'
+                    ? 'Realtime WebSocket enabled for OpenAI agent and orchestrator runs.'
+                    : 'Standard HTTP restored for OpenAI runs.'
+            );
+            patchProviderCache({
+                utils,
+                profileId: input.profileId,
+                providerId: 'openai',
+                executionPreference,
+                ...(provider ? { provider } : {}),
+            });
+            void utils.runtime.getShellBootstrap.invalidate({ profileId: input.profileId });
+        },
+    });
+
     const setModelRoutingPreferenceMutation = trpc.provider.setModelRoutingPreference.useMutation({
         onSuccess: ({ preference, providers }) => {
             patchProviderCache({
@@ -261,6 +279,7 @@ export function useProviderSettingsMutations(input: UseProviderSettingsMutations
         setDefaultMutation,
         setApiKeyMutation,
         setConnectionProfileMutation,
+        setExecutionPreferenceMutation,
         syncCatalogMutation,
         setModelRoutingPreferenceMutation,
         setOrganizationMutation,

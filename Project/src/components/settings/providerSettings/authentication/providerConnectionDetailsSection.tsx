@@ -1,29 +1,67 @@
 import { Button } from '@/web/components/ui/button';
 
+import { openAIExecutionModes, type OpenAIExecutionMode } from '@/shared/contracts';
+
 interface ProviderConnectionDetailsSectionProps {
+    selectedProviderId: string | undefined;
     connectionProfileValue: string;
     connectionProfileOptions: Array<{ value: string; label: string }>;
     supportsCustomBaseUrl: boolean;
     baseUrlOverrideValue: string;
     resolvedBaseUrl: string | null;
+    executionPreference:
+        | {
+        mode: OpenAIExecutionMode;
+        canUseRealtimeWebSocket: boolean;
+        disabledReason?: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported';
+    }
+        | undefined;
     isSavingConnectionProfile: boolean;
+    isSavingExecutionPreference: boolean;
     onConnectionProfileChange: (value: string) => void;
+    onExecutionPreferenceChange: (mode: OpenAIExecutionMode) => void;
     onBaseUrlOverrideChange: (value: string) => void;
     onSaveBaseUrlOverride: () => void;
 }
 
+function describeRealtimeDisabledReason(
+    reason: 'provider_not_supported' | 'api_key_required' | 'base_url_not_supported' | undefined
+): string {
+    if (reason === 'api_key_required') {
+        return 'Realtime WebSocket currently requires an OpenAI API key.';
+    }
+
+    if (reason === 'base_url_not_supported') {
+        return 'Realtime WebSocket is limited to the official OpenAI base URL in this version.';
+    }
+
+    if (reason === 'provider_not_supported') {
+        return 'Realtime WebSocket is only available for the direct OpenAI provider.';
+    }
+
+    return 'Realtime WebSocket is only available for agent and orchestrator runs.';
+}
+
+function isOpenAIExecutionMode(value: string): value is OpenAIExecutionMode {
+    return openAIExecutionModes.some((candidate) => candidate === value);
+}
+
 export function ProviderConnectionDetailsSection({
+    selectedProviderId,
     connectionProfileValue,
     connectionProfileOptions,
     supportsCustomBaseUrl,
     baseUrlOverrideValue,
     resolvedBaseUrl,
+    executionPreference,
     isSavingConnectionProfile,
+    isSavingExecutionPreference,
     onConnectionProfileChange,
+    onExecutionPreferenceChange,
     onBaseUrlOverrideChange,
     onSaveBaseUrlOverride,
 }: ProviderConnectionDetailsSectionProps) {
-    if (connectionProfileOptions.length <= 1 && !supportsCustomBaseUrl) {
+    if (connectionProfileOptions.length <= 1 && !supportsCustomBaseUrl && !executionPreference) {
         return null;
     }
 
@@ -88,6 +126,47 @@ export function ProviderConnectionDetailsSection({
                         <p className='text-muted-foreground text-xs leading-5'>
                             Resolved base URL: {resolvedBaseUrl ?? 'Provider default is unavailable'}
                         </p>
+                    </div>
+                ) : null}
+
+                {selectedProviderId === 'openai' && executionPreference ? (
+                    <div className='space-y-2 rounded-2xl border border-dashed border-border/70 p-3'>
+                        <div className='space-y-1'>
+                            <p className='text-xs font-medium'>Execution mode</p>
+                            <p className='text-muted-foreground text-xs leading-5'>
+                                Standard HTTP works everywhere. Realtime WebSocket is lower-latency, but only for
+                                agent and orchestrator runs on official OpenAI API-key setups.
+                            </p>
+                        </div>
+
+                        <label className='space-y-1.5'>
+                            <span className='text-muted-foreground block text-xs font-medium'>OpenAI execution</span>
+                            <select
+                                id='provider-openai-execution-mode'
+                                name='providerOpenAIExecutionMode'
+                                value={executionPreference.mode}
+                                onChange={(event) => {
+                                    const nextMode = event.target.value;
+                                    if (isOpenAIExecutionMode(nextMode)) {
+                                        onExecutionPreferenceChange(nextMode);
+                                    }
+                                }}
+                                className='border-border bg-background h-10 w-full rounded-xl border px-3 text-sm'
+                                disabled={isSavingExecutionPreference}>
+                                <option value='standard_http'>Standard HTTP</option>
+                                <option
+                                    value='realtime_websocket'
+                                    disabled={!executionPreference.canUseRealtimeWebSocket}>
+                                    Realtime WebSocket
+                                </option>
+                            </select>
+                        </label>
+
+                        {!executionPreference.canUseRealtimeWebSocket ? (
+                            <p className='text-muted-foreground text-xs leading-5'>
+                                {describeRealtimeDisabledReason(executionPreference.disabledReason)}
+                            </p>
+                        ) : null}
                     </div>
                 ) : null}
             </div>

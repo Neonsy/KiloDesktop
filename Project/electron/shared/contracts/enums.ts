@@ -120,6 +120,9 @@ export type RuntimeProviderId = FirstPartyProviderId;
 export const providerAuthMethods = ['api_key', 'device_code', 'oauth_pkce', 'oauth_device'] as const;
 export type ProviderAuthMethod = (typeof providerAuthMethods)[number];
 
+export const openAIExecutionModes = ['standard_http', 'realtime_websocket'] as const;
+export type OpenAIExecutionMode = (typeof openAIExecutionModes)[number];
+
 export const providerAuthStates = ['logged_out', 'pending', 'configured', 'authenticated', 'error', 'expired'] as const;
 export type ProviderAuthState = (typeof providerAuthStates)[number];
 

@@ -6,6 +6,7 @@ import type {
     ProviderToolProtocol,
 } from '@/app/backend/providers/types';
 import type { EntityId, ProviderAuthMethod, RuntimeProviderId } from '@/app/backend/runtime/contracts';
+import type { OpenAIExecutionMode } from '@/app/backend/runtime/contracts';
 import { ensureCheckpointForRun } from '@/app/backend/runtime/services/checkpoint/service';
 import { executeRun, isAbortError } from '@/app/backend/runtime/services/runExecution/executeRun';
 import { moveRunToAbortedState, moveRunToFailedState } from '@/app/backend/runtime/services/runExecution/terminalState';
@@ -25,6 +26,7 @@ export async function runToTerminalState(input: {
     toolProtocol: ProviderToolProtocol;
     apiFamily?: ProviderApiFamily;
     routedApiFamily?: ProviderRoutedApiFamily;
+    openAIExecutionMode?: OpenAIExecutionMode;
     authMethod: ProviderAuthMethod | 'none';
     runtimeOptions: StartRunInput['runtimeOptions'];
     cache: RunCacheResolution;

@@ -200,6 +200,7 @@ async function generateAiTitle(input: {
                 transport: {
                     family: 'auto',
                 },
+                execution: {},
             },
             cache: {
                 strategy: 'auto',

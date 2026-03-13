@@ -3,6 +3,7 @@ import type { FirstPartyProviderId } from '@/app/backend/providers/registry';
 import type {
     ComposerImageAttachmentInput,
     KiloDynamicSort,
+    OpenAIExecutionMode,
     ProviderAuthMethod,
     RuntimeMessagePartType,
     RuntimeRequestedTransportFamily,
@@ -19,7 +20,7 @@ export type ProviderToolProtocol =
     | 'provider_native'
     | 'anthropic_messages'
     | 'google_generativeai';
-export type ProviderRuntimeTransportFamily = ProviderToolProtocol;
+export type ProviderRuntimeTransportFamily = ProviderToolProtocol | 'openai_realtime_websocket';
 
 export type ProviderApiFamily =
     | 'openai_compatible'
@@ -36,6 +37,7 @@ export interface ProviderModelCapabilities {
     supportsAudioInput: boolean;
     supportsAudioOutput: boolean;
     supportsPromptCache?: boolean;
+    supportsRealtimeWebSocket?: boolean;
     toolProtocol?: ProviderToolProtocol;
     apiFamily?: ProviderApiFamily;
     routedApiFamily?: ProviderRoutedApiFamily;
@@ -202,6 +204,10 @@ export interface ProviderRuntimeTransportOptions {
     family: RuntimeRequestedTransportFamily;
 }
 
+export interface ProviderRuntimeExecutionOptions {
+    openAIExecutionMode?: OpenAIExecutionMode;
+}
+
 export interface ProviderRuntimeInput {
     profileId: string;
     sessionId: string;
@@ -275,6 +281,7 @@ export interface ProviderRuntimeInput {
         reasoning: ProviderRuntimeReasoningOptions;
         cache: ProviderRuntimeCacheOptions;
         transport: ProviderRuntimeTransportOptions;
+        execution: ProviderRuntimeExecutionOptions;
     };
     cache: ProviderRuntimeCacheApplication;
     authMethod: ProviderAuthMethod | 'none';
