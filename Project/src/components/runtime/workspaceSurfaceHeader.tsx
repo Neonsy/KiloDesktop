@@ -34,12 +34,14 @@ export function WorkspaceSurfaceHeader({
     onReturnToPrimarySection,
     onOpenCommandPalette,
 }: WorkspaceSurfaceHeaderProps) {
+    const shouldShowHeaderProfileSwitcher = appSection !== 'sessions';
+
     return (
         <header className='border-border/80 bg-background/88 flex items-center justify-between gap-3 border-b px-4 py-3 backdrop-blur-sm'>
             <div className='flex min-w-0 items-center gap-3'>
                 <div className='min-w-0'>
                     <p className='text-[11px] font-semibold tracking-[0.14em] uppercase'>NeonConductor</p>
-                    <p className='text-muted-foreground text-xs'>Workspace-first command surface</p>
+                    <p className='text-muted-foreground text-xs'>Command surface</p>
                 </div>
 
                 <div
@@ -96,22 +98,24 @@ export function WorkspaceSurfaceHeader({
                     </select>
                 </label>
 
-                <label className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                    <span className='sr-only'>Profile</span>
-                    <select
-                        className='border-border bg-card h-9 min-w-[200px] rounded-full border px-3 text-sm'
-                        value={resolvedProfileId ?? ''}
-                        disabled={!resolvedProfileId || isSwitchingProfile}
-                        onChange={(event) => {
-                            onProfileChange(event.target.value.trim());
-                        }}>
-                        {profiles.map((profile) => (
-                            <option key={profile.id} value={profile.id}>
-                                {profile.name}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                {shouldShowHeaderProfileSwitcher ? (
+                    <label className='text-muted-foreground text-[11px] font-semibold tracking-[0.12em] uppercase'>
+                        <span className='sr-only'>Profile</span>
+                        <select
+                            className='border-border bg-card h-9 min-w-[200px] rounded-full border px-3 text-sm'
+                            value={resolvedProfileId ?? ''}
+                            disabled={!resolvedProfileId || isSwitchingProfile}
+                            onChange={(event) => {
+                                onProfileChange(event.target.value.trim());
+                            }}>
+                            {profiles.map((profile) => (
+                                <option key={profile.id} value={profile.id}>
+                                    {profile.name}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                ) : null}
 
                 <button
                     type='button'

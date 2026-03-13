@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceSurfaceHeader } from '@/web/components/runtime/workspaceSurfaceHeader';
 
 describe('workspace surface header', () => {
-    it('keeps the header focused on global workspace context instead of modal settings controls', () => {
+    it('keeps the header focused on global workspace context instead of duplicating active run controls', () => {
         const html = renderToStaticMarkup(
             <WorkspaceSurfaceHeader
                 appSection='sessions'
@@ -26,11 +26,11 @@ describe('workspace surface header', () => {
         expect(html).toContain('Sessions');
         expect(html).toContain('Workspaces');
         expect(html).toContain('Workspace Alpha');
-        expect(html).toContain('Local Default');
         expect(html).toContain('Search');
         expect(html).toContain('App');
         expect(html).not.toContain('Orchestrator');
         expect(html).not.toContain('Agent');
         expect(html).not.toContain('Chat');
+        expect(html).not.toContain('Local Default');
     });
 });

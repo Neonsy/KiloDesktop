@@ -34,6 +34,8 @@ describe('session workspace panel layout', () => {
         const html = renderToStaticMarkup(
             createElement(SessionWorkspacePanel, {
                 profileId: 'profile_default',
+                profiles: [{ id: 'profile_default', name: 'Local Default' }],
+                selectedProfileId: 'profile_default',
                 sessions: [
                     {
                         id: 'sess_default',
@@ -93,6 +95,7 @@ describe('session workspace panel layout', () => {
                 runErrorMessage: undefined,
                 onSelectSession: vi.fn(),
                 onSelectRun: vi.fn(),
+                onProfileChange: vi.fn(),
                 onProviderChange: vi.fn(),
                 onModelChange: vi.fn(),
                 onReasoningEffortChange: vi.fn(),
@@ -108,9 +111,8 @@ describe('session workspace panel layout', () => {
         );
 
         expect(html).toContain('Show Inspector');
-        expect(html).toContain('Session');
-        expect(html).toContain('Run focus');
-        expect(html).toContain('Conversation flow');
+        expect(html).toContain('Active thread');
+        expect(html).toContain('2 turns · completed');
         expect(html).not.toContain('inspector');
     });
 });

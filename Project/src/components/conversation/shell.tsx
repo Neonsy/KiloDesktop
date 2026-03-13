@@ -46,6 +46,8 @@ import {
 
 interface ConversationShellProps {
     profileId: string;
+    profiles: Array<{ id: string; name: string }>;
+    selectedProfileId: string | undefined;
     topLevelTab: TopLevelTab;
     selectedWorkspaceFingerprint?: string;
     requestedThreadCreationWorkspaceFingerprint?: string;
@@ -56,11 +58,14 @@ interface ConversationShellProps {
     onSelectedWorkspaceFingerprintChange?: (workspaceFingerprint: string | undefined) => void;
     onThreadCreationRequestHandled?: () => void;
     onOpenWorkspaces?: () => void;
+    onProfileChange: (profileId: string) => void;
     onBootChromeReadyChange?: (readiness: ConversationShellBootChromeReadiness) => void;
 }
 
 export function ConversationShell({
     profileId,
+    profiles,
+    selectedProfileId,
     topLevelTab,
     selectedWorkspaceFingerprint,
     requestedThreadCreationWorkspaceFingerprint,
@@ -71,6 +76,7 @@ export function ConversationShell({
     onSelectedWorkspaceFingerprintChange,
     onThreadCreationRequestHandled,
     onOpenWorkspaces,
+    onProfileChange,
     onBootChromeReadyChange,
 }: ConversationShellProps) {
     const [tabSwitchNotice, setTabSwitchNotice] = useState<string | undefined>(undefined);
@@ -243,6 +249,46 @@ export function ConversationShell({
     });
     const selectedSessionId = shellViewModel.sessionRunSelection.selection.resolvedSessionId;
     const selectedRunId = shellViewModel.sessionRunSelection.selection.resolvedRunId;
+    const shouldUseThreadCreationDraft = isThreadCreationActive || !uiState.selectedThreadId;
+    const composerTopLevelTab = shouldUseThreadCreationDraft ? threadCreationTopLevelTab : topLevelTab;
+    const composerActiveModeKey =
+        composerTopLevelTab === 'chat' ? 'chat' : composerTopLevelTab === 'agent' ? 'code' : 'plan';
+    const composerSelectedProviderId = shouldUseThreadCreationDraft
+        ? threadCreationProviderId
+        : runTargetState.selectedProviderIdForComposer;
+    const composerSelectedModelId = shouldUseThreadCreationDraft
+        ? threadCreationModelId || undefined
+        : runTargetState.selectedModelIdForComposer;
+    const selectedComposerModelRecord =
+        composerSelectedProviderId && composerSelectedModelId
+            ? (runTargetState.modelsByProvider.get(composerSelectedProviderId) ?? []).find(
+                  (model) => model.id === composerSelectedModelId
+              )
+            : undefined;
+    const selectedModelSupportsReasoning = Boolean(selectedComposerModelRecord?.supportsReasoning);
+    const supportedReasoningEfforts =
+        composerSelectedProviderId === 'kilo'
+            ? selectedComposerModelRecord?.reasoningEfforts?.filter(
+                  (effort): effort is Exclude<RuntimeReasoningEffort, 'none'> => effort !== 'none'
+              )
+            : undefined;
+    const canAdjustReasoningEffort =
+        selectedModelSupportsReasoning &&
+        (composerSelectedProviderId === 'kilo'
+            ? supportedReasoningEfforts !== undefined && supportedReasoningEfforts.length > 0
+            : supportedReasoningEfforts === undefined || supportedReasoningEfforts.length > 0);
+    const effectiveReasoningEffort =
+        selectedModelSupportsReasoning &&
+        canAdjustReasoningEffort &&
+        (supportedReasoningEfforts === undefined ||
+            requestedReasoningEffort === 'none' ||
+            supportedReasoningEfforts.includes(requestedReasoningEffort))
+            ? requestedReasoningEffort
+            : 'none';
+    const runtimeOptions = buildRuntimeRunOptions({
+        supportsReasoning: selectedModelSupportsReasoning,
+        reasoningEffort: effectiveReasoningEffort,
+    });
     const fallbackContextSessionId = 'sess_missing';
     const hasSelectedSession = isEntityId(selectedSessionId, 'sess');
     const contextSessionId = hasSelectedSession ? selectedSessionId : fallbackContextSessionId;
@@ -259,30 +305,6 @@ export function ConversationShell({
             ? { workspaceFingerprint: shellViewModel.selectedThread.workspaceFingerprint }
             : {}),
     };
-    const selectedModelSupportsReasoning = Boolean(runTargetState.selectedModelForComposer?.supportsReasoning);
-    const supportedReasoningEfforts =
-        runTargetState.selectedProviderIdForComposer === 'kilo'
-            ? runTargetState.selectedModelForComposer?.reasoningEfforts?.filter(
-                  (effort): effort is Exclude<RuntimeReasoningEffort, 'none'> => effort !== 'none'
-              )
-            : undefined;
-    const canAdjustReasoningEffort =
-        selectedModelSupportsReasoning &&
-        (runTargetState.selectedProviderIdForComposer === 'kilo'
-            ? supportedReasoningEfforts !== undefined && supportedReasoningEfforts.length > 0
-            : supportedReasoningEfforts === undefined || supportedReasoningEfforts.length > 0);
-    const effectiveReasoningEffort =
-        selectedModelSupportsReasoning &&
-        canAdjustReasoningEffort &&
-        (supportedReasoningEfforts === undefined ||
-            requestedReasoningEffort === 'none' ||
-            supportedReasoningEfforts.includes(requestedReasoningEffort))
-            ? requestedReasoningEffort
-            : 'none';
-    const runtimeOptions = buildRuntimeRunOptions({
-        supportsReasoning: selectedModelSupportsReasoning,
-        reasoningEffort: effectiveReasoningEffort,
-    });
     const preComposerCanAttachImages =
         imageAttachmentsAllowed && Boolean(runTargetState.selectedModelOptionForComposer?.supportsVision);
     const preComposerImageAttachmentBlockedReason = !imageAttachmentsAllowed
@@ -402,12 +424,22 @@ export function ConversationShell({
         }
         onThreadCreationRequestHandled?.();
     };
+    useEffect(() => {
+        if (!shouldUseThreadCreationDraft) {
+            return;
+        }
+
+        const defaults = resolveWorkspaceDefaultSelection(threadCreationWorkspaceFingerprint, topLevelTab);
+        setThreadCreationTopLevelTab((current) => current || defaults.topLevelTab);
+        setThreadCreationProviderId((current) => current ?? defaults.providerId);
+        setThreadCreationModelId((current) => current || defaults.modelId);
+    }, [resolveWorkspaceDefaultSelection, shouldUseThreadCreationDraft, threadCreationWorkspaceFingerprint, topLevelTab]);
+
     const selectedComposerModelOption =
-        runTargetState.selectedProviderIdForComposer && runTargetState.selectedModelIdForComposer
+        composerSelectedProviderId && composerSelectedModelId
             ? composerModelOptions.find(
-                (option) =>
-                    option.providerId === runTargetState.selectedProviderIdForComposer &&
-                      option.id === runTargetState.selectedModelIdForComposer
+                  (option) =>
+                      option.providerId === composerSelectedProviderId && option.id === composerSelectedModelId
               )
             : undefined;
     const selectedModelCompatibilityReason =
@@ -828,36 +860,13 @@ export function ConversationShell({
         setIsThreadCreationActive(false);
         setThreadCreationTitle('');
     };
-    const threadCreationModelOptions = (queries.shellBootstrapQuery.data?.providers ?? []).flatMap((provider) =>
-        (queries.shellBootstrapQuery.data?.providerModels ?? [])
-            .filter((model) => model.providerId === provider.id)
-            .map((model) =>
-                buildModelPickerOption({
-                    model,
-                    provider,
-                    compatibilityContext: {
-                        surface: 'conversation',
-                        requiresTools: modeRequiresNativeTools({
-                            topLevelTab: threadCreationTopLevelTab,
-                            modeKey:
-                                threadCreationTopLevelTab === 'chat'
-                                    ? 'chat'
-                                    : threadCreationTopLevelTab === 'agent'
-                                      ? 'code'
-                                      : 'plan',
-                        }),
-                        modeKey:
-                            threadCreationTopLevelTab === 'chat'
-                                ? 'chat'
-                                : threadCreationTopLevelTab === 'agent'
-                                  ? 'code'
-                                  : 'plan',
-                        hasPendingImageAttachments: false,
-                        imageAttachmentsAllowed: threadCreationTopLevelTab !== 'orchestrator',
-                    },
-                })
-            )
-    );
+    const handleThreadCreationWorkspaceChange = (workspaceFingerprint: string | undefined) => {
+        const defaults = resolveWorkspaceDefaultSelection(workspaceFingerprint, threadCreationTopLevelTab);
+        setThreadCreationWorkspaceFingerprint(workspaceFingerprint);
+        setThreadCreationTopLevelTab(defaults.topLevelTab);
+        setThreadCreationProviderId(defaults.providerId);
+        setThreadCreationModelId(defaults.modelId);
+    };
     const threadCreationSurface =
         isThreadCreationActive || !uiState.selectedThreadId ? (
             <WorkspaceThreadCreationSurface
@@ -866,20 +875,9 @@ export function ConversationShell({
                     label: workspaceRoot.label,
                 }))}
                 workspaceFingerprint={threadCreationWorkspaceFingerprint}
-                topLevelTab={threadCreationTopLevelTab}
                 title={threadCreationTitle}
-                providerId={threadCreationProviderId}
-                modelId={threadCreationModelId}
-                modelOptions={threadCreationModelOptions}
                 isCreatingThread={mutations.createThreadMutation.isPending || mutations.createSessionMutation.isPending}
-                onWorkspaceChange={setThreadCreationWorkspaceFingerprint}
-                onTopLevelTabChange={setThreadCreationTopLevelTab}
-                onProviderChange={(providerId) => {
-                    setThreadCreationProviderId(providerId);
-                    const nextModelId = threadCreationModelOptions.find((option) => option.providerId === providerId)?.id ?? '';
-                    setThreadCreationModelId(nextModelId);
-                }}
-                onModelChange={setThreadCreationModelId}
+                onWorkspaceChange={handleThreadCreationWorkspaceChange}
                 onTitleChange={setThreadCreationTitle}
                 onCreateThread={() => {
                     void handleCreateThread();
@@ -923,6 +921,8 @@ export function ConversationShell({
         },
         panel: {
             profileId,
+            profiles,
+            ...(selectedProfileId ? { selectedProfileId } : {}),
             sessions: shellViewModel.sessionRunSelection.sessions,
             runs: shellViewModel.sessionRunSelection.runs,
             messages: shellViewModel.sessionRunSelection.messages,
@@ -938,10 +938,10 @@ export function ConversationShell({
             isStartingRun: mutations.startRunMutation.isPending || mutations.planStartMutation.isPending,
             isResolvingPermission: mutations.resolvePermissionMutation.isPending,
             canCreateSession: Boolean(uiState.selectedThreadId),
-            selectedProviderId: runTargetState.selectedProviderIdForComposer,
-            selectedModelId: runTargetState.selectedModelIdForComposer,
-            topLevelTab,
-            activeModeKey: modeKey,
+            selectedProviderId: composerSelectedProviderId,
+            selectedModelId: composerSelectedModelId,
+            topLevelTab: composerTopLevelTab,
+            activeModeKey: composerActiveModeKey,
             modes,
             reasoningEffort: effectiveReasoningEffort,
             selectedModelSupportsReasoning,
@@ -958,28 +958,47 @@ export function ConversationShell({
             ...(selectedModelCompatibilityState ? { selectedModelCompatibilityState } : {}),
             ...(selectedModelCompatibilityReason ? { selectedModelCompatibilityReason } : {}),
             runErrorMessage: composer.runSubmitError,
+            controlsDisabled: !threadCreationWorkspaceFingerprint && !selectedSessionId,
+            submitDisabled: !selectedSessionId,
             ...(contextStateQuery.data ? { contextState: contextStateQuery.data } : {}),
             canCompactContext:
                 topLevelTab !== 'orchestrator' && hasSelectedSession && Boolean(contextStateQuery.data?.compactable),
             isCompactingContext: mutations.compactSessionMutation.isPending,
             onSelectSession: sessionActions.onSelectSession,
             onSelectRun: uiState.setSelectedRunId,
+            onProfileChange,
             onProviderChange: (providerId: string) => {
                 if (!isProviderId(providerId)) {
                     return;
                 }
-                sessionActions.onProviderChange(
-                    providerId,
+                const nextModelId =
                     composerModelOptions.find(
                         (option) => option.providerId === providerId && option.compatibilityState === 'compatible'
-                    )?.id ?? composerModelOptions.find((option) => option.providerId === providerId)?.id
-                );
+                    )?.id ?? composerModelOptions.find((option) => option.providerId === providerId)?.id;
+                if (shouldUseThreadCreationDraft) {
+                    setThreadCreationProviderId(providerId);
+                    setThreadCreationModelId(nextModelId ?? '');
+                    return;
+                }
+                sessionActions.onProviderChange(providerId, nextModelId);
             },
             onModelChange: (modelId: string) => {
+                if (shouldUseThreadCreationDraft) {
+                    setThreadCreationModelId(modelId);
+                    return;
+                }
                 sessionActions.onModelChange(runTargetState.selectedProviderIdForComposer, modelId);
             },
             onReasoningEffortChange: setRequestedReasoningEffort,
-            onModeChange,
+            onModeChange: (nextModeKey: string) => {
+                if (shouldUseThreadCreationDraft) {
+                    setThreadCreationTopLevelTab(
+                        nextModeKey === 'chat' ? 'chat' : nextModeKey === 'code' ? 'agent' : 'orchestrator'
+                    );
+                    return;
+                }
+                onModeChange(nextModeKey);
+            },
             onCreateSession: sessionActions.onCreateSession,
             onPromptEdited: composer.onPromptEdited,
             onAddImageFiles: composer.onAddImageFiles,

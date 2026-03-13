@@ -5,12 +5,13 @@ import type { SessionWorkspacePanelProps } from '@/web/components/conversation/s
 
 interface WorkspacePrimaryColumnProps {
     profileId: SessionWorkspacePanelProps['profileId'];
+    profiles: SessionWorkspacePanelProps['profiles'];
+    selectedProfileId: SessionWorkspacePanelProps['selectedProfileId'];
     messages: SessionWorkspacePanelProps['messages'];
     partsByMessageId: SessionWorkspacePanelProps['partsByMessageId'];
     runs: SessionWorkspacePanelProps['runs'];
     pendingImages: SessionWorkspacePanelProps['pendingImages'];
     isStartingRun: SessionWorkspacePanelProps['isStartingRun'];
-    selectedSessionId: SessionWorkspacePanelProps['selectedSessionId'];
     selectedProviderId: SessionWorkspacePanelProps['selectedProviderId'];
     selectedModelId: SessionWorkspacePanelProps['selectedModelId'];
     topLevelTab: SessionWorkspacePanelProps['topLevelTab'];
@@ -35,6 +36,9 @@ interface WorkspacePrimaryColumnProps {
     threadCreationSurface: SessionWorkspacePanelProps['threadCreationSurface'];
     promptResetKey: SessionWorkspacePanelProps['promptResetKey'];
     focusComposerRequestKey: SessionWorkspacePanelProps['focusComposerRequestKey'];
+    controlsDisabled: SessionWorkspacePanelProps['controlsDisabled'];
+    submitDisabled: SessionWorkspacePanelProps['submitDisabled'];
+    onProfileChange: SessionWorkspacePanelProps['onProfileChange'];
     onProviderChange: SessionWorkspacePanelProps['onProviderChange'];
     onModelChange: SessionWorkspacePanelProps['onModelChange'];
     onReasoningEffortChange: SessionWorkspacePanelProps['onReasoningEffortChange'];
@@ -51,12 +55,13 @@ interface WorkspacePrimaryColumnProps {
 
 export function WorkspacePrimaryColumn({
     profileId,
+    profiles,
+    selectedProfileId,
     messages,
     partsByMessageId,
     runs,
     pendingImages,
     isStartingRun,
-    selectedSessionId,
     selectedProviderId,
     selectedModelId,
     topLevelTab,
@@ -81,6 +86,9 @@ export function WorkspacePrimaryColumn({
     threadCreationSurface,
     promptResetKey,
     focusComposerRequestKey,
+    controlsDisabled,
+    submitDisabled,
+    onProfileChange,
     onProviderChange,
     onModelChange,
     onReasoningEffortChange,
@@ -119,8 +127,10 @@ export function WorkspacePrimaryColumn({
                 <div className='border-border/70 bg-background/85 shrink-0 rounded-[28px] border p-4 shadow-sm'>
                     <ComposerActionPanel
                         pendingImages={pendingImages}
-                        disabled={!selectedSessionId}
+                        disabled={false}
                         isSubmitting={isStartingRun}
+                        profiles={profiles}
+                        {...(selectedProfileId ? { selectedProfileId } : {})}
                         selectedProviderId={selectedProviderId}
                         selectedModelId={selectedModelId}
                         topLevelTab={topLevelTab}
@@ -143,6 +153,9 @@ export function WorkspacePrimaryColumn({
                         {...(isCompactingContext !== undefined ? { isCompactingContext } : {})}
                         {...(promptResetKey !== undefined ? { promptResetKey } : {})}
                         {...(focusComposerRequestKey !== undefined ? { focusComposerRequestKey } : {})}
+                        {...(controlsDisabled !== undefined ? { controlsDisabled } : {})}
+                        {...(submitDisabled !== undefined ? { submitDisabled } : {})}
+                        onProfileChange={onProfileChange}
                         onProviderChange={onProviderChange}
                         onModelChange={onModelChange}
                         onReasoningEffortChange={onReasoningEffortChange}

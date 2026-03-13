@@ -11,6 +11,8 @@ export type { SessionWorkspacePanelProps } from '@/web/components/conversation/s
 
 export function SessionWorkspacePanel({
     profileId,
+    profiles,
+    selectedProfileId,
     sessions,
     runs,
     messages,
@@ -58,8 +60,11 @@ export function SessionWorkspacePanel({
     threadCreationSurface,
     promptResetKey,
     focusComposerRequestKey,
+    controlsDisabled,
+    submitDisabled,
     onSelectSession,
     onSelectRun,
+    onProfileChange,
     onProviderChange,
     onModelChange,
     onReasoningEffortChange,
@@ -182,12 +187,13 @@ export function SessionWorkspacePanel({
             )}>
             <WorkspacePrimaryColumn
                 profileId={profileId}
+                profiles={profiles}
+                selectedProfileId={selectedProfileId}
                 messages={messages}
                 partsByMessageId={partsByMessageId}
                 runs={runs}
                 pendingImages={pendingImages}
                 isStartingRun={isStartingRun}
-                selectedSessionId={selectedSession?.id}
                 selectedProviderId={selectedProviderId}
                 selectedModelId={selectedModelId}
                 topLevelTab={topLevelTab}
@@ -212,6 +218,9 @@ export function SessionWorkspacePanel({
                 threadCreationSurface={threadCreationSurface}
                 promptResetKey={promptResetKey}
                 focusComposerRequestKey={focusComposerRequestKey}
+                controlsDisabled={controlsDisabled}
+                submitDisabled={submitDisabled}
+                onProfileChange={onProfileChange}
                 onProviderChange={onProviderChange}
                 onModelChange={onModelChange}
                 onReasoningEffortChange={onReasoningEffortChange}

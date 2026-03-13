@@ -71,6 +71,8 @@ export interface AgentContextSummary {
 
 export interface SessionWorkspacePanelProps {
     profileId: string;
+    profiles: Array<{ id: string; name: string }>;
+    selectedProfileId?: string;
     sessions: SessionSummaryRecord[];
     runs: RunRecord[];
     messages: MessageRecord[];
@@ -124,8 +126,11 @@ export interface SessionWorkspacePanelProps {
     threadCreationSurface?: ReactNode;
     promptResetKey?: number;
     focusComposerRequestKey?: number;
+    controlsDisabled?: boolean;
+    submitDisabled?: boolean;
     onSelectSession: (sessionId: string) => void;
     onSelectRun: (runId: string) => void;
+    onProfileChange: (profileId: string) => void;
     onProviderChange: (providerId: string) => void;
     onModelChange: (modelId: string) => void;
     onReasoningEffortChange: (effort: RuntimeReasoningEffort) => void;

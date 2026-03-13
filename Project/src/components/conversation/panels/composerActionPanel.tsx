@@ -31,7 +31,11 @@ interface PendingImageView {
 interface ComposerActionPanelProps {
     pendingImages: PendingImageView[];
     disabled: boolean;
+    controlsDisabled?: boolean;
+    submitDisabled?: boolean;
     isSubmitting: boolean;
+    profiles?: Array<{ id: string; name: string }>;
+    selectedProfileId?: string;
     selectedProviderId: string | undefined;
     selectedModelId: string | undefined;
     topLevelTab: TopLevelTab;
@@ -58,6 +62,7 @@ interface ComposerActionPanelProps {
     isCompactingContext?: boolean;
     promptResetKey?: number;
     focusComposerRequestKey?: number;
+    onProfileChange?: (profileId: string) => void;
     onProviderChange: (providerId: string) => void;
     onModelChange: (modelId: string) => void;
     onReasoningEffortChange: (effort: RuntimeReasoningEffort) => void;
@@ -135,7 +140,11 @@ const reasoningEffortOptions: Array<{ value: RuntimeReasoningEffort; label: stri
 export function ComposerActionPanel({
     pendingImages,
     disabled,
+    controlsDisabled,
+    submitDisabled,
     isSubmitting,
+    profiles,
+    selectedProfileId,
     selectedProviderId,
     selectedModelId,
     topLevelTab,
@@ -158,6 +167,7 @@ export function ComposerActionPanel({
     isCompactingContext = false,
     promptResetKey,
     focusComposerRequestKey,
+    onProfileChange,
     onProviderChange,
     onModelChange,
     onReasoningEffortChange,
@@ -195,6 +205,8 @@ export function ComposerActionPanel({
     const hasBlockingPendingImages = pendingImages.some((image) => image.status !== 'ready');
     const hasSubmittableContent = draftPrompt.trim().length > 0 || pendingImages.some((image) => image.status === 'ready');
     const hasUnsupportedPendingImages = pendingImages.length > 0 && !canAttachImages;
+    const composerControlsDisabled = controlsDisabled ?? disabled;
+    const composerSubmitDisabled = submitDisabled ?? disabled;
     const shouldShowModePicker = topLevelTab !== 'chat';
     const isKiloReasoningModel = selectedProviderId === 'kilo' && selectedModelSupportsReasoning;
     const availableReasoningEfforts = selectedModelSupportsReasoning
@@ -214,7 +226,8 @@ export function ComposerActionPanel({
     const selectedReasoningEffort = availableReasoningEfforts.some((option) => option.value === reasoningEffort)
         ? reasoningEffort
         : 'none';
-    const reasoningControlDisabled = disabled || !selectedModelSupportsReasoning || !hasAdjustableReasoningEfforts;
+    const reasoningControlDisabled =
+        composerControlsDisabled || !selectedModelSupportsReasoning || !hasAdjustableReasoningEfforts;
     const compactConnectionLabel = selectedProviderStatus
         ? `${selectedProviderStatus.label} · ${selectedProviderStatus.authState.replace('_', ' ')}`
         : undefined;
@@ -226,7 +239,12 @@ export function ComposerActionPanel({
             ? 'Sending is locked until every image finishes processing.'
             : pendingImages.length > 0
               ? 'Images are ready to send with this message.'
-              : 'Text-only prompt.';
+              : canAttachImages
+                ? `Attach up to ${String(maxImageAttachmentsPerMessage)} images or send text-only.`
+                : 'Text-only prompt.';
+    const composerFooterMessage = composerSubmitDisabled
+        ? 'Create or select a thread before you start the run.'
+        : attachmentStatusMessage;
 
     useEffect(() => {
         if (focusComposerRequestKey === undefined) {
@@ -258,7 +276,7 @@ export function ComposerActionPanel({
                 className='space-y-3'
                 onDragOver={(event) => {
                     event.preventDefault();
-                    if (!canAttachImages || disabled) {
+                    if (!canAttachImages || composerControlsDisabled) {
                         return;
                     }
 
@@ -274,7 +292,7 @@ export function ComposerActionPanel({
                 onDrop={(event) => {
                     event.preventDefault();
                     setIsDragActive(false);
-                    if (!canAttachImages || disabled) {
+                    if (!canAttachImages || composerControlsDisabled) {
                         return;
                     }
 
@@ -302,117 +320,6 @@ export function ComposerActionPanel({
                         }
                     }}
                 />
-                <div
-                    className={`grid gap-3 ${
-                        shouldShowModePicker
-                            ? 'xl:grid-cols-[minmax(0,0.7fr)_minmax(0,1.2fr)_minmax(180px,0.6fr)]'
-                            : 'md:grid-cols-[minmax(0,1fr)_minmax(180px,0.45fr)]'
-                    }`}>
-                    {shouldShowModePicker ? (
-                        <div className='space-y-1'>
-                            <label className='text-muted-foreground block text-[11px] font-semibold tracking-[0.12em] uppercase'>
-                                Mode
-                            </label>
-                            <select
-                                aria-label='Execution mode'
-                                value={activeModeKey}
-                                onChange={(event) => {
-                                    onModeChange(event.target.value);
-                                }}
-                                className='border-border bg-background h-10 w-full rounded-xl border px-3 text-sm'
-                                disabled={disabled || modes.length === 0}>
-                                {modes.map((mode) => (
-                                    <option key={mode.id} value={mode.modeKey}>
-                                        {mode.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    ) : null}
-                    <div className='space-y-1'>
-                        <label
-                            className='text-muted-foreground block text-[11px] font-semibold tracking-[0.12em] uppercase'
-                            htmlFor='composer-model-select'>
-                            Model
-                        </label>
-                        <ModelPicker
-                            id='composer-model-select'
-                            name='composerModel'
-                            providerId={undefined}
-                            selectedModelId={selectedModelId ?? ''}
-                            models={modelOptions}
-                            disabled={disabled || modelOptions.length === 0}
-                            ariaLabel='Model'
-                            placeholder='Select model'
-                            onSelectOption={(option) => {
-                                if (option.providerId && option.providerId !== selectedProviderId) {
-                                    onProviderChange(option.providerId);
-                                }
-                            }}
-                            onSelectModel={onModelChange}
-                        />
-                        {selectedModelCompatibilityReason ? (
-                            <p
-                                className={`text-[11px] leading-5 ${
-                                    selectedModelCompatibilityState === 'incompatible'
-                                        ? 'text-destructive'
-                                        : selectedModelCompatibilityState === 'warning'
-                                          ? 'text-amber-700 dark:text-amber-300'
-                                          : 'text-muted-foreground'
-                                }`}>
-                                {selectedModelCompatibilityReason}
-                            </p>
-                        ) : null}
-                    </div>
-                    <div className='space-y-1'>
-                        <label
-                            className='text-muted-foreground block text-[11px] font-semibold tracking-[0.12em] uppercase'
-                            htmlFor='composer-reasoning-select'>
-                            Reasoning
-                        </label>
-                        <select
-                            id='composer-reasoning-select'
-                            aria-label='Reasoning effort'
-                            value={selectedReasoningEffort}
-                            onChange={(event) => {
-                                const selectedEffort = availableReasoningEfforts.find(
-                                    (option) => option.value === event.target.value
-                                )?.value;
-                                if (!selectedEffort) {
-                                    return;
-                                }
-
-                                onReasoningEffortChange(selectedEffort);
-                            }}
-                            className='border-border bg-background h-10 w-full rounded-xl border px-3 text-sm'
-                            disabled={reasoningControlDisabled}>
-                            {availableReasoningEfforts.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                        <p className='text-muted-foreground text-[11px] leading-5'>
-                            {selectedModelSupportsReasoning
-                                ? !hasAdjustableReasoningEfforts
-                                    ? isKiloReasoningModel
-                                        ? 'This model supports reasoning, but Kilo does not expose trusted adjustable effort levels.'
-                                        : 'This model supports reasoning, but does not expose adjustable effort levels.'
-                                    : selectedReasoningEffort === 'none'
-                                      ? 'Reasoning is off for the next run.'
-                                      : 'Reasoning level applies to the next run.'
-                                : 'This model does not support reasoning.'}
-                        </p>
-                    </div>
-                </div>
-                {compactConnectionLabel || routingBadge ? (
-                    <div className='flex flex-wrap gap-x-4 gap-y-1'>
-                        {compactConnectionLabel ? (
-                            <p className='text-muted-foreground text-xs'>{compactConnectionLabel}</p>
-                        ) : null}
-                        {routingBadge ? <p className='text-muted-foreground text-xs'>{routingBadge}</p> : null}
-                    </div>
-                ) : null}
                 {runErrorMessage ? (
                     <p aria-live='polite' className='text-destructive text-xs'>
                         {runErrorMessage}
@@ -513,24 +420,20 @@ export function ComposerActionPanel({
                     className={`border-border bg-card/30 relative overflow-hidden rounded-2xl border transition ${
                         isDragActive ? 'border-primary bg-primary/10 shadow-[0_0_0_1px_hsl(var(--primary)/0.25)]' : ''
                     }`}>
-                    <div className='border-border flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3'>
-                        <div>
-                            <p className='text-sm font-semibold'>Prompt</p>
-                            <p className='text-muted-foreground text-xs'>
-                                Paste or drop images here. Up to {maxImageAttachmentsPerMessage} images, 1.5 MB each
-                                after compression.
-                            </p>
+                    {compactConnectionLabel || routingBadge ? (
+                        <div className='border-border flex flex-wrap items-center gap-2 border-b px-4 py-3'>
+                            {compactConnectionLabel ? (
+                                <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-[11px]'>
+                                    {compactConnectionLabel}
+                                </span>
+                            ) : null}
+                            {routingBadge ? (
+                                <span className='border-border bg-background/70 text-muted-foreground rounded-full border px-3 py-1 text-[11px]'>
+                                    {routingBadge}
+                                </span>
+                            ) : null}
                         </div>
-                        <Button
-                            type='button'
-                            size='sm'
-                            variant='outline'
-                            disabled={disabled || !canAttachImages}
-                            onClick={openFilePicker}>
-                            <ImagePlus className='h-4 w-4' />
-                            Add images
-                        </Button>
-                    </div>
+                    ) : null}
                     {imageAttachmentBlockedReason && !canAttachImages ? (
                         <p className='text-muted-foreground border-border border-b px-4 py-3 text-xs'>
                             {imageAttachmentBlockedReason}
@@ -671,7 +574,7 @@ export function ComposerActionPanel({
                             }
 
                             if (
-                                disabled ||
+                                composerSubmitDisabled ||
                                 isSubmitting ||
                                 !hasSubmittableContent ||
                                 hasBlockingPendingImages ||
@@ -688,31 +591,148 @@ export function ComposerActionPanel({
                         className='border-border bg-background/70 focus-visible:ring-ring focus-visible:border-ring min-h-[160px] w-full resize-y border-t px-4 py-4 text-sm leading-6 focus-visible:ring-2 focus-visible:outline-none'
                         autoComplete='off'
                         spellCheck
-                        placeholder='Prompt for the selected session…'
+                        placeholder='Type your message here…'
                     />
                     {isDragActive ? (
                         <div className='bg-primary/10 text-primary pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold backdrop-blur-sm'>
                             Drop images to attach them
                         </div>
                     ) : null}
-                </div>
-                <div className='flex flex-wrap items-center justify-between gap-3'>
-                    <p aria-live='polite' className='text-muted-foreground text-xs'>
-                        {attachmentStatusMessage}
-                    </p>
-                    <Button
-                        type='submit'
-                        size='sm'
-                        disabled={
-                            disabled ||
-                            isSubmitting ||
-                            !hasSubmittableContent ||
-                            hasBlockingPendingImages ||
-                            hasUnsupportedPendingImages ||
-                            selectedModelCompatibilityState === 'incompatible'
-                        }>
-                        {hasBlockingPendingImages ? 'Images preparing…' : 'Start Run'}
-                    </Button>
+                    <div className='border-border space-y-3 border-t px-4 py-3'>
+                        <div className='flex flex-wrap items-center gap-2'>
+                            <div className='min-w-[220px] flex-[1.35]'>
+                                <ModelPicker
+                                    id='composer-model-select'
+                                    name='composerModel'
+                                    providerId={undefined}
+                                    selectedModelId={selectedModelId ?? ''}
+                                    models={modelOptions}
+                                    disabled={composerControlsDisabled || modelOptions.length === 0}
+                                    ariaLabel='Model'
+                                    placeholder='Select model'
+                                    onSelectOption={(option) => {
+                                        if (option.providerId && option.providerId !== selectedProviderId) {
+                                            onProviderChange(option.providerId);
+                                        }
+                                    }}
+                                    onSelectModel={onModelChange}
+                                />
+                            </div>
+                            {profiles && profiles.length > 0 ? (
+                                <label className='min-w-[150px] flex-1 sm:max-w-[220px]'>
+                                    <span className='sr-only'>Profile</span>
+                                    <select
+                                        aria-label='Profile'
+                                        value={selectedProfileId ?? ''}
+                                        className='border-border bg-background h-10 w-full rounded-full border px-3 text-sm'
+                                        disabled={composerControlsDisabled || !selectedProfileId || !onProfileChange}
+                                        onChange={(event) => {
+                                            onProfileChange?.(event.target.value);
+                                        }}>
+                                        {profiles.map((profile) => (
+                                            <option key={profile.id} value={profile.id}>
+                                                {profile.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            ) : null}
+                            {shouldShowModePicker ? (
+                                <label className='min-w-[140px] flex-1 sm:max-w-[180px]'>
+                                    <span className='sr-only'>Mode</span>
+                                    <select
+                                        aria-label='Execution mode'
+                                        value={activeModeKey}
+                                        onChange={(event) => {
+                                            onModeChange(event.target.value);
+                                        }}
+                                        className='border-border bg-background h-10 w-full rounded-full border px-3 text-sm'
+                                        disabled={composerControlsDisabled || modes.length === 0}>
+                                        {modes.map((mode) => (
+                                            <option key={mode.id} value={mode.modeKey}>
+                                                {mode.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            ) : null}
+                            <label className='min-w-[140px] flex-1 sm:max-w-[180px]'>
+                                <span className='sr-only'>Reasoning</span>
+                                <select
+                                    id='composer-reasoning-select'
+                                    aria-label='Reasoning effort'
+                                    value={selectedReasoningEffort}
+                                    onChange={(event) => {
+                                        const selectedEffort = availableReasoningEfforts.find(
+                                            (option) => option.value === event.target.value
+                                        )?.value;
+                                        if (!selectedEffort) {
+                                            return;
+                                        }
+
+                                        onReasoningEffortChange(selectedEffort);
+                                    }}
+                                    className='border-border bg-background h-10 w-full rounded-full border px-3 text-sm'
+                                    disabled={reasoningControlDisabled}>
+                                    {availableReasoningEfforts.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                            {option.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <Button
+                                type='button'
+                                size='sm'
+                                variant='outline'
+                                className='rounded-full'
+                                disabled={composerControlsDisabled || !canAttachImages}
+                                onClick={openFilePicker}>
+                                <ImagePlus className='h-4 w-4' />
+                                Attach
+                            </Button>
+                            <div className='ml-auto'>
+                                <Button
+                                    type='submit'
+                                    size='sm'
+                                    className='rounded-full'
+                                    disabled={
+                                        composerSubmitDisabled ||
+                                        isSubmitting ||
+                                        !hasSubmittableContent ||
+                                        hasBlockingPendingImages ||
+                                        hasUnsupportedPendingImages ||
+                                        selectedModelCompatibilityState === 'incompatible'
+                                    }>
+                                    {hasBlockingPendingImages ? 'Images preparing…' : 'Start Run'}
+                                </Button>
+                            </div>
+                        </div>
+                        <div className='flex flex-wrap items-start justify-between gap-2'>
+                            <div className='space-y-1'>
+                                <p
+                                    aria-live='polite'
+                                    className={`text-xs ${
+                                        selectedModelCompatibilityState === 'incompatible'
+                                            ? 'text-destructive'
+                                            : 'text-muted-foreground'
+                                    }`}>
+                                    {composerFooterMessage}
+                                </p>
+                                <p className='text-muted-foreground text-[11px] leading-5'>
+                                    {selectedModelSupportsReasoning
+                                        ? !hasAdjustableReasoningEfforts
+                                            ? isKiloReasoningModel
+                                                ? 'This model supports reasoning, but Kilo does not expose trusted adjustable effort levels.'
+                                                : 'This model supports reasoning, but does not expose adjustable effort levels.'
+                                            : selectedReasoningEffort === 'none'
+                                              ? 'Reasoning is off for the next run.'
+                                              : 'Reasoning level applies to the next run.'
+                                        : 'This model does not support reasoning.'}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </form>
             <ImageLightboxModal

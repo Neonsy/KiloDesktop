@@ -137,6 +137,8 @@ export function WorkspaceSurface() {
                                 <ConversationShell
                                     key={controller.resolvedProfileId}
                                     profileId={controller.resolvedProfileId}
+                                    profiles={controller.profiles}
+                                    selectedProfileId={controller.resolvedProfileId}
                                     topLevelTab={controller.topLevelTab}
                                     {...(controller.currentWorkspaceFingerprint
                                         ? { selectedWorkspaceFingerprint: controller.currentWorkspaceFingerprint }
@@ -159,6 +161,9 @@ export function WorkspaceSurface() {
                                     }
                                     onOpenWorkspaces={() => {
                                         controller.setAppSection('workspaces');
+                                    }}
+                                    onProfileChange={(profileId) => {
+                                        void controller.selectProfile(profileId);
                                     }}
                                     onBootChromeReadyChange={setConversationShellBootReadiness}
                                 />
