@@ -14,15 +14,7 @@ export function ProvidersWorkspaceView({ profileId }: ProvidersWorkspaceViewProp
 
     return (
         <section className='flex h-full min-h-0 min-w-0 flex-col overflow-hidden'>
-            <div className='border-border/80 bg-background/40 flex shrink-0 flex-wrap items-end justify-between gap-3 border-b px-5 py-4 md:px-6'>
-                <div className='space-y-1'>
-                    <h4 className='text-xl font-semibold text-balance'>Providers & Models</h4>
-                    <p className='text-muted-foreground max-w-3xl text-sm leading-6'>
-                        Keep Kilo and direct providers in one destination. Authentication, connection profiles, and
-                        default model choices stay grouped by provider, not scattered across settings.
-                    </p>
-                </div>
-
+            <div className='border-border/80 bg-background/40 flex shrink-0 flex-wrap items-center justify-end gap-2 border-b px-5 py-3 md:px-6'>
                 <div className='flex flex-wrap gap-2'>
                     <button
                         type='button'
